@@ -1,0 +1,2055 @@
+import { Question } from "../../models";
+
+export const dotnetMidQuestions: Question[] = [
+  // ── Advanced C# & .NET Internals (Q101 - Q115) ───────────────────
+  {
+    id: "dotnet-mid-q101",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "mid",
+    questionTitle: "How does the .NET Garbage Collector (GC) work across Generations (Gen 0, 1, 2, LOH, POH)?",
+    questionTitle_fa: "سیستم Garbage Collector در دات‌نت چگونه کار می‌کند؟",
+    answerContent: `### .NET Garbage Collector Generations
+
+The .NET GC is a generational, tracing, mark-and-sweep collector based on the **generational hypothesis** (newer objects have shorter lifespans).
+
+#### Generations:
+- **Gen 0:** Newly allocated short-lived objects (DTOs, local variables). Collected frequently and very fast ($<1\\text{ms}$).
+- **Gen 1:** Buffer generation for objects surviving Gen 0. Promoted to Gen 1.
+- **Gen 2:** Long-lived objects (Singletons, static references, cache). Collected during a Full GC.
+- **Large Object Heap (LOH):** Objects $\\ge 85,000$ bytes. Not compacted by default to avoid expensive memory copies.
+- **Pinned Object Heap (POH - .NET 5+):** Dedicated for pinned objects to eliminate fragmentation in Gen 0-2.`,
+    answerContent_fa: `### نحوه کارکرد زباله‌روب (GC) در دات‌نت
+
+زباله‌روب دات‌نت بر اساس فرضیه نسلی کار می‌کند که اشیای جوان‌تر زودتر از بین می‌روند:
+- **Gen 0:** اشیای تازه تخصیص‌یافته با طول عمر کوتاه که بسیار سریع پاک‌سازی می‌شوند.
+- **Gen 1:** لایه بافر برای اشیایی که از Gen 0 زنده مانده‌اند.
+- **Gen 2:** اشیای با طول عمر طولانی (مانند سرویس‌های Singleton) که پاک‌سازی آن Full GC نام دارد.
+- **LOH:** اشیای بزرگتر از ۸۵ هزار بایت برای جلوگیری از جابجایی سنگین حافظه.
+- **POH (دات‌نت ۵ به بعد):** اشیای پین‌شده در حافظه برای ارتباط با کدهای Unmanaged.`,
+  },
+  {
+    id: "dotnet-mid-q102",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "mid",
+    questionTitle: "What is the purpose of IDisposable and how does the 'using' statement work?",
+    questionTitle_fa: "مفهوم IDisposable چیست و بلوک using چه کاری انجام می‌دهد؟",
+    answerContent: `### IDisposable & the 'using' Statement
+
+\`IDisposable\` provides a mechanism for releasing **unmanaged resources** (database connections, file handles, network sockets) deterministically without waiting for the Garbage Collector.
+
+\`\`\`csharp
+// Modern C# using declaration
+await using var connection = new SqlConnection(connString);
+await connection.OpenAsync();
+// Automatically calls connection.DisposeAsync() at the end of the enclosing scope
+\`\`\`
+
+The \`using\` block translates behind the scenes into a \`try-finally\` block guaranteeing \`Dispose()\` is called even if an exception occurs.`,
+    answerContent_fa: `### مفهوم IDisposable و بلوک using
+
+اینترفیس \`IDisposable\` برای آزادسازی قطعی و بی‌درنگ **منابع مدیریت‌نشده (Unmanaged)** مانند کانکشن‌های دات‌بیس و فایل‌ها استفاده می‌شود. دستور \`using\` در زمان کامپایل به یک بلوک \`try-finally\` تبدیل می‌شود تا فراخوانی متد \`Dispose\` حتی در صورت بروز خطا تضمین گردد.`,
+  },
+  {
+    id: "dotnet-mid-q103",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "mid",
+    questionTitle: "What is the difference between Task.Run and Task.Factory.StartNew?",
+    questionTitle_fa: "تفاوت Task.Run و Task.Factory.StartNew چیست؟",
+    answerContent: `### Task.Run vs. Task.Factory.StartNew
+
+- **\`Task.Run\` (.NET 4.5+):**
+  - Shortcut for \`Task.Factory.StartNew\` with safe default flags (\`TaskScheduler.Default\` and unwraps nested tasks).
+  - Recommended standard for offloading CPU-bound tasks to the ThreadPool.
+- **\`Task.Factory.StartNew\`:**
+  - Advanced low-level method providing granular configuration (e.g. \`TaskCreationOptions.LongRunning\` for dedicated non-ThreadPool threads).
+  - **Gotcha:** Does not automatically unwrap \`Task<Task<T>>\` when passing async delegates without calling \`.Unwrap()\`.`,
+    answerContent_fa: `### تفاوت Task.Run و Task.Factory.StartNew
+
+- **\`Task.Run\`**: روش استاندارد و ساده‌تر برای اجرای کدهای محاسباتی (CPU-bound) روی ThreadPool با تنظیمات پیش‌فرض امن.
+- **\`Task.Factory.StartNew\`**: متد سطح پایینی است که امکاناتی مثل ساخت ترد اختصاصی برای کارهای طولانی (\`TaskCreationOptions.LongRunning\`) را فراهم می‌کند اما نیاز به مدیریت صریح \`Unwrap\` دارد.`,
+  },
+  {
+    id: "dotnet-junior-q104",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "mid",
+    questionTitle: "What causes Deadlocks in Asynchronous C# programming and how do you prevent them?",
+    questionTitle_fa: "مفهوم Deadlock در برنامه‌نویسی Asynchronous چیست و چگونه رخ می‌دهد؟",
+    answerContent: `### Async Deadlocks (.Result & .Wait())
+
+Deadlocks occur when synchronous code blocks on an asynchronous task in environments with a **\`SynchronizationContext\`** (e.g., legacy ASP.NET, WPF, WinForms).
+
+\`\`\`csharp
+// DEADLOCK SCENARIO:
+public string GetData()
+{
+    // Blocks the UI/request thread waiting for task completion
+    return FetchDataAsync().Result; 
+}
+
+public async Task<string> FetchDataAsync()
+{
+    var data = await _client.GetStringAsync(url);
+    // Tries to resume on the original SynchronizationContext thread, which is currently blocked on .Result!
+    return data;
+}
+\`\`\`
+
+#### Prevention:
+1. **Async all the way:** Use \`async\` and \`await\` from top to bottom.
+2. **\`ConfigureAwait(false)\`:** In libraries, avoid capturing the synchronization context.`,
+    answerContent_fa: `### علت ددلاک در کدهای ناهمگام و راه‌های جلوگیری
+
+ددلاک زمانی رخ می‌دهد که یک متد همگام با \`.Result\` یا \`.Wait()\` منتظر یک متد \`async\` بماند. متد async پس از پایان مرحله اول برای ادامه کار به دنبال ترد آزاد کانتکست اصلی می‌گردد، اما آن ترد توسط دستور \`.Result\` مسدود (Block) شده است.
+
+#### راهکارها:
+- استفاده از \`await\` در تمام سطوح (Async all the way).
+- استفاده از \`ConfigureAwait(false)\` در کتابخانه‌ها.`,
+  },
+  {
+    id: "dotnet-mid-q105",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "mid",
+    questionTitle: "What is SynchronizationContext in .NET?",
+    questionTitle_fa: "مفهوم SynchronizationContext در دات‌نت چیست؟",
+    answerContent: `### SynchronizationContext in .NET
+
+\`SynchronizationContext\` coordinates executing work onto a specific thread environment (such as the UI Dispatcher thread in WPF/MAUI).
+
+- **ASP.NET Core:** Has **no \`SynchronizationContext\`**! Every continuation runs on any free ThreadPool thread, improving scalability and eliminating classic ASP.NET async deadlocks.
+- **Desktop/Mobile (WPF, Blazor Server, MAUI):** Uses a single-threaded SynchronizationContext to marshal UI updates back to the main UI thread.`,
+    answerContent_fa: `### مفهوم SynchronizationContext
+
+ابزاری برای هدایت و بازگرداندن اجرای کدهای ادامه (Continuation) به یک ترد خاص (مانند ترد اصلی UI در اپلیکیشن‌های دسکتاپ) است. در **ASP.NET Core** برای افزایش پرفورمنس هیچ SynchronizationContextای وجود ندارد و کدهای بعد از \`await\` روی هر ترد آزادی از ThreadPool اجرا می‌شوند.`,
+  },
+  {
+    id: "dotnet-mid-q106",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    questionTitle: "How do you write a Custom Middleware in ASP.NET Core?",
+    questionTitle_fa: "چگونه یک Middleware سفارشی در ASP.NET Core می‌نویسیم؟",
+    answerContent: `### Custom Middleware Implementation
+
+#### Factory-based / Convention-based Middleware:
+\`\`\`csharp
+public class RequestPerformanceMiddleware
+{
+    private readonly RequestDelegate _next;
+    private readonly ILogger<RequestPerformanceMiddleware> _logger;
+
+    public RequestPerformanceMiddleware(RequestDelegate next, ILogger<RequestPerformanceMiddleware> logger)
+    {
+        _next = next;
+        _logger = logger;
+    }
+
+    public async Task InvokeAsync(HttpContext context)
+    {
+        var sw = Stopwatch.StartNew();
+        await _next(context); // Pass down the pipeline
+        sw.Stop();
+
+        if (sw.ElapsedMilliseconds > 500)
+        {
+            _logger.LogWarning("Long Request: {Path} took {Elapsed}ms", context.Request.Path, sw.ElapsedMilliseconds);
+        }
+    }
+}
+
+// Extension method for clean Program.cs registration:
+public static class MiddlewareExtensions
+{
+    public static IApplicationBuilder UseRequestPerformance(this IApplicationBuilder app)
+        => app.UseMiddleware<RequestPerformanceMiddleware>();
+}
+\`\`\``,
+    answerContent_fa: `### نحوه نوشتن میدل‌ویر سفارشی
+
+میدل‌ویر کلاسی شامل متد \`InvokeAsync(HttpContext context)\` است که \`RequestDelegate next\` را در سازنده تزریق کرده و پس از انجام عملیات‌های مورد نیاز، ریکوئست را با \`await _next(context)\` به مرحله بعد می‌فرستد.`,
+  },
+  {
+    id: "dotnet-mid-q107",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    questionTitle: "What is the difference between IHostedService and BackgroundService in .NET?",
+    questionTitle_fa: "استفاده از IHostedService و BackgroundService چه تفاوتی دارد؟",
+    answerContent: `### IHostedService vs. BackgroundService
+
+- **\`IHostedService\`:**
+  - Raw base interface with \`StartAsync(CancellationToken)\` and \`StopAsync(CancellationToken)\`.
+  - \`StartAsync\` must return quickly; running a continuous loop directly inside \`StartAsync\` blocks the entire web application startup!
+- **\`BackgroundService\`:**
+  - Abstract base class implementing \`IHostedService\`.
+  - Exposes an abstract **\`ExecuteAsync(CancellationToken stoppingToken)\`** method designed specifically for long-running background loops.
+
+\`\`\`csharp
+public class QueueProcessor : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            await ProcessNextJobAsync();
+            await Task.Delay(1000, stoppingToken);
+        }
+    }
+}
+\`\`\``,
+    answerContent_fa: `### تفاوت IHostedService و BackgroundService
+
+- **\`IHostedService\`**: اینترفیسی پایه با متدهای \`StartAsync\` و \`StopAsync\` است که نباید در آن حلقه بی‌نهایت نوشت زیرا فرآیند استارت‌آپ سرور را مسدود می‌کند.
+- **\`BackgroundService\`**: کلاس انتزاعی پیاده‌سازی‌کننده IHostedService است که متد \`ExecuteAsync\` را برای اجرای پردازش‌های پس‌زمینه طولانی به صورت امن فراهم می‌کند.`,
+  },
+  {
+    id: "dotnet-mid-q108",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    questionTitle: "What is Content Negotiation in ASP.NET Core?",
+    questionTitle_fa: "مفهوم Content Negotiation در ASP.NET Core چیست؟",
+    answerContent: `### Content Negotiation
+
+Content negotiation allows a client and server to agree on the data format (JSON, XML, Protobuf) for HTTP responses based on the request's **\`Accept\`** header.
+
+\`\`\`http
+GET /api/products/1 HTTP/1.1
+Accept: application/xml
+\`\`\`
+
+ASP.NET Core inspects formatters registered in \`Program.cs\` (\`AddXmlSerializerFormatters()\`) and serializes the response accordingly.`,
+    answerContent_fa: `### مفهوم Content Negotiation (مذاکره محتوا)
+
+مکانیزمی است که طی آن سرور بر اساس هدر **\`Accept\`** ارسالی کلاینت (مانند \`application/json\` یا \`application/xml\`) فرمت مناسب خروجی را انتخاب و سریالایز می‌کند.`,
+  },
+  {
+    id: "dotnet-mid-q109",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    questionTitle: "How do you implement Rate Limiting in ASP.NET Core (.NET 7/8)?",
+    questionTitle_fa: "چگونه در ASP.NET Core عملیات Rate Limiting را پیاده‌سازی می‌کنی؟",
+    answerContent: `### Native Rate Limiting in .NET 7/8
+
+.NET 7+ includes built-in rate limiting middleware (\`Microsoft.AspNetCore.RateLimiting\`):
+
+#### Algorithms:
+1. **Fixed Window:** Fixed number of requests per time interval.
+2. **Sliding Window:** Divides interval into segments to avoid boundary burst spikes.
+3. **Token Bucket:** Allows controlled bursts while maintaining continuous replenishment.
+4. **Concurrency:** Limits simultaneous concurrent requests.
+
+\`\`\`csharp
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddFixedWindowLimiter("fixed", opt =>
+    {
+        opt.PermitLimit = 100;
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.QueueLimit = 10;
+    });
+});
+
+app.UseRateLimiter();
+app.MapGet("/api/data", () => Results.Ok()).RequireRateLimiting("fixed");
+\`\`\``,
+    answerContent_fa: `### پیاده‌سازی Rate Limiting در دات‌نت
+
+در دات‌نت ۷ و ۸ قابلیت Rate Limiting به صورت بومی با الگوریتم‌های Fixed Window، Sliding Window و Token Bucket ارائه شده است که با متد \`AddRateLimiter\` کانفیگ شده و با \`RequireRateLimiting\` روی اندپوینت‌ها اعمال می‌گردد.`,
+  },
+  {
+    id: "dotnet-mid-q110",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    questionTitle: "What is the difference between ActionFilter and ResultFilter and their execution order?",
+    questionTitle_fa: "تفاوت ActionFilter و ResultFilter چیست و تقدم اجرای آنها چگونه است؟",
+    answerContent: `### ActionFilter vs. ResultFilter
+
+1. **ActionFilter (\`IActionFilter\` / \`IAsyncActionFilter\`):**
+   - Runs **before** the action method executes (\`OnActionExecuting\`) and **after** it returns (\`OnActionExecuted\`).
+   - Ideal for validating model state, logging action inputs, or short-circuiting.
+2. **ResultFilter (\`IResultFilter\` / \`IAsyncResultFilter\`):**
+   - Runs **only if** the action method executes successfully.
+   - Wraps the execution of the \`IActionResult\` (e.g. modifying HTTP response headers before body serialization).`,
+    answerContent_fa: `### تفاوت ActionFilter و ResultFilter
+
+- **ActionFilter:** قبل و بعد از اجرای خود متد اکشن اجرا می‌شود و برای لاگ پارامترها و اعتبارسنجی کاربرد دارد.
+- **ResultFilter:** بعد از پایان موفقیت‌آمیز اکشن و در زمان تولید نتیجه خروجی (\`IActionResult\`) اجرا می‌شود.`,
+  },
+  {
+    id: "dotnet-mid-q111",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    questionTitle: "Why should you use IHttpClientFactory instead of 'new HttpClient()' in C#?",
+    questionTitle_fa: "مزایای استفاده از IHttpClientFactory نسبت به new HttpClient() چیست؟",
+    answerContent: `### Why Use IHttpClientFactory?
+
+#### Problems with \`new HttpClient()\`:
+1. **Socket Exhaustion:** Disposing \`HttpClient\` leaves underlying OS sockets in \`TIME_WAIT\` state under load.
+2. **DNS Stale Records:** Keeping a singleton \`HttpClient\` instance forever fails to respect DNS changes.
+
+#### How \`IHttpClientFactory\` Solves Both:
+- Pools and manages the lifetime of the underlying **\`HttpMessageHandler\`** instances (default 2 minutes lifetime) so DNS changes are respected.
+- Reuses socket connections across calls, preventing socket exhaustion.
+- Seamlessly integrates with **Polly** for retry and circuit breaker policies.`,
+    answerContent_fa: `### مزایای IHttpClientFactory
+
+استفاده مستقیم از \`new HttpClient()\` به دلیل باز ماندن سوکت‌ها در وضعیت \`TIME_WAIT\` باعث خطای Socket Exhaustion می‌شود و نمونه Singleton آن نیز تغییرات DNS سرور را متوجه نمی‌شود. \`IHttpClientFactory\` طول عمر Handlerهای سوکت را در یک Pool مدیریت می‌کند و از هر دو مشکل جلوگیری می‌نماید.`,
+  },
+  {
+    id: "dotnet-mid-q112",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    questionTitle: "What is Socket Exhaustion and how is it resolved in .NET?",
+    questionTitle_fa: "مشکل Socket Exhaustion چیست و چگونه حل می‌شود؟",
+    answerContent: `### Socket Exhaustion
+
+Socket exhaustion occurs when an application rapidly opens and closes thousands of outbound TCP connections. When a TCP socket closes, the OS holds it in the **\`TIME_WAIT\`** state for 240 seconds to ensure stray packets are discarded.
+
+If all available ephemeral TCP ports are exhausted, subsequent network requests throw \`SocketException: No connection could be made\`.
+
+**Resolution:** Use \`IHttpClientFactory\` or \`SocketsHttpHandler\` connection pooling.`,
+    answerContent_fa: `### مشکل Socket Exhaustion
+
+زمانی رخ می‌دهد که برنامه با سرعت بالا سوکت‌های TCP زیادی باز کرده و می‌بندد. سوکت‌های بسته شده به مدت چند دقیقه در وضعیت \`TIME_WAIT\` سیستم‌عامل باقی می‌مانند و پورت آزادی برای درخواست‌های بعدی باقی نمی‌ماند. راه حل استفاده از Connection Pooling در \`IHttpClientFactory\` است.`,
+  },
+  {
+    id: "dotnet-mid-q113",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    questionTitle: "What is gRPC and how does it compare to REST APIs?",
+    questionTitle_fa: "پروتکل gRPC چیست و چه تفاوتی با REST دارد؟",
+    answerContent: `### gRPC vs. REST
+
+| Feature | gRPC | REST |
+| :--- | :--- | :--- |
+| **Protocol** | **HTTP/2** (Multiplexing, binary framing) | HTTP/1.1 or HTTP/2 |
+| **Payload Format**| **Protocol Buffers (Protobuf)** (compact binary) | JSON / XML (human-readable text) |
+| **Performance** | Up to $7\times-10\times$ faster than REST | Standard web speed |
+| **Streaming** | Bi-directional streaming, client/server streaming | Request-Response primarily |
+| **Contract** | Strict \`.proto\` contract file | OpenAPI / Swagger (optional) |
+| **Ideal For** | High-throughput internal microservice communication | Public-facing client/browser APIs |`,
+    answerContent_fa: `### مقایسه پروتکل gRPC با REST
+
+پروتکل **gRPC** بر بستر **HTTP/2** و با فرمت باینری فوق‌العاده فشرده **Protocol Buffers** کار می‌کند که ۷ تا ۱۰ برابر سریع‌تر از JSON است و از Streaming دوطرفه پشتیبانی می‌کند. برای ارتباطات داخلی بین میکروسرویس‌ها بسیار ایده‌آل است.`,
+  },
+  {
+    id: "dotnet-mid-q114",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    questionTitle: "When and why do you use SignalR in ASP.NET Core?",
+    questionTitle_fa: "چه زمانی از SignalR استفاده می‌کنیم؟",
+    answerContent: `### SignalR in ASP.NET Core
+
+SignalR is an open-source library that adds real-time web functionality to applications, enabling server code to push content to connected clients instantly.
+
+#### Transports (automatic fallback):
+1. **WebSockets** (best performance, full-duplex).
+2. **Server-Sent Events (SSE)**.
+3. **Long Polling**.
+
+#### Use Cases:
+- Real-time dashboards, financial price tickers, chat applications, and live order status notifications.`,
+    answerContent_fa: `### کاربرد SignalR در دات‌نت
+
+کتابخانه‌ای برای ارتباط بلادرنگ (Real-Time) دوطرفه بین سرور و کلاینت است که از پروتکل‌هایی مانند WebSockets استفاده می‌کند و برای سیستم‌های چت، پنل‌های مانیتورینگ زنده و اعلان‌های وضعیت تراکنش‌ها به کار می‌رود.`,
+  },
+  {
+    id: "dotnet-mid-q115",
+    stackId: "dotnet",
+    categoryId: "security-practices",
+    levelId: "mid",
+    questionTitle: "How do you manage Connection Strings and Secrets securely in production?",
+    questionTitle_fa: "نحوه مدیریت Connection Stringها و Secretها در محیط پروداکشن چگونه است؟",
+    answerContent: `### Secure Secrets Management in Production
+
+1. **Never Commit Secrets to Git:** Keep \`appsettings.json\` sanitized with empty placeholder values.
+2. **Environment Variables:** Inject secrets into Linux/Docker containers via OS environment variables.
+3. **Secret Stores:** Use managed vaults such as **Azure Key Vault**, **HashiCorp Vault**, or AWS Secrets Manager with managed identities (RBAC).
+4. **Local Development:** Use \`dotnet user-secrets\`.`,
+    answerContent_fa: `### مدیریت امن سکرت‌ها و رمزها در پروداکشن
+
+- عدم قرار دادن رمزها در سورس‌کد و فایل‌های کانفیگ گیت.
+- استفاده از **Secret Managerهای ابری** مانند Azure Key Vault یا HashiCorp Vault.
+- تزریق کانکشن‌استرینگ‌ها از طریق **Environment Variables** در کانتینرهای داکر.
+- استفاده از \`dotnet user-secrets\` در محیط لوکال.`,
+  },
+
+  // ── Software Architecture, DDD & Clean Architecture (Q116 - Q130) 
+  {
+    id: "dotnet-mid-q116",
+    stackId: "dotnet",
+    categoryId: "architecture-ddd",
+    levelId: "mid",
+    questionTitle: "Name the layers in Clean Architecture and describe their responsibilities.",
+    questionTitle_fa: "لایه‌های Clean Architecture را نام ببر و وظیفه هر کدام را بگو.",
+    answerContent: `### Clean Architecture Layers
+
+Clean Architecture enforces the **Dependency Rule** (dependencies point inward toward the core domain):
+
+1. **Domain Layer (Core):**
+   - Contains Enterprise Entities, Value Objects, Domain Events, Enums, and Domain Exceptions. Zero external dependencies.
+2. **Application Layer:**
+   - Contains Use Cases, CQRS Commands/Queries, DTOs, FluentValidation rules, and Port/Interface definitions.
+3. **Infrastructure Layer:**
+   - External implementations: EF Core \`DbContext\`, Repositories, Email/SMS senders, RabbitMQ event bus, Redis caches.
+4. **Presentation Layer (Web / API):**
+   - Controllers, Minimal API endpoints, Middleware, Swagger, ViewModels.`,
+    answerContent_fa: `### لایه‌های معماری تمیز (Clean Architecture)
+
+۱. **Domain:** هسته اصلی شامل موجودیت‌ها (Entities)، Value Objectها و رویدادهای دامنه بدون هیچ‌گونه وابستگی به کتابخانه‌های خارجی.
+۲. **Application:** لایه Use Caseها، دستورات CQRS، اعتبارسنجی‌ها و تعریف اینترفیس‌های سرویس‌ها.
+۳. **Infrastructure:** پیاده‌سازی جزئیات فنی مانند EF Core، دیتابیس، صف‌های پیام و کش.
+۴. **Presentation:** کنترلرها و APIها که نقطه ورود کلاینت هستند.`,
+  },
+  {
+    id: "dotnet-mid-q117",
+    stackId: "dotnet",
+    categoryId: "architecture-ddd",
+    levelId: "mid",
+    questionTitle: "Why must the Domain Layer have zero dependencies on outer layers in Clean Architecture?",
+    questionTitle_fa: "چرا لایه Domain در معماری تمیز نباید هیچ وابستگی‌ای به لایه‌های دیگر داشته باشد؟",
+    answerContent: `### Domain Layer Independence
+
+- **Business Rules Outlive Technology:** The domain represents core enterprise business logic and must remain pure and unaffected by changes to frameworks, ORMs, or database vendors.
+- **Testability:** Pure C# domain entities can be unit tested instantly without setting up databases or mocking external libraries.
+- **Portability:** The business logic can be ported to different runtime environments without rewrites.`,
+    answerContent_fa: `### دلیل استقلال کامل لایه Domain
+
+قوانین بیزینس مهم‌ترین دارایی نرم‌افزار هستند و نباید با تغییر فریم‌ورک‌ها، دیتابیس‌ها یا ابزارهای خارجی دچار تغییر شوند. این استقلال باعث تست‌پذیری فوق‌العاده سریع و طول عمر بالای کد می‌شود.`,
+  },
+  {
+    id: "dotnet-mid-q118",
+    stackId: "dotnet",
+    categoryId: "architecture-ddd",
+    levelId: "mid",
+    questionTitle: "What is CQRS (Command Query Responsibility Segregation)?",
+    questionTitle_fa: "مفهوم CQRS چیست؟",
+    answerContent: `### CQRS (Command Query Responsibility Segregation)
+
+CQRS segregates the data modification model (**Commands**) from the data reading model (**Queries**).
+
+- **Commands:** Mutate state, execute business validation, return void or ID (e.g. \`CreateOrderCommand\`).
+- **Queries:** Return flat DTOs without modifying state (e.g. \`GetOrderByIdQuery\`).
+
+#### Benefits:
+- Optimized read models (e.g. Dapper for fast reads, EF Core for rich command domain logic).
+- Independent scaling of read and write workloads.`,
+    answerContent_fa: `### مفهوم الگوی CQRS
+
+الگوی CQRS مدل خواندن داده‌ها (Queries) را از مدل نوشتن و تغییر داده‌ها (Commands) کاملاً تفکیک می‌کند. این کار اجازه می‌دهد مدل خواندن برای سرعت بالا بهینه شود (مثلاً با Dapper یا کش) و مدل نوشتن برای صحت قوانین دامنه و تراکنش‌ها (با EF Core و DDD).`,
+  },
+  {
+    id: "dotnet-mid-q119",
+    stackId: "dotnet",
+    categoryId: "architecture-ddd",
+    levelId: "mid",
+    questionTitle: "What is the difference between a Command and a Query in CQRS?",
+    questionTitle_fa: "تفاوت Command و Query در معماری CQRS چیست؟",
+    answerContent: `### Command vs. Query
+
+| Aspect | Command | Query |
+| :--- | :--- | :--- |
+| **Intent** | Mutate state ("Do something") | Fetch data ("Tell me something") |
+| **Side Effects** | Modifies database state | **Idempotent and side-effect free** |
+| **Return Value** | Result status, Created ID, or void | Strongly-typed DTO payload |
+| **Validation** | Rich business invariants | Query parameter/filter validation |`,
+    answerContent_fa: `### تفاوت Command و Query
+
+- **Command:** وضعیت سیستم را تغییر می‌دهد (مانند ثبت سفارش یا پرداخت) و قواعد اعتبارسنجی بیزینس را اجرا می‌کند.
+- **Query:** صرفاً داده را واکشی می‌کند و هیچ‌گونه اثر جانبی (Side-effect) روی دیتابیس ندارد.`,
+  },
+  {
+    id: "dotnet-mid-q120",
+    stackId: "dotnet",
+    categoryId: "architecture-ddd",
+    levelId: "mid",
+    questionTitle: "How does MediatR work and what problem does it solve in CQRS?",
+    questionTitle_fa: "کتابخانه MediatR چگونه کار می‌کند و چه مشکلی را در CQRS حل می‌کند؟",
+    answerContent: `### MediatR in CQRS
+
+MediatR implements the **In-Process Mediator Pattern**, decoupling the sender of a request from its handler.
+
+\`\`\`csharp
+// 1. Request definition
+public record CreateUserCommand(string Email, string Name) : IRequest<Guid>;
+
+// 2. Isolated Handler
+public class CreateUserHandler : IRequestHandler<CreateUserCommand, Guid>
+{
+    public async Task<Guid> Handle(CreateUserCommand request, CancellationToken ct)
+    {
+        // Business logic...
+        return userId;
+    }
+}
+
+// 3. Controller sends via Mediator (Single line)
+[HttpPost]
+public async Task<IActionResult> Create(CreateUserCommand cmd) 
+    => Ok(await _mediator.Send(cmd));
+\`\`\`
+
+#### Solves:
+Eliminates bloated controllers with 15+ injected service dependencies and enables **Pipeline Behaviors** (logging, validation, caching wrappers).`,
+    answerContent_fa: `### نقش کتابخانه MediatR در CQRS
+
+کتابخانه MediatR الگوی Mediator درون‌فرآیندی را پیاده‌سازی می‌کند تا کنترلرها مستقیماً به سرویس‌ها وابسته نباشند و صرفاً یک شیء Command را به MediatR بفرستند. همچنین قابلیت **Pipeline Behaviors** را برای اضافه کردن لاگینگ و ولیدیشن خودکار روی تمام دستورات فراهم می‌کند.`,
+  },
+  {
+    id: "dotnet-mid-q121",
+    stackId: "dotnet",
+    categoryId: "architecture-ddd",
+    levelId: "mid",
+    questionTitle: "Explain the Repository and Unit of Work Patterns.",
+    questionTitle_fa: "الگوی Repository و Unit of Work را توضیح بده.",
+    answerContent: `### Repository & Unit of Work Patterns
+
+- **Repository Pattern:** Mediates between domain and data mapping layers, acting like an in-memory collection of domain objects (\`GetById\`, \`Add\`, \`Remove\`).
+- **Unit of Work Pattern:** Maintains a list of business objects affected by a business transaction and coordinates writing changes as a single atomic database transaction.`,
+    answerContent_fa: `### الگوهای Repository و Unit of Work
+
+- **Repository:** دسترسی به داده‌ها را انتزاعی کرده و با آن شبیه به یک کالکشن درون حافظه رفتار می‌کند.
+- **Unit of Work:** تغییرات چند موجودیت مختلف را در طول یک تراکنش ردیابی کرده و همه را با هم در قالب یک تراکنش واحد ثبت می‌کند.`,
+  },
+  {
+    id: "dotnet-mid-q122",
+    stackId: "dotnet",
+    categoryId: "architecture-ddd",
+    levelId: "mid",
+    questionTitle: "Is it sensible to create a Repository pattern on top of EF Core when DbContext is already a Unit of Work?",
+    questionTitle_fa: "آیا استفاده از الگوی Repository روی EF Core منطقی است؟",
+    answerContent: `### The Repository on EF Core Debate
+
+- **Arguments Against (Often considered anti-pattern):**
+  - \`DbContext\` is already a Unit of Work, and \`DbSet<T>\` is already a Generic Repository.
+  - Wrapping EF Core in generic repositories often cripples advanced LINQ features (projections, split queries, eager loading).
+- **Arguments In Favor (Architectural Boundary):**
+  - Keeps the Application layer decoupled from direct EF Core references.
+  - Useful when using **Specific Repositories** per Aggregate Root in Domain-Driven Design (\`IOrderRepository\`).`,
+    answerContent_fa: `### آیا استفاده از Repository روی EF Core منطقی است؟
+
+خود \`DbContext\` در واقع پیاده‌سازی Unit of Work و \`DbSet\` ریپازیتوری است. ساخت Generic Repository عمومی روی EF Core معمولاً باعث از دست رفتن قدرت LINQ می‌شود. اما ساخت **ریپازیتوری‌های اختصاصی برای Aggregate Rootها** در معماری DDD برای تست‌پذیری و حفظ مرزهای دامین کاملاً معتبر و استاندارد است.`,
+  },
+  {
+    id: "dotnet-mid-q123",
+    stackId: "dotnet",
+    categoryId: "architecture-ddd",
+    levelId: "mid",
+    questionTitle: "What is the difference between a Rich Domain Model and an Anemic Domain Model?",
+    questionTitle_fa: "تفاوت Rich Domain Model با Anemic Domain Model چیست؟",
+    answerContent: `### Rich vs. Anemic Domain Model
+
+- **Anemic Domain Model (Anti-pattern in DDD):**
+  - Entities are just dumb data holders with public getters and setters (\`get; set;\`).
+  - Business logic is scattered across various service classes.
+- **Rich Domain Model (Encapsulated OOP):**
+  - Entities protect their invariants with private setters.
+  - Business operations and mutations are performed via methods on the entity itself (\`order.Cancel()\`, \`order.AddItem()\`).`,
+    answerContent_fa: `### تفاوت مدل غنی (Rich) و مدل کم‌خون (Anemic)
+
+- **Anemic Domain Model:** کلاس‌های موجودیت فقط پراپرتی‌های get/set دارند و هیچ منطقی ندارند و بیزینس در لایه سرویس پخش شده است.
+- **Rich Domain Model:** موجودیت‌ها دارای Setterهای خصوصی بوده و متدهای تغییر وضعیت و اعتبارسنجی قوانین درون خود کلاس قرار دارند (مانند \`account.Withdraw(amount)\`).`,
+  },
+  {
+    id: "dotnet-mid-q124",
+    stackId: "dotnet",
+    categoryId: "architecture-ddd",
+    levelId: "mid",
+    questionTitle: "What is a Value Object in Domain-Driven Design (DDD)?",
+    questionTitle_fa: "مفهوم Value Object در Domain-Driven Design (DDD) چیست؟",
+    answerContent: `### Value Objects in DDD
+
+A **Value Object** is an immutable object defined by its attributes rather than a unique identity (\`Id\`).
+
+#### Characteristics:
+1. **No Conceptual Identity:** Two \`Money(100, "USD")\` objects with the same attributes are completely equal.
+2. **Immutability:** Once created, its values cannot change (use C# \`record\` or readonly class).
+3. **Self-Validation:** Validates itself upon construction.`,
+    answerContent_fa: `### مفهوم Value Object در DDD
+
+شیئی تغییرناپذیر (Immutable) است که شناسه یکتا (\`Id\`) ندارد و هویت آن وابسته به مقادیر ویژگی‌هایش است (مانند \`Money\`، \`Address\` یا \`DateRange\`). دو Value Object با مقادیر یکسان کاملاً با هم برابر در نظر گرفته می‌شوند.`,
+  },
+  {
+    id: "dotnet-mid-q125",
+    stackId: "dotnet",
+    categoryId: "architecture-ddd",
+    levelId: "mid",
+    questionTitle: "What is the difference between an Entity and an Aggregate Root in DDD?",
+    questionTitle_fa: "مفهوم Entity و Aggregate Root در DDD چیست؟",
+    answerContent: `### Entity vs. Aggregate Root
+
+- **Entity:** An object defined by its persistent **unique Identity (\`Id\`)** that runs through its entire lifecycle.
+- **Aggregate Root (AR):** The master entity that serves as the single entry point to an **Aggregate** (a cluster of associated entities and value objects).
+  - External objects can only hold a direct reference to the Aggregate Root.
+  - The Aggregate Root guarantees transactional consistency for the entire cluster.`,
+    answerContent_fa: `### تفاوت Entity و Aggregate Root
+
+- **Entity:** شیئی که دارای یک شناسه یکتای اختصاصی (\`Id\`) است و در طول زمان تغییر وضعیت می‌دهد.
+- **Aggregate Root:** موجودیت اصلی و نگهبان یک کلاستر از موجودیت‌ها است (مانند \`Order\` که حاوی \`OrderItem\`ها است). ارتباطات بیرونی فقط باید از طریق Aggregate Root انجام شود تا یکپارچگی داده‌ها حفظ شود.`,
+  },
+  {
+    id: "dotnet-mid-q126",
+    stackId: "dotnet",
+    categoryId: "architecture-ddd",
+    levelId: "mid",
+    questionTitle: "What is the difference between a Domain Event and an Integration Event?",
+    questionTitle_fa: "تفاوت Domain Event و Integration Event چیست؟",
+    answerContent: `### Domain Event vs. Integration Event
+
+- **Domain Event:**
+  - In-process event signaling that something important happened **within the same Bounded Context / database transaction** (e.g. \`OrderCreatedDomainEvent\`).
+  - Handled synchronously or asynchronously via MediatR within the same application process.
+- **Integration Event:**
+  - Published over a message broker (**RabbitMQ**, Kafka) to notify **external microservices and bounded contexts** (e.g. \`OrderPaidIntegrationEvent\`).`,
+    answerContent_fa: `### تفاوت Domain Event و Integration Event
+
+- **Domain Event:** رویدادی درون‌برنامه‌ای است که در محدوده همان میکروسرویس و تراکنش دیتابیس منتشر و بررسی می‌شود (با MediatR).
+- **Integration Event:** رویدادی است که از طریق صف‌های پیام (RabbitMQ) برای باخبر کردن سایر میکروسرویس‌های مستقل فرستاده می‌شود.`,
+  },
+  {
+    id: "dotnet-mid-q127",
+    stackId: "dotnet",
+    categoryId: "architecture-ddd",
+    levelId: "mid",
+    questionTitle: "What is the purpose of the Factory Method Design Pattern?",
+    questionTitle_fa: "الگوی Factory Method چه کاربردی دارد؟",
+    answerContent: `### Factory Method Pattern
+
+Defines an interface or method for creating an object, letting subclasses or internal factory methods decide which class to instantiate.
+
+\`\`\`csharp
+public class PaymentGatewayFactory
+{
+    public IPaymentGateway Create(PaymentProvider provider) => provider switch
+    {
+        PaymentProvider.Zarinpal => new ZarinpalGateway(),
+        PaymentProvider.Saman => new SamanGateway(),
+        _ => throw new NotSupportedException()
+    };
+}
+\`\`\``,
+    answerContent_fa: `### الگوی طراحی Factory Method
+
+الگویی برای ساخت اشیاء بدون نیاز به مشخص کردن کلاس دقیق در زمان فراخوانی است و تصمیم‌گیری برای ساخت شیء مناسب را بر اساس پارامترهای ورودی کپسوله می‌کند.`,
+  },
+  {
+    id: "dotnet-mid-q128",
+    stackId: "dotnet",
+    categoryId: "architecture-ddd",
+    levelId: "mid",
+    questionTitle: "What is the Singleton Pattern and why can it cause issues in multithreaded environments?",
+    questionTitle_fa: "الگوی Singleton چیست و چرا در محیط Multi-thread مشکل‌ساز می‌شود؟",
+    answerContent: `### Singleton Pattern & Thread-Safety
+
+Ensures a class has only one instance and provides a global point of access to it.
+
+#### Multithreaded Issues:
+If not initialized properly, multiple concurrent threads can enter the constructor simultaneously and create multiple instances.
+
+#### Thread-safe C# Singleton:
+\`\`\`csharp
+public sealed class CacheManager
+{
+    private static readonly Lazy<CacheManager> _lazy =
+        new Lazy<CacheManager>(() => new CacheManager());
+
+    public static CacheManager Instance => _lazy.Value;
+    private CacheManager() { }
+}
+\`\`\``,
+    answerContent_fa: `### الگوی Singleton و چالش‌های Multi-threading
+
+تضمین می‌کند که فقط یک نمونه از یک کلاس در کل برنامه وجود داشته باشد. در محیط چندتردی اگر پیاده‌سازی Lazy ایمن (Thread-safe) نباشد، ممکن است چند ترد همزمان وارد سازنده شده و چند نمونه ساخته شود. استفاده از \`Lazy<T>\` در دات‌نت بهترین راه حل است.`,
+  },
+  {
+    id: "dotnet-mid-q129",
+    stackId: "dotnet",
+    categoryId: "architecture-ddd",
+    levelId: "mid",
+    questionTitle: "Where is the Strategy Pattern applied in a FinTech or Insurance platform?",
+    questionTitle_fa: "الگوی Strategy Pattern در کجای یک سیستم فین‌تک کاربرد دارد؟",
+    answerContent: `### Strategy Pattern in FinTech / InsurTech
+
+Defines a family of interchangeable algorithms and encapsulates each one inside a separate class.
+
+#### Real-world FinTech Use Cases:
+- **Fee Calculation:** Different calculation strategies for Debit Cards, Credit Cards, and Cryptocurrency.
+- **Insurance Premium Calculation:** Different risk-scoring strategies for Third-Party Auto Insurance, Life Insurance, and Fire Insurance.`,
+    answerContent_fa: `### کاربرد الگوی Strategy در سیستم‌های مالی و بیمه‌ای
+
+برای پیاده‌سازی الگوریتم‌های مختلف محاسبه (مانند محاسبه کارمزد تراکنش، فرمول‌های قیمت‌گذاری بیمه شخص ثالث یا تخفیف‌های مناسبتی) استفاده می‌شود تا بتوان بدون تغییر کدهای قبلی، فرمول‌های جدید اضافه کرد.`,
+  },
+  {
+    id: "dotnet-mid-q130",
+    stackId: "dotnet",
+    categoryId: "architecture-ddd",
+    levelId: "mid",
+    questionTitle: "When should you use the Decorator Design Pattern?",
+    questionTitle_fa: "دیزاین پترن Decorator چه زمانی استفاده می‌شود؟",
+    answerContent: `### Decorator Pattern
+
+Attaches additional responsibilities to an object dynamically without modifying its underlying code (Open/Closed Principle).
+
+#### Common .NET Uses:
+- Wrapping a repository with a **Caching Decorator** or **Logging Decorator**.
+
+\`\`\`csharp
+public class CachedProductRepository : IProductRepository
+{
+    private readonly IProductRepository _inner;
+    private readonly IMemoryCache _cache;
+    // Intercepts call, checks cache, delegates to _inner if cache miss
+}
+\`\`\``,
+    answerContent_fa: `### کاربرد الگوی Decorator
+
+برای افزودن قابلیت‌های جدید (مانند کشینگ، لاگینگ یا مانیتورینگ زمان اجرا) به یک کلاس موجود بدون دستکاری سورس‌کد آن کلاس استفاده می‌شود (مانند قرار دادن لایه Caching دور یک Repository).`,
+  },
+
+  // ── Database, EF Core & Optimization (Q131 - Q145) ───────────────
+  {
+    id: "dotnet-mid-q131",
+    stackId: "dotnet",
+    categoryId: "ef-core",
+    levelId: "mid",
+    questionTitle: "How do you detect and fix the N+1 query problem in EF Core?",
+    questionTitle_fa: "مشکل N+1 در EF Core چیست و چگونه حل می‌شود؟",
+    answerContent: `### Resolving N+1 in EF Core
+
+1. **Use Eager Loading (\`Include\` / \`ThenInclude\`):**
+   \`\`\`csharp
+   var orders = await _context.Orders.Include(o => o.Items).ToListAsync();
+   \`\`\`
+2. **Explicit Projection (\`Select\`):**
+   Only queries the specific fields needed.
+3. **Split Queries (\`AsSplitQuery\`):**
+   Prevents Cartesian explosive joins when including multiple child collections.`,
+    answerContent_fa: `### حل مشکل N+1 در EF Core
+
+استفاده از **Eager Loading** با دستور \`Include\`، پروژکشن فیلدهای مورد نیاز با \`Select\` و استفاده از **\`AsSplitQuery\`** برای جلوگیری از ضرب دکارتی جدول‌ها.`,
+  },
+  {
+    id: "dotnet-mid-q132",
+    stackId: "dotnet",
+    categoryId: "ef-core",
+    levelId: "mid",
+    questionTitle: "What is AsNoTracking in EF Core and what performance benefits does it provide?",
+    questionTitle_fa: "متد AsNoTracking در EF Core چه می‌کند و چه زمانی باید استفاده شود؟",
+    answerContent: `### AsNoTracking Deep Dive
+
+- Bypasses the EF Core Change Tracker snapshot generation.
+- Reduces memory allocations by ~40-60% and speeds up read queries by avoiding object identity tracking.
+- **Rule:** Use \`AsNoTracking()\` for all read-only API endpoints and reporting queries.`,
+    answerContent_fa: `### کاربرد و مزایای AsNoTracking
+
+ردیابی تغییرات توسط Change Tracker را غیرفعال می‌کند و مصرف حافظه رم را ۴۰ تا ۶۰ درصد کاهش داده و سرعت کوئری را به شدت بالا می‌برد. باید در تمامی اندپوینت‌های Read-Only استفاده شود.`,
+  },
+  {
+    id: "dotnet-mid-q133",
+    stackId: "dotnet",
+    categoryId: "ef-core",
+    levelId: "mid",
+    questionTitle: "What is a Concurrency Token in EF Core and how is Optimistic Concurrency implemented?",
+    questionTitle_fa: "مفهوم Concurrency Token در EF Core چیست؟",
+    answerContent: `### Concurrency Tokens & Optimistic Concurrency
+
+A **Concurrency Token** (such as a \`rowversion\` or \`xmin\` timestamp) detects conflicting updates between multiple users.
+
+\`\`\`csharp
+public class BankAccount
+{
+    public int Id { get; set; }
+    public decimal Balance { get; set; }
+
+    [Timestamp] // Concurrency Token
+    public byte[] RowVersion { get; set; }
+}
+\`\`\`
+
+If another user modified the row between read and write, EF Core generates a SQL \`WHERE RowVersion = @original\` clause and throws a **\`DbUpdateConcurrencyException\`**.`,
+    answerContent_fa: `### توکن همزمانی (Concurrency Token) در EF Core
+
+روشی برای پیاده‌سازی **Optimistic Concurrency** با استفاده از یک فیلد \`[Timestamp]\` (مانند rowversion) است. اگر کاربری رکورد را ویرایش کند و همزمان کاربر دیگری قصد ذخیره تغییرات را داشته باشد، خطای \`DbUpdateConcurrencyException\` صادر شده و از بازنویسی اشتباه داده جلوگیری می‌شود.`,
+  },
+  {
+    id: "dotnet-mid-q134",
+    stackId: "dotnet",
+    categoryId: "ef-core",
+    levelId: "mid",
+    questionTitle: "What is the difference between Optimistic and Pessimistic Concurrency in databases?",
+    questionTitle_fa: "تفاوت Optimistic Concurrency و Pessimistic Concurrency در دیتابیس چیست؟",
+    answerContent: `### Optimistic vs. Pessimistic Concurrency
+
+- **Optimistic Concurrency:**
+  - Assumes conflicts are rare.
+  - Does not lock records during reading; checks for conflicts at write time using version numbers.
+  - Ideal for web apps and microservices with high read throughput.
+- **Pessimistic Concurrency:**
+  - Assumes conflicts will happen.
+  - Acquires database locks (e.g. \`SELECT ... FOR UPDATE\` / \`XLOCK\`) from read until commit, blocking other transactions.`,
+    answerContent_fa: `### مقایسه قفل‌گذاری خوش‌بینانه و بدبینانه
+
+- **Optimistic:** هیچ قفلی روی سطرها نمی‌گذارد و موقع ذخیره چک می‌کند که نسخه داده تغییر نکرده باشد (مناسب وب و API).
+- **Pessimistic:** از زمان خواندن روی سطرها قفل سخت دیتابیسی می‌گذارد و سایر تراکنش‌ها را معطل نگه می‌دارد (مناسب عملیات‌های فوق‌حساس مالی).`,
+  },
+  {
+    id: "dotnet-mid-q135",
+    stackId: "dotnet",
+    categoryId: "ef-core",
+    levelId: "mid",
+    questionTitle: "How do you identify and optimize slow database queries?",
+    questionTitle_fa: "چگونه کوئری‌های کند دیتابیس را پیدا و بهینه‌سازی می‌کنی؟",
+    answerContent: `### Identifying & Optimizing Slow Queries
+
+1. **Identify:** Use SQL Server Profiler, Extended Events, \`pg_stat_statements\` (PostgreSQL), and APM tools (OpenTelemetry/SigNoz).
+2. **Analyze:** Inspect the **Execution Plan** to find **Index Scans**, Table Scans, and High-cost Key Lookups.
+3. **Optimize:**
+   - Add targeted **Covering Indexes**.
+   - Eliminate non-SARGable operators (e.g. \`WHERE YEAR(Date) = 2024\`).
+   - Use pagination (\`OFFSET/FETCH\`).`,
+    answerContent_fa: `### شناسایی و بهینه‌سازی کوئری‌های کند
+
+۱. شناسایی از طریق ابزارهای مانیتورینگ APM و لاگ کوئری‌های کند دیتابیس.
+۲. بررسی **Execution Plan** و پیدا کردن Index Scanها و عملیات‌های گران‌قیمت.
+۳. اصلاح با ساخت ایندکس‌های مناسب (Covering Index)، حذف توابع از روی ستون‌های شرط و صفحه‌بندی.`,
+  },
+  {
+    id: "dotnet-mid-q136",
+    stackId: "dotnet",
+    categoryId: "ef-core",
+    levelId: "mid",
+    questionTitle: "What is an Execution Plan in SQL Server?",
+    questionTitle_fa: "مفهوم Execution Plan در SQL Server چیست؟",
+    answerContent: `### SQL Execution Plans
+
+An Execution Plan is the graphic or text roadmap generated by the database query optimizer detailing how it executes a SQL statement (Index Seek, Index Scan, Nested Loops Join, Hash Match).`,
+    answerContent_fa: `### مفهوم Execution Plan
+
+نقشه راه و برنامه اجرایی بهینه‌سازی‌شده‌ای است که موتور دیتابیس برای اجرای یک کوئری (نحوه سرچ در ایندکس‌ها، انواع Join و مرتب‌سازی) تولید می‌کند.`,
+  },
+  {
+    id: "dotnet-mid-q137",
+    stackId: "dotnet",
+    categoryId: "ef-core",
+    levelId: "mid",
+    questionTitle: "What is the difference between a Clustered Index and a Non-Clustered Index?",
+    questionTitle_fa: "تفاوت Clustered Index و Non-Clustered Index چیست؟",
+    answerContent: `### Clustered vs. Non-Clustered Index
+
+- **Clustered Index:**
+  - Dictates the **physical storage order** of data rows in the table.
+  - Only **one** clustered index per table (typically the Primary Key).
+- **Non-Clustered Index:**
+  - A separate B-Tree structure containing index key columns and row locators (pointers back to clustered index keys).
+  - Multiple non-clustered indexes per table.`,
+    answerContent_fa: `### تفاوت Clustered Index و Non-Clustered Index
+
+- **Clustered Index:** ترتیب فیزیکی ذخیره‌سازی داده‌ها روی هارد دیسک را مشخص می‌کند (فقط یک عدد در هر جدول).
+- **Non-Clustered Index:** ساختار جداگانه‌ای از اشاره‌گرها برای جستجوی سریع روی ستون‌های خاص است (چندین عدد در هر جدول).`,
+  },
+  {
+    id: "dotnet-mid-q138",
+    stackId: "dotnet",
+    categoryId: "ef-core",
+    levelId: "mid",
+    questionTitle: "What is a Covering Index in SQL?",
+    questionTitle_fa: "مفهوم Covering Index در SQL چیست؟",
+    answerContent: `### Covering Index
+
+A **Covering Index** contains all columns requested by a query, either in the index key or via the **\`INCLUDE\`** clause.
+
+\`\`\`sql
+CREATE NONCLUSTERED INDEX IX_Orders_CustomerId
+ON Orders (CustomerId)
+INCLUDE (OrderDate, TotalAmount);
+\`\`\`
+
+#### Benefit:
+Eliminates expensive **Key Lookups** to the clustered index because the query engine retrieves all needed fields directly from the index.`,
+    answerContent_fa: `### ایندکس پوششی (Covering Index)
+
+ایندکسی است که تمام ستون‌های مورد نیاز در شرط و فیلدهای خروجی کوئری را پوشش می‌دهد (با عبارت \`INCLUDE\`) و نیاز به عملیات پرهزینه **Key Lookup** را به صفر می‌رساند.`,
+  },
+  {
+    id: "dotnet-mid-q139",
+    stackId: "dotnet",
+    categoryId: "ef-core",
+    levelId: "mid",
+    questionTitle: "How does handling JSON data in PostgreSQL (JSONB) differ from SQL Server?",
+    questionTitle_fa: "نحوه مدیریت داده‌های نوع JSON در PostgreSQL چه تفاوتی با SQL Server دارد؟",
+    answerContent: `### JSON in PostgreSQL (JSONB) vs. SQL Server
+
+- **PostgreSQL (\`JSONB\`):**
+  - Stores JSON in a decomposed, indexed binary format.
+  - Supports **GIN indexes** for blazingly fast lookups directly inside nested JSON keys.
+- **SQL Server:**
+  - Stores JSON as standard \`NVARCHAR\` text and parses it at query time via functions (\`JSON_VALUE\`, \`JSON_QUERY\`).`,
+    answerContent_fa: `### تفاوت مدیریت JSON در PostgreSQL و SQL Server
+
+در **PostgreSQL** فرمت \`JSONB\` داده‌ها را به صورت باینری ذخیره می‌کند و می‌توان روی فیلدهای داخلی جیسون ایندکس **GIN** گذاشت که بسیار سریع است. در **SQL Server** جیسون به صورت متن \`NVARCHAR\` ذخیره شده و با توابع پارس می‌شود.`,
+  },
+  {
+    id: "dotnet-mid-q140",
+    stackId: "dotnet",
+    categoryId: "ef-core",
+    levelId: "mid",
+    questionTitle: "What is Database Connection Pooling and how does it work?",
+    questionTitle_fa: "مفهوم Connection Pooling در ارتباط با دیتابیس چیست؟",
+    answerContent: `### Database Connection Pooling
+
+Opening physical TCP database connections is expensive (authentication, handshakes). A **Connection Pool** keeps a pool of open, warm connections in memory.
+
+When code calls \`connection.Open()\`, it borrows an existing connection from the pool. Calling \`connection.Close()\` returns it to the pool rather than terminating the physical TCP socket.`,
+    answerContent_fa: `### مفهوم Connection Pooling
+
+باز کردن کانکشن فیزیکی به دیتابیس بسیار زمان‌بر است. Connection Pool مجموعه‌ای از کانکشن‌های باز را در حافظه نگه می‌دارد تا هنگام درخواست برنامه سریعاً به آن اختصاص داده و پس از \`Dispose\` به جای بستن فیزیکی، به استخر کانکشن‌ها بازگرداند.`,
+  },
+  {
+    id: "dotnet-mid-q141",
+    stackId: "dotnet",
+    categoryId: "ef-core",
+    levelId: "mid",
+    questionTitle: "How is Data Seeding performed in EF Core?",
+    questionTitle_fa: "نحوه Seed کردن داده‌های اولیه در EF Core چگونه است؟",
+    answerContent: `### Data Seeding in EF Core
+
+1. **Model Seed Data (\`HasData\` in \`OnModelCreating\`):**
+   - Managed directly through EF Core migrations. Requires static primary keys.
+2. **Custom Seeding at Application Startup:**
+   - Query \`DbContext\` on startup inside \`Program.cs\` to insert initial lookup tables and default admin users.`,
+    answerContent_fa: `### نحوه Seed کردن داده‌های اولیه
+
+استفاده از متد \`modelBuilder.Entity<T>().HasData()\` در متد \`OnModelCreating\` برای اعمال از طریق مایگریشن یا اجرای اسکریپت سفارشی درج داده‌های پایه در زمان استارت‌آپ برنامه.`,
+  },
+  {
+    id: "dotnet-mid-q142",
+    stackId: "dotnet",
+    categoryId: "ef-core",
+    levelId: "mid",
+    questionTitle: "What are Global Query Filters in EF Core (e.g. for Soft Delete and Multi-Tenancy)?",
+    questionTitle_fa: "مفهوم Global Query Filters در EF Core چیست؟",
+    answerContent: `### Global Query Filters
+
+Automatically applies LINQ query predicates to all queries on an entity type.
+
+\`\`\`csharp
+modelBuilder.Entity<Product>()
+    .HasQueryFilter(p => !p.IsDeleted && p.TenantId == _currentTenantId);
+\`\`\`
+
+To bypass the filter when needed: \`_context.Products.IgnoreQueryFilters().ToListAsync()\`.`,
+    answerContent_fa: `### مفهوم Global Query Filters
+
+فیلترهای سراسری هستند که به صورت خودکار روی تمامی کوئری‌های یک موجودیت اعمال می‌شوند و برای پیاده‌سازی **حذف منطقی (Soft Delete)** یا تفکیک داده‌های مستاجران در **Multi-Tenancy** کاربرد دارند.`,
+  },
+  {
+    id: "dotnet-mid-q143",
+    stackId: "dotnet",
+    categoryId: "ef-core",
+    levelId: "mid",
+    questionTitle: "How do you perform Bulk Insert and Bulk Update efficiently in modern .NET / EF Core?",
+    questionTitle_fa: "چگونه عملیات Bulk Insert یا Bulk Update را در دات‌نت بهینه انجام می‌دهی؟",
+    answerContent: `### Bulk Operations in EF Core 7+
+
+- **\`ExecuteUpdateAsync\` / \`ExecuteDeleteAsync\` (.NET 7+):**
+  - Executes directly in the database without loading entities into memory or change tracking.
+  \`\`\`csharp
+  await _context.Products
+      .Where(p => p.Price > 100)
+      .ExecuteUpdateAsync(s => s.SetProperty(p => p.Discount, 10));
+  \`\`\`
+- **Bulk Insert:** Use libraries like \`EFCore.BulkExtensions\` or \`SqlBulkCopy\`.`,
+    answerContent_fa: `### بهینه‌سازی عملیات Bulk Insert و Bulk Update
+
+در دات‌نت ۷ و ۸ متدهای **\`ExecuteUpdateAsync\`** و **\`ExecuteDeleteAsync\`** تغییرات را بدون لود کردن داده‌ها در رم مستقیماً در دیتابیس اعمال می‌کنند. برای درج‌های میلیونی از \`SqlBulkCopy\` استفاده می‌شود.`,
+  },
+  {
+    id: "dotnet-mid-q144",
+    stackId: "dotnet",
+    categoryId: "ef-core",
+    levelId: "mid",
+    questionTitle: "What is a Value Converter in EF Core?",
+    questionTitle_fa: "مفهوم Value Converter در EF Core چیست؟",
+    answerContent: `### Value Converters in EF Core
+
+Value converters convert property values when reading from or writing to the database (e.g. converting strongly-typed IDs, encrypting strings, or mapping enums to strings).
+
+\`\`\`csharp
+modelBuilder.Entity<Order>()
+    .Property(e => e.Status)
+    .HasConversion<string>(); // Stores enum as string in DB
+\`\`\``,
+    answerContent_fa: `### مفهوم Value Converter در EF Core
+
+ابزاری برای تبدیل مقادیر پراپرتی‌ها هنگام ذخیره یا خواندن از دیتابیس است (مانند ذخیره Enum به صورت متنی در دیتابیس یا تبدیل آبجکت به JSON).`,
+  },
+  {
+    id: "dotnet-mid-q145",
+    stackId: "dotnet",
+    categoryId: "ef-core",
+    levelId: "mid",
+    questionTitle: "What is Client Evaluation vs. Server Evaluation in EF Core?",
+    questionTitle_fa: "تفاوت Client Evaluation و Server Evaluation هنگام واکشی اطلاعات چیست؟",
+    answerContent: `### Server vs. Client Evaluation in EF Core
+
+- **Server Evaluation:** LINQ expressions translated into native SQL commands executed inside the database engine.
+- **Client Evaluation:** Operations that cannot be translated to SQL are evaluated in .NET memory on the server after downloading the dataset.
+- **Rule in EF Core 3.0+:** EF Core throws an exception if a top-level query clause cannot be translated to SQL, preventing accidental mass data downloads.`,
+    answerContent_fa: `### مقایسه Client Evaluation و Server Evaluation
+
+- **Server Evaluation:** بخش‌هایی از کوئری LINQ که مستقیماً به SQL تبدیل شده و در دیتابیس اجرا می‌شوند.
+- **Client Evaluation:** دستوراتی که دیتابیس نمی‌شناسد و پس از دانلود داده‌ها در رم سرور دات‌نت محاسبه می‌شوند.`,
+  },
+
+  // ── Message Brokers, Caching & Microservices (Q146 - Q160) ───────
+  {
+    id: "dotnet-mid-q146",
+    stackId: "dotnet",
+    categoryId: "microservices",
+    levelId: "mid",
+    questionTitle: "What are the trade-offs of Microservices architecture compared to a Monolith?",
+    questionTitle_fa: "مزایا و معایب معماری میکروسرویس نسبت به Monolith چیست؟",
+    answerContent: `### Microservices vs. Monolith Trade-offs
+
+#### Advantages:
+- Independent deployments, scalability, and technological diversity per service.
+- Isolated failure domains.
+
+#### Disadvantages & Complexity:
+- Distributed data consistency (no ACID across services).
+- Network latency and serialization overhead.
+- Operational complexity (monitoring, tracing, service discovery).`,
+    answerContent_fa: `### مزایا و معایب معماری میکروسرویس
+
+- **مزایا:** دیپلوی مستقل تیم‌ها، مقیاس‌پذیری مجزای هر ماژول و ایزوله بودن خطاها.
+- **معایب:** پیچیدگی بالا در حفظ یکپارچگی داده‌ها (عدم وجود تراکنش سراسری)، افزایش ترافیک شبکه و نیاز به زیرساخت‌های پیچیده مانیتورینگ.`,
+  },
+  {
+    id: "dotnet-mid-q147",
+    stackId: "dotnet",
+    categoryId: "microservices",
+    levelId: "mid",
+    questionTitle: "What is the role of an API Gateway (like Ocelot or YARP) in Microservices?",
+    questionTitle_fa: "ابزار API Gateway (مثل Ocelot یا YARP) چه وظیفه‌ای در میکروسرویس دارد؟",
+    answerContent: `### API Gateway (YARP / Ocelot)
+
+Acts as a single entry point for all clients, abstracting the internal microservice topology.
+
+#### Responsibilities:
+1. **Reverse Proxy & Routing:** Forwards requests to internal service instances.
+2. **Authentication & Authorization:** Validates tokens at the edge.
+3. **Rate Limiting & Throttling**.
+4. **Request Aggregation & SSL Termination**.`,
+    answerContent_fa: `### وظایف API Gateway (مثل YARP یا Ocelot)
+
+نقطه ورود واحد کلاینت‌ها به سیستم است و وظایفی چون مسیریابی درخواست‌ها، احراز هویت اولیه، Rate Limiting، تجمیع پاسخ‌ها و SSL Termination را انجام می‌دهد.`,
+  },
+  {
+    id: "dotnet-mid-q148",
+    stackId: "dotnet",
+    categoryId: "microservices",
+    levelId: "mid",
+    questionTitle: "What is the difference between Synchronous and Asynchronous communication between microservices?",
+    questionTitle_fa: "ارتباط Synchronous و Asynchronous بین میکروسرویس‌ها چه تفاوتی دارند؟",
+    answerContent: `### Sync vs. Async Microservice Communication
+
+- **Synchronous (HTTP REST / gRPC):**
+  - Client waits for an immediate response from the downstream service.
+  - **Risk:** Cascading failures and temporal coupling.
+- **Asynchronous (Message-Driven / RabbitMQ / Kafka):**
+  - Publisher emits an event to a broker and continues immediately.
+  - Highly resilient, decoupled, and handles traffic spikes seamlessly.`,
+    answerContent_fa: `### مقایسه ارتباط همگام و ناهمگام در میکروسرویس‌ها
+
+- **همگام (REST / gRPC):** سرویس منتظر پاسخ می‌ماند که باعث ایجاد وابستگی زمانی و سرایت خرابی (Cascading Failure) می‌شود.
+- **ناهمگام (RabbitMQ):** پیام در صف قرار گرفته و سرویس‌ها بدون قفل شدن کار خود را ادامه می‌دهند که پایداری سیستم را به شدت افزایش می‌دهد.`,
+  },
+  {
+    id: "dotnet-mid-q149",
+    stackId: "dotnet",
+    categoryId: "microservices",
+    levelId: "mid",
+    questionTitle: "What is RabbitMQ and what problems does it solve in distributed systems?",
+    questionTitle_fa: "RabbitMQ چیست و چه مشکلی را در سیستم‌های توزیع‌شده حل می‌کند؟",
+    answerContent: `### RabbitMQ
+
+RabbitMQ is an enterprise message broker implementing the **AMQP** protocol.
+
+#### Solves:
+- **Decoupling:** Decouples producer systems from consumer systems.
+- **Load Leveling (Buffering):** Absorbs sudden spikes in traffic and processes messages at a controlled pace.
+- **Guaranteed Delivery:** Retries and persists messages in case of worker downtime.`,
+    answerContent_fa: `### مفهوم و کاربرد RabbitMQ
+
+یک Message Broker بر پایه پروتکل AMQP است که ارتباط ناهمگام بین سرویس‌ها، توزیع بار (Load Leveling) در زمان ترافیک سنگین و اطمینان از عدم مفقودی پیام‌ها در صورت خرابی سرورها را تضمین می‌کند.`,
+  },
+  {
+    id: "dotnet-mid-q150",
+    stackId: "dotnet",
+    categoryId: "microservices",
+    levelId: "mid",
+    questionTitle: "What is the difference between an Exchange and a Queue in RabbitMQ?",
+    questionTitle_fa: "تفاوت Queue و Exchange در RabbitMQ چیست؟",
+    answerContent: `### RabbitMQ: Exchange vs. Queue
+
+- **Exchange:** Message routing agent. Receives messages from producers and pushes them to queues based on **Bindings** and **Routing Keys**.
+- **Queue:** Buffer stored in memory/disk that holds messages until consumed by worker applications.`,
+    answerContent_fa: `### تفاوت Exchange و Queue در RabbitMQ
+
+- **Exchange:** مسیریاب پیام است که پیام‌ها را از فرستنده گرفته و بر اساس قوانین (Routing Key) به صف‌های مربوطه هدایت می‌کند.
+- **Queue:** صف ذخیره‌سازی پیام‌ها در حافظه/دیسک تا زمانی که گیرنده‌ها (Consumers) آن‌ها را پردازش کنند.`,
+  },
+  {
+    id: "dotnet-mid-q151",
+    stackId: "dotnet",
+    categoryId: "microservices",
+    levelId: "mid",
+    questionTitle: "Explain the types of Exchanges in RabbitMQ (Direct, Fanout, Topic, Headers).",
+    questionTitle_fa: "انواع Exchange در RabbitMQ (Direct, Topic, Fanout) را توضیح بده.",
+    answerContent: `### RabbitMQ Exchange Types
+
+1. **Direct Exchange:** Routes messages to queues based on an **exact match** of the routing key.
+2. **Fanout Exchange:** Broadcasts messages to **all bound queues** unconditionally (ignores routing keys).
+3. **Topic Exchange:** Routes messages based on wildcard pattern matching (\`*\` matches one word, \`#\` matches zero or more words, e.g. \`order.payment.#\`).
+4. **Headers Exchange:** Routes based on message header attributes instead of routing keys.`,
+    answerContent_fa: `### انواع Exchange در RabbitMQ
+
+۱. **Direct:** هدایت پیام به صفی که Routing Key آن دقیقاً تطابق دارد.
+۲. **Fanout:** ارسال کپی پیام به تمامی صف‌های متصل (Broadcast).
+۳. **Topic:** هدایت پیام بر اساس الگوهای Wildcard (مانند \`order.*.paid\`).
+۴. **Headers:** مسیریابی بر اساس مقادیر هدر پیام.`,
+  },
+  {
+    id: "dotnet-mid-q152",
+    stackId: "dotnet",
+    categoryId: "microservices",
+    levelId: "mid",
+    questionTitle: "What is a Dead Letter Queue (DLQ) in RabbitMQ?",
+    questionTitle_fa: "مفهوم Dead Letter Queue (DLQ) در RabbitMQ چیست؟",
+    answerContent: `### Dead Letter Queue (DLQ)
+
+A DLQ captures messages that cannot be processed successfully after exceeding max retry limits (e.g. poison messages or malformed payloads). This prevents failing messages from clogging main processing queues.`,
+    answerContent_fa: `### مفهوم Dead Letter Queue (DLQ)
+
+صفی اختصاصی برای نگه‌داری پیام‌هایی است که به دلیل خطای غیرمنتظره پس از چندین بار تلاش مجدد (Retry) پردازش نشده‌اند تا مانع از متوقف شدن صف اصلی شوند.`,
+  },
+  {
+    id: "dotnet-mid-q153",
+    stackId: "dotnet",
+    categoryId: "microservices",
+    levelId: "mid",
+    questionTitle: "What is MassTransit and what capabilities does it add on top of RabbitMQ?",
+    questionTitle_fa: "کتابخانه MassTransit چیست و چه امکاناتی به RabbitMQ اضافه می‌کند؟",
+    answerContent: `### MassTransit in .NET
+
+MassTransit is a high-level service bus framework for .NET that abstracts message brokers.
+
+#### Capabilities:
+- Strongly-typed consumers.
+- Automatic retry policies with exponential backoff.
+- Outbox pattern implementation.
+- Saga state machines for distributed workflow orchestration.`,
+    answerContent_fa: `### نقش کتابخانه MassTransit
+
+یک فریم‌ورک Service Bus قدرتمند در دات‌نت است که کار با صف‌های پیام را ساده کرده و امکاناتی چون مدیریت خودکار خطاها و تلاش مجدد (Retries)، الگوی Outbox و ماشین‌های وضعیت Saga را فراهم می‌سازد.`,
+  },
+  {
+    id: "dotnet-mid-q154",
+    stackId: "dotnet",
+    categoryId: "microservices",
+    levelId: "mid",
+    questionTitle: "What is Redis and what are its use cases beyond caching?",
+    questionTitle_fa: "ابزار Redis چیست و چه کاربردهایی فراتر از Caching دارد؟",
+    answerContent: `### Redis Capabilities
+
+Redis is an in-memory key-value data structure store used as a:
+1. **High-speed Cache**.
+2. **Distributed Locks (Redlock algorithm)** for concurrency coordination.
+3. **Rate Limiting Counters** (\`INCR\` with TTL).
+4. **Pub/Sub and Stream Message Broker**.
+5. **Leaderboards / Real-time rankings** using Sorted Sets (\`ZSET\`).`,
+    answerContent_fa: `### کاربردهای Redis فراتر از کشینگ
+
+ردیس یک پایگاه داده In-Memory فوق‌العاده سریع است که علاوه بر کش، برای **قفل‌های توزیع‌شده (Distributed Lock)**، شمارنده‌های **Rate Limiting**، سیستم‌های **Pub/Sub** و صف‌بندی اولویت‌دار استفاده می‌شود.`,
+  },
+  {
+    id: "dotnet-mid-q155",
+    stackId: "dotnet",
+    categoryId: "microservices",
+    levelId: "mid",
+    questionTitle: "What are the common Data Structures in Redis (String, Hash, Set, Sorted Set)?",
+    questionTitle_fa: "ساختارهای داده در Redis چه کاربردهایی دارند؟",
+    answerContent: `### Redis Data Structures
+
+- **Strings:** Binary-safe strings, tokens, JSON blobs, counters (\`INCR\`).
+- **Hashes:** Objects with field-value pairs (ideal for user profiles).
+- **Sets:** Unordered unique collections (tags, unique visitors).
+- **Sorted Sets (ZSET):** Sets ordered by a floating-point score (leaderboards, priority queues).
+- **Lists:** Ordered string lists (queues with \`LPUSH\` and \`RPOP\`).`,
+    answerContent_fa: `### ساختارهای داده در ردیس
+
+- **String:** ذخیره توکن‌ها، شمارنده‌ها و مقادیر ساده.
+- **Hash:** ذخیره اشیاء و فیلدهای آبجکت (مثل پروفایل کاربر).
+- **Set:** کالکشن مقادیر یکتا بدون تکرار.
+- **Sorted Set (ZSET):** کالکشن مرتب‌شده بر اساس امتیاز (مناسب رتبه‌بندی و صف‌های اولویت‌دار).`,
+  },
+  {
+    id: "dotnet-mid-q156",
+    stackId: "dotnet",
+    categoryId: "microservices",
+    levelId: "mid",
+    questionTitle: "What is the difference between Redis Pub/Sub and RabbitMQ?",
+    questionTitle_fa: "تفاوت Redis Pub/Sub با RabbitMQ چیست؟",
+    answerContent: `### Redis Pub/Sub vs. RabbitMQ
+
+- **Redis Pub/Sub:**
+  - Fire-and-forget message broadcasting.
+  - **No persistence or guaranteed delivery:** If a subscriber is offline, the message is permanently lost.
+- **RabbitMQ:**
+  - Full-fledged enterprise message broker with message acknowledgments (\`ack\`), persistent disk storage, routing exchanges, and dead-lettering.`,
+    answerContent_fa: `### تفاوت Redis Pub/Sub و RabbitMQ
+
+- **Redis Pub/Sub:** سبک و سریع است اما رویکرد Fire-and-forget دارد و در صورت قطعی کلاینت، پیام‌ها از دست می‌روند (فاقد صف و تضمین تحویل).
+- **RabbitMQ:** دارای صف‌های دائمی، تضمین تحویل و سیستم تایید دریافت (Ack) برای سناریوهای حیاتی بیزینسی است.`,
+  },
+  {
+    id: "dotnet-mid-q157",
+    stackId: "dotnet",
+    categoryId: "microservices",
+    levelId: "mid",
+    questionTitle: "What are the Caching Strategies in ASP.NET Core (IMemoryCache vs. IDistributedCache)?",
+    questionTitle_fa: "استراتژی‌های پیاده‌سازی Cache در ASP.NET Core چیست؟",
+    answerContent: `### IMemoryCache vs. IDistributedCache
+
+- **\`IMemoryCache\` (In-Memory):**
+  - Stores cache directly in local web server RAM.
+  - Fastest, but not shared across multi-instance load-balanced servers.
+- **\`IDistributedCache\` (Distributed - Redis / SQL Server):**
+  - Shared external cache accessible by all scaled instances.
+- **HybridCache (.NET 9):** Combines L1 (in-memory) and L2 (Redis) caching.`,
+    answerContent_fa: `### استراتژی‌های کشینگ در دات‌نت
+
+- **IMemoryCache:** کش در حافظه رم سرور فعلی (فوق‌العاده سریع اما مخصوص تک‌سرور).
+- **IDistributedCache:** کش توزیع‌شده مشترک بین تمام سرورها در کلاستر (بر پایه Redis).`,
+  },
+  {
+    id: "dotnet-mid-q158",
+    stackId: "dotnet",
+    categoryId: "microservices",
+    levelId: "mid",
+    questionTitle: "What is the Cache Stampede (Thundering Herd) problem and how do you prevent it?",
+    questionTitle_fa: "مشکل Cache Stampede چیست و چگونه حل می‌شود؟",
+    answerContent: `### Cache Stampede (Thundering Herd)
+
+Occurs when a popular cached item expires, and thousands of concurrent requests simultaneously miss the cache and hit the database at once, overwhelming and crashing the database.
+
+#### Solutions:
+1. **Locking / Mutex:** Only allow one request to recalculate and populate the cache (\`SemaphoreSlim\` or Redis lock).
+2. **Early Expiration / Probabilistic Refresh:** Background refresh before expiration.`,
+    answerContent_fa: `### مشکل Cache Stampede
+
+زمانی رخ می‌دهد که کلید یک کش پربازدید منقضی شود و هزاران ریکوئست همزمان به دیتابیس هجوم ببرند. راهکار استفاده از قفل‌گذاری روی کلید کش یا استفاده از \`HybridCache\` در دات‌نت است.`,
+  },
+  {
+    id: "dotnet-mid-q159",
+    stackId: "dotnet",
+    categoryId: "microservices",
+    levelId: "mid",
+    questionTitle: "What are the best strategies for Cache Invalidation?",
+    questionTitle_fa: "چه زمانی و با چه استراتژی‌ای باید کش را Invalidate کنیم؟",
+    answerContent: `### Cache Invalidation Strategies
+
+1. **TTL (Time-To-Live):** Automatic expiration after a set duration.
+2. **Write-Through / Write-Aside Invalidation:** Explicitly remove or update the cache key whenever data is updated or deleted.
+3. **Event-Driven Invalidation:** Publish domain/integration events upon data changes to clear related cache tags.`,
+    answerContent_fa: `### استراتژی‌های ابطال کش (Cache Invalidation)
+
+استفاده از مدت زمان انقضا (TTL)، حذف صریح کلید کش به محض تغییر در متدهای Update و استفاده از معماری رویدادمحور برای حذف کش‌های مرتبط.`,
+  },
+  {
+    id: "dotnet-mid-q160",
+    stackId: "dotnet",
+    categoryId: "microservices",
+    levelId: "mid",
+    questionTitle: "What is Service Discovery (e.g. Consul) in Microservices?",
+    questionTitle_fa: "مفهوم Service Discovery (مانند Consul) در میکروسرویس‌ها چیست؟",
+    answerContent: `### Service Discovery
+
+In dynamic container environments (Kubernetes, Docker Swarm), service IP addresses change frequently. **Service Discovery** acts as an automated phonebook (Service Registry) where microservice instances register on startup and discover other services dynamically.`,
+    answerContent_fa: `### مفهوم Service Discovery
+
+در محیط‌های داینامیک کانتینری که آی‌پی سرویس‌ها دائم تغییر می‌کند، ابزارهایی مانند Consul یا DNS داخلی کوبرنتیز وظیفه ثبت خودکار و یافتن آدرس آی‌پی سرویس‌های فعال را به عهده دارند.`,
+  },
+
+  // ── Linux, DevOps, CI/CD & Observability (Q161 - Q175) ───────────
+  {
+    id: "dotnet-mid-q161",
+    stackId: "dotnet",
+    categoryId: "devops-docker",
+    levelId: "mid",
+    questionTitle: "How do you Dockerize a .NET 8 application for production with a Multi-Stage build?",
+    questionTitle_fa: "چگونه یک اپلیکیشن .NET 8 را برای پروداکشن با Multi-stage build داکرایز می‌کنی؟",
+    answerContent: `### Production .NET 8 Dockerfile
+
+\`\`\`dockerfile
+# Stage 1: Build & Publish (Uses heavy SDK image)
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+WORKDIR /src
+COPY ["MyApp.csproj", "./"]
+RUN dotnet restore "MyApp.csproj"
+COPY . .
+RUN dotnet publish "MyApp.csproj" -c Release -o /app/publish /p:UseAppHost=false
+
+# Stage 2: Runtime Image (Uses lightweight ASP.NET runtime image)
+FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine AS final
+WORKDIR /app
+COPY --from=build /app/publish .
+USER app
+EXPOSE 8080
+ENTRYPOINT ["dotnet", "MyApp.dll"]
+\`\`\``,
+    answerContent_fa: `### ساخت Dockerfile بهینه با Multi-stage build
+
+استفاده از ایمیج سنگین \`sdk\` صرفاً برای کامپایل و پابلیش برنامه در مرحله اول، و کپی فایل‌های نهایی به یک ایمیج بسیار سبک \`aspnet:8.0-alpine\` در مرحله دوم جهت کاهش چشمگیر حجم Image و افزایش امنیت.`,
+  },
+  {
+    id: "dotnet-mid-q162",
+    stackId: "dotnet",
+    categoryId: "devops-docker",
+    levelId: "mid",
+    questionTitle: "What is a Multi-Stage build in Docker and why is it important?",
+    questionTitle_fa: "مفهوم Multi-stage build در فایل‌های داکر چیست و چه کمکی به حجم Image می‌کند؟",
+    answerContent: `### Multi-Stage Docker Builds
+
+Multi-stage builds allow using multiple \`FROM\` statements in a single Dockerfile.
+- Build tools, compilers, and source code remain in the build stage.
+- Only the final compiled binaries are copied into the lean production runtime container, reducing image size from $>800\\text{MB}$ down to $<100\\text{MB}$.`,
+    answerContent_fa: `### مزایای Multi-stage build
+
+ابزارهای بیلد و سورس‌کد در لایه بیلد باقی مانده و تنها فایل‌های اجرایی کامپایل‌شده به ایمیج نهایی منتقل می‌شوند که حجم ایمیج را از ۸۰۰ مگابایت به کمتر از ۱۰۰ مگابایت می‌رساند.`,
+  },
+  {
+    id: "dotnet-mid-q163",
+    stackId: "dotnet",
+    categoryId: "devops-docker",
+    levelId: "mid",
+    questionTitle: "What is the difference between ENTRYPOINT and CMD in a Dockerfile?",
+    questionTitle_fa: "تفاوت ENTRYPOINT و CMD در Dockerfile چیست؟",
+    answerContent: `### ENTRYPOINT vs. CMD
+
+- **\`ENTRYPOINT\`:** Sets the default executable command that cannot be easily overridden (e.g. \`ENTRYPOINT ["dotnet", "App.dll"]\`).
+- **\`CMD\`:** Provides default arguments for the \`ENTRYPOINT\` that can be overridden by passing arguments in \`docker run\`.`,
+    answerContent_fa: `### تفاوت ENTRYPOINT و CMD
+
+- **ENTRYPOINT:** دستور اصلی و ثابتی است که کانتینر همیشه با آن اجرا می‌شود.
+- **CMD:** پارامترهای پیش‌فرضی است که می‌توان هنگام دستور \`docker run\` به سادگی آن‌ها را جایگزین کرد.`,
+  },
+  {
+    id: "dotnet-mid-q164",
+    stackId: "dotnet",
+    categoryId: "devops-docker",
+    levelId: "mid",
+    questionTitle: "Explain core Kubernetes concepts: Pod, Node, Deployment, and Service.",
+    questionTitle_fa: "مفاهیم پایه Kubernetes (Pod, Node, Service) را توضیح بده.",
+    answerContent: `### Kubernetes Core Concepts
+
+- **Pod:** The smallest deployable computing unit in Kubernetes; encapsulates one or more containers sharing network and storage.
+- **Node:** A physical or virtual worker machine running Pods.
+- **Deployment:** Manages the desired state, scaling, and rolling updates of Pods.
+- **Service:** An abstraction that defines a stable IP and DNS name to load balance traffic across a set of Pods.`,
+    answerContent_fa: `### مفاهیم پایه کوبرنتیز
+
+- **Pod:** کوچک‌ترین واحد محاسباتی شامل یک یا چند کانتینر.
+- **Node:** سرور فیزیکی یا مجازی اجراکننده پادها.
+- **Deployment:** مدیریت تعداد کپی‌ها (Replicas) و به‌روزرسانی بدون قطعی پادها.
+- **Service:** ایجاد یک آدرس IP ثابت و لودبالانسینگ ترافیک به سمت پادها.`,
+  },
+  {
+    id: "dotnet-mid-q165",
+    stackId: "dotnet",
+    categoryId: "devops-docker",
+    levelId: "mid",
+    questionTitle: "How do you configure Nginx as a Reverse Proxy for an ASP.NET Core app on Linux?",
+    questionTitle_fa: "نحوه کانفیگ Nginx به عنوان Reverse Proxy برای اپلیکیشن دات‌نت در لینوکس چگونه است؟",
+    answerContent: `### Nginx Reverse Proxy Configuration
+
+\`\`\`nginx
+server {
+    listen 80;
+    server_name api.example.com;
+
+    location / {
+        proxy_pass         http://127.0.0.1:5000;
+        proxy_http_version 1.1;
+        proxy_set_header   Upgrade $http_upgrade;
+        proxy_set_header   Connection keep-alive;
+        proxy_set_header   Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+    }
+}
+\`\`\`
+In ASP.NET Core, enable \`app.UseForwardedHeaders()\` to read the real client IP.`,
+    answerContent_fa: `### کانفیگ Nginx به عنوان Reverse Proxy
+
+در فایل کانفیگ Nginx با دستور \`proxy_pass http://127.0.0.1:5000;\` ترافیک به Kestrel فوروارد شده و هدرهای \`X-Forwarded-For\` تنظیم می‌شوند. در دات‌نت نیز میدل‌ویر \`UseForwardedHeaders\` فعال می‌گردد.`,
+  },
+  {
+    id: "dotnet-mid-q166",
+    stackId: "dotnet",
+    categoryId: "devops-docker",
+    levelId: "mid",
+    questionTitle: "What steps do you follow to deploy a .NET app on an Ubuntu Linux server using systemd?",
+    questionTitle_fa: "برای دیپلوی پروژه‌های دات‌نت روی سرور لینوکسی چه مراحلی طی می‌کنی؟",
+    answerContent: `### Deploying .NET on Ubuntu with systemd
+
+1. Publish application binaries to \`/var/www/my-app\`.
+2. Create a systemd service file: \`/etc/systemd/system/kestrel-myapp.service\`:
+   \`\`\`ini
+   [Unit]
+   Description=My .NET Web App
+   [Service]
+   WorkingDirectory=/var/www/my-app
+   ExecStart=/usr/bin/dotnet /var/www/my-app/MyApp.dll
+   Restart=always
+   RestartSec=10
+   SyslogIdentifier=dotnet-myapp
+   User=www-data
+   Environment=ASPNETCORE_ENVIRONMENT=Production
+   [Install]
+   WantedBy=multi-user.target
+   \`\`\`
+3. Enable and start: \`systemctl enable --now kestrel-myapp.service\`.`,
+    answerContent_fa: `### دیپلوی دات‌نت در اوبونتو با systemd
+
+کپی باینری‌های برنامه در سرور، ساخت یک سرویس \`systemd\` با تنظیم \`Restart=always\` و متغیرهای پروداکشن، و در نهایت استارت سرویس با \`systemctl enable --now\`.`,
+  },
+  {
+    id: "dotnet-mid-q167",
+    stackId: "dotnet",
+    categoryId: "devops-docker",
+    levelId: "mid",
+    questionTitle: "What is the structure of a .gitlab-ci.yml pipeline file?",
+    questionTitle_fa: "فایل .gitlab-ci.yml چه ساختاری دارد؟",
+    answerContent: `### GitLab CI Pipeline Structure
+
+\`\`\`yaml
+stages:
+  - build
+  - test
+  - publish
+  - deploy
+
+build_job:
+  stage: build
+  script:
+    - dotnet build -c Release
+
+test_job:
+  stage: test
+  script:
+    - dotnet test --no-build -c Release
+
+docker_publish:
+  stage: publish
+  script:
+    - docker build -t my-registry.com/app:$CI_COMMIT_SHA .
+    - docker push my-registry.com/app:$CI_COMMIT_SHA
+  only:
+    - main
+\`\`\``,
+    answerContent_fa: `### ساختار فایل .gitlab-ci.yml
+
+تعریف مراحل (Stages) مختلف مانند \`build\`، \`test\`، \`publish\` و \`deploy\` که با هر Push به گیت‌لب دستورات خط فرمان به ترتیب در رانرها اجرا می‌شوند.`,
+  },
+  {
+    id: "dotnet-mid-q168",
+    stackId: "dotnet",
+    categoryId: "devops-docker",
+    levelId: "mid",
+    questionTitle: "What is the difference between Continuous Integration (CI) and Continuous Deployment (CD)?",
+    questionTitle_fa: "تفاوت Continuous Integration (CI) و Continuous Deployment (CD) چیست؟",
+    answerContent: `### CI vs. CD
+
+- **Continuous Integration (CI):** Developers merge code frequently; automated pipeline builds and runs unit tests to catch integration bugs early.
+- **Continuous Delivery (CD):** Automatically prepares release artifacts and deploys to staging environments with manual approval for production.
+- **Continuous Deployment:** Every passing build is automatically deployed to production with zero manual intervention.`,
+    answerContent_fa: `### تفاوت CI و CD
+
+- **CI:** بیلد و اجرای خودکار تست‌ها با هر کامیت.
+- **CD (Delivery):** آماده‌سازی خودکار پکیج‌های انتشار برای دیپلوی با تایید دستی.
+- **CD (Deployment):** انتشار خودکار و مستقیم کدهای تاییدشده در محیط پروداکشن بدون دخالت انسان.`,
+  },
+  {
+    id: "dotnet-mid-q169",
+    stackId: "dotnet",
+    categoryId: "devops-docker",
+    levelId: "mid",
+    questionTitle: "What is Observability and how does it differ from traditional Monitoring?",
+    questionTitle_fa: "مفهوم Observability چیست و چه تفاوتی با Monitoring ساده دارد؟",
+    answerContent: `### Observability vs. Monitoring
+
+- **Monitoring:** Tells you **that** a system is broken (e.g. CPU $>90\%$, HTTP 500 error rate high).
+- **Observability:** Enables you to understand **why** the system is broken by inferring internal system states from external outputs (combining Metrics, Traces, and Structured Logs).`,
+    answerContent_fa: `### تفاوت Observability با Monitoring
+
+- **Monitoring:** به شما می‌گوید که سیستم خراب شده است (مثلاً خطای ۵۰۰ یا مصرف بالای CPU).
+- **Observability:** به شما اجازه می‌دهد از طریق تحلیل لاگ‌ها، تریس‌ها و متریک‌ها بفهمید **چرا** سیستم دچار مشکل شده است.`,
+  },
+  {
+    id: "dotnet-mid-q170",
+    stackId: "dotnet",
+    categoryId: "devops-docker",
+    levelId: "mid",
+    questionTitle: "Explain the Three Pillars of Observability: Logs, Metrics, and Traces.",
+    questionTitle_fa: "تفاوت Log، Metric و Trace در مانیتورینگ چیست؟",
+    answerContent: `### The 3 Pillars of Observability
+
+1. **Logs:** Timestamped discrete text events detailing what occurred (\`User 42 failed password attempt\`).
+2. **Metrics:** Numeric aggregated telemetry measured over intervals (Request rate, memory usage, P99 latency).
+3. **Traces:** End-to-end journey of a request as it travels across multiple distributed microservices.`,
+    answerContent_fa: `### ۳ ستون اصلی Observability
+
+۱. **Logs:** وقایع متنی زمان‌بندی‌شده از اتفاقات رخ‌داده در برنامه.
+۲. **Metrics:** مقادیر عددی تجمیعی برای سنجش سلامت سیستم (مانند زمان پاسخ‌دهی و مصرف رم).
+۳. **Traces:** ردیابی مسیر کامل یک ریکوئست در بین چندین میکروسرویس مختلف.`,
+  },
+  {
+    id: "dotnet-mid-q171",
+    stackId: "dotnet",
+    categoryId: "devops-docker",
+    levelId: "mid",
+    questionTitle: "What is OpenTelemetry and how is it instrumented in .NET?",
+    questionTitle_fa: "ابزار OpenTelemetry چیست و چگونه در دات‌نت استفاده می‌شود؟",
+    answerContent: `### OpenTelemetry (OTel) in .NET
+
+OpenTelemetry is the vendor-neutral industry standard for generating, collecting, and exporting traces, metrics, and logs.
+
+\`\`\`csharp
+builder.Services.AddOpenTelemetry()
+    .WithTracing(tracing => tracing
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+        .AddEntityFrameworkCoreInstrumentation()
+        .AddOtlpExporter());
+\`\`\``,
+    answerContent_fa: `### نقش OpenTelemetry در دات‌نت
+
+استاندارد جهانی و فراجامع برای جمع‌آوری لاگ، متریک و تریس در اپلیکیشن‌ها است که به سادگی با پکیج‌های \`OpenTelemetry.Extensions.Hosting\` به ASP.NET Core متصل شده و داده‌ها را به SigNoz، Jaeger یا Prometheus صادر می‌کند.`,
+  },
+  {
+    id: "dotnet-mid-q172",
+    stackId: "dotnet",
+    categoryId: "devops-docker",
+    levelId: "mid",
+    questionTitle: "What is SigNoz and how does it compare to the ELK Stack?",
+    questionTitle_fa: "ابزار SigNoz چه کاربردی دارد و چه تفاوتی با ELK Stack دارد؟",
+    answerContent: `### SigNoz vs. ELK Stack
+
+- **SigNoz:** All-in-one open-source APM native to **OpenTelemetry**, built on top of **ClickHouse** (columnar database). Extremely fast query speeds for traces and metrics with much lower RAM requirements.
+- **ELK Stack (Elasticsearch, Logstash, Kibana):** Excellent for full-text log search, but heavier on memory and resource consumption.`,
+    answerContent_fa: `### مقایسه SigNoz و ELK Stack
+
+ابزار **SigNoz** پلتفرمی مدرن و مبتنی بر ClickHouse و OpenTelemetry است که متریک، تریس و لاگ را یکپارچه نمایش می‌دهد و مصرف منابع کمتری نسبت به **ELK Stack** دارد.`,
+  },
+  {
+    id: "dotnet-mid-q173",
+    stackId: "dotnet",
+    categoryId: "devops-docker",
+    levelId: "mid",
+    questionTitle: "Explain the architecture of the ELK Stack (Elasticsearch, Logstash, Kibana).",
+    questionTitle_fa: "معماری Elasticsearch و کاربرد Logstash و Kibana را توضیح بده.",
+    answerContent: `### ELK Stack Architecture
+
+1. **Logstash / Filebeat:** Shippers that collect, parse, and ingest logs from servers.
+2. **Elasticsearch:** Distributed search and analytics engine storing inverted index documents.
+3. **Kibana:** Web UI for searching logs and creating visualization dashboards.`,
+    answerContent_fa: `### معماری ELK Stack
+
+شامل **Logstash/Filebeat** برای جمع‌آوری و فیلتر کردن لاگ‌ها، **Elasticsearch** به عنوان پایگاه داده جستجوی متنی سریع و **Kibana** به عنوان رابط گرافیکی نمایش داشبوردها و جستجوی لاگ‌ها.`,
+  },
+  {
+    id: "dotnet-mid-q174",
+    stackId: "dotnet",
+    categoryId: "clean-code-testing",
+    levelId: "mid",
+    questionTitle: "What is your strategy for Integration Testing with databases using Testcontainers?",
+    questionTitle_fa: "استراتژی شما برای تست‌های Integration با دیتابیس (مثلاً Testcontainers) چیست؟",
+    answerContent: `### Integration Testing with Testcontainers
+
+**Testcontainers** spins up lightweight, real Docker containers (PostgreSQL, SQL Server, Redis) during test execution and tears them down automatically.
+
+\`\`\`csharp
+public class IntegrationTestFixture : IAsyncLifetime
+{
+    private readonly PostgreSqlContainer _dbContainer = new PostgreSqlBuilder().Build();
+
+    public async Task InitializeAsync() => await _dbContainer.StartAsync();
+    public async Task DisposeAsync() => await _dbContainer.DisposeAsync();
+}
+\`\`\``,
+    answerContent_fa: `### تست‌های Integration با Testcontainers
+
+ابزار Testcontainers هنگام اجرای تست‌های خودکار، کانتینرهای داکر واقعی دیتابیس (مانند PostgreSQL یا Redis) را استارت زده، مایگریشن‌ها را اعمال می‌کند و پس از اتمام تست‌ها، کانتینر را پاک می‌کند تا نیازی به دیتابیس In-Memory یا Mock نباشد.`,
+  },
+  {
+    id: "dotnet-mid-q175",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    questionTitle: "How do you implement Health Checks in ASP.NET Core?",
+    questionTitle_fa: "نحوه پیاده‌سازی Health Check در سرویس‌های دات‌نت چگونه است؟",
+    answerContent: `### Health Checks in ASP.NET Core
+
+\`\`\`csharp
+builder.Services.AddHealthChecks()
+    .AddSqlServer(connString, name: "database")
+    .AddRedis(redisConn, name: "cache");
+
+app.MapHealthChecks("/health");
+\`\`\`
+Kubernetes uses this endpoint for **Liveness** (restart crashed containers) and **Readiness** probes (route traffic only when ready).`,
+    answerContent_fa: `### پیاده‌سازی Health Check در ASP.NET Core
+
+با متد \`AddHealthChecks\` وضعیت دیتابیس، ردیس و صف‌ها بررسی شده و در مسیر \`/health\` اکسپوز می‌شود تا کوبرنتیز پادهای سالم را شناسایی کند (Liveness & Readiness Probes).`,
+  },
+
+  // ── Security, Logging & Daily Scenarios (Q176 - Q200) ────────────
+  {
+    id: "dotnet-mid-q176",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    questionTitle: "How do you implement API Versioning in ASP.NET Core?",
+    questionTitle_fa: "نحوه Versioning در Web APIها را چگونه پیاده‌سازی می‌کنی؟",
+    answerContent: `### API Versioning Strategies
+
+1. **URI Path Versioning (Recommended):** \`/api/v1/orders\` vs \`/api/v2/orders\`.
+2. **Query String:** \`/api/orders?api-version=2.0\`.
+3. **Header Versioning:** \`X-Version: 2.0\`.
+
+Implemented via \`Asp.Versioning.Mvc\` package in ASP.NET Core.`,
+    answerContent_fa: `### ورژن‌بندی (Versioning) در Web API
+
+روش استاندارد از طریق URL (مانند \`/api/v1/products\`) با استفاده از پکیج \`Asp.Versioning.Mvc\` است که امکان ارتقای ساختار API را بدون از کار انداختن کلاینت‌های نسخه قدیمی فراهم می‌کند.`,
+  },
+  {
+    id: "dotnet-mid-q177",
+    stackId: "dotnet",
+    categoryId: "security-practices",
+    levelId: "mid",
+    questionTitle: "What is Structured Logging and why use Serilog?",
+    questionTitle_fa: "مفهوم Structured Logging چیست و چرا از Serilog استفاده می‌کنیم؟",
+    answerContent: `### Structured Logging & Serilog
+
+Traditional text logs (\`Log("User 42 logged in")\`) are hard to query.
+**Structured Logging** captures properties as JSON key-value pairs:
+\`\`\`csharp
+_logger.LogInformation("User {UserId} placed order {OrderId}", userId, orderId);
+\`\`\`
+Enables searching logs in Elasticsearch/Kibana by \`UserId == 42\` and \`OrderId == 100\`.`,
+    answerContent_fa: `### مفهوم Structured Logging و Serilog
+
+لاگ ساختاریافته پارامترها را به شکل کلید/مقدار ذخیره می‌کند تا بتوان در ابزارهایی مانند الستیک‌سرچ بر اساس فیلدهای خاص (مانند \`UserId\`) کوئری و فیلتر دقیق انجام داد.`,
+  },
+  {
+    id: "dotnet-mid-q178",
+    stackId: "dotnet",
+    categoryId: "security-practices",
+    levelId: "mid",
+    questionTitle: "How do you handle Timezones and Dates in enterprise applications?",
+    questionTitle_fa: "مدیریت Timezoneها و تاریخ‌ها (UTC در مقابل Local) در دیتابیس را چگونه هندل می‌کنی؟",
+    answerContent: `### Timezone Handling Best Practices
+
+1. **Store in UTC:** Always store timestamps in UTC (\`DateTimeOffset\` or UTC \`DateTime\`) in the database.
+2. **Convert at UI Boundary:** Convert UTC to the client's local timezone (or Persian Solar calendar) only when rendering to the user.`,
+    answerContent_fa: `### مدیریت تاریخ‌ها و Timezoneها
+
+همیشه تاریخ‌ها در دیتابیس به صورت **UTC** ذخیره می‌شوند و تبدیل به ساعت محلی یا تقویم شمسی صرفاً در لایه نمایش به کاربر (UI) صورت می‌گیرد.`,
+  },
+  {
+    id: "dotnet-mid-q179",
+    stackId: "dotnet",
+    categoryId: "security-practices",
+    levelId: "mid",
+    questionTitle: "What is the difference between Policy-based and Claim-based Authorization in ASP.NET Core?",
+    questionTitle_fa: "تفاوت Policy-based Authorization و Claim-based Authorization چیست؟",
+    answerContent: `### Claim vs. Policy Authorization
+
+- **Claim:** A key-value identity pair (e.g. \`Department: Finance\`, \`Age: 25\`).
+- **Policy:** A rule combining multiple requirements and claims:
+\`\`\`csharp
+options.AddPolicy("SeniorFinancePolicy", policy =>
+    policy.RequireClaim("Department", "Finance")
+          .RequireRole("Manager"));
+\`\`\``,
+    answerContent_fa: `### تفاوت Claim و Policy در احراز دسترسی
+
+- **Claim:** یک جفت کلید/مقدار هویتی کاربر است (مانند \`Role: Admin\`).
+- **Policy:** قانونی ترکیبی است که می‌تواند مجموعه‌ای از Claimها، نقش‌ها و شرایط منطقی را برای دسترسی به یک اندپوینت بررسی کند.`,
+  },
+  {
+    id: "dotnet-mid-q180",
+    stackId: "dotnet",
+    categoryId: "security-practices",
+    levelId: "mid",
+    questionTitle: "What is a JWT (JSON Web Token) and what are its components?",
+    questionTitle_fa: "مفهوم JWT (JSON Web Token) چیست و شامل چه بخش‌هایی است؟",
+    answerContent: `### JWT Structure
+
+A JWT consists of three Base64Url-encoded parts separated by dots (\`.\`):
+1. **Header:** Algorithm & token type (\`{"alg": "HS256", "typ": "JWT"}\`).
+2. **Payload:** Claims, User ID, Expiration timestamp (\`exp\`).
+3. **Signature:** \`HMACSHA256(Header + Payload, SecretKey)\` ensuring token tamper resistance.`,
+    answerContent_fa: `### ساختار JWT
+
+توکن JWT شامل ۳ بخش کدگذاری‌شده با نقطه است:
+۱. **Header:** الگوریتم امضا.
+۲. **Payload:** اطلاعات کاربر و Claimها.
+۳. **Signature:** امضای دیجیتال با کلید سکرت سرور برای تضمین عدم تغییر توکن.`,
+  },
+  {
+    id: "dotnet-mid-q181",
+    stackId: "dotnet",
+    categoryId: "security-practices",
+    levelId: "mid",
+    questionTitle: "What is the difference between Access Tokens and Refresh Tokens?",
+    questionTitle_fa: "توکن‌های Access و Refresh چه تفاوتی دارند و چرا به Refresh Token نیاز داریم؟",
+    answerContent: `### Access Token vs. Refresh Token
+
+- **Access Token:** Short-lived (e.g., 15 minutes), sent with every HTTP request. If stolen, window of vulnerability is small.
+- **Refresh Token:** Long-lived (e.g., 30 days), stored securely in database, used exclusively to request a new Access Token.`,
+    answerContent_fa: `### تفاوت Access Token و Refresh Token
+
+- **Access Token:** طول عمر کوتاه (مثلاً ۱۵ دقیقه) دارد و با هر ریکوئست ارسال می‌شود.
+- **Refresh Token:** طول عمر طولانی دارد و فقط برای تمدید Access Token به کار می‌رود تا نیاز به لاگین مجدد نباشد.`,
+  },
+  {
+    id: "dotnet-mid-q182",
+    stackId: "dotnet",
+    categoryId: "security-practices",
+    levelId: "mid",
+    questionTitle: "How do you securely store passwords in a database (Hashing vs. Encryption)?",
+    questionTitle_fa: "نحوه ایمن‌سازی پسوردها در دیتابیس (Hashing vs Encryption) چیست؟",
+    answerContent: `### Password Security: Hashing vs. Encryption
+
+- **Encryption (Two-way):** Can be decrypted with a private key (NEVER use for passwords).
+- **Hashing (One-way):** Mathematically irreversible. Always use slow, salted cryptographic hashing algorithms (**Argon2id**, **BCrypt**, **PBKDF2**).`,
+    answerContent_fa: `### ذخیره ایمن پسوردها
+
+پسوردها هرگز نباید رمزنگاری (Encryption) شوند چون قابل رمزگشایی هستند، بلکه باید با الگوریتم‌های هشینگ یک‌طرفه و کند مانند **BCrypt** یا **Argon2** به همراه **Salt** هش شوند.`,
+  },
+  {
+    id: "dotnet-mid-q183",
+    stackId: "dotnet",
+    categoryId: "security-practices",
+    levelId: "mid",
+    questionTitle: "What is a Salt in password hashing and how does BCrypt work?",
+    questionTitle_fa: "الگوریتم‌های Hashing مثل BCrypt را توضیح بده و بگو Salt چیست؟",
+    answerContent: `### Password Salting & BCrypt
+
+A **Salt** is a unique cryptographically random string appended to the password before hashing.
+- Prevents **Rainbow Table attacks** and ensures two identical passwords produce completely different hash outputs.`,
+    answerContent_fa: `### مفهوم Salt در هشینگ
+
+یک رشته رندوم منحصر‌به‌فرد است که قبل از هش به پسورد اضافه می‌شود تا مانع از حملات جدول رنگین‌کمان (Rainbow Table) شود.`,
+  },
+  {
+    id: "dotnet-mid-q184",
+    stackId: "dotnet",
+    categoryId: "security-practices",
+    levelId: "mid",
+    questionTitle: "What is a CSRF attack and how is it prevented in ASP.NET Core?",
+    questionTitle_fa: "حمله CSRF چیست و چگونه در دات‌نت از آن جلوگیری می‌کنیم؟",
+    answerContent: `### CSRF (Cross-Site Request Forgery)
+
+Tricks an authenticated user's browser into submitting unwanted actions to a web app using stored cookies.
+
+**Prevention:** Use Anti-Forgery Tokens (\`[ValidateAntiForgeryToken]\`) or SameSite cookie attributes (\`SameSite=Strict/Lax\`).`,
+    answerContent_fa: `### حمله CSRF و راه‌های مقابله
+
+حمله‌ای است که کاربر لاگین‌شده را فریب می‌دهد تا فرم ناخواسته‌ای را بدون اطلاع ارسال کند. راهکار استفاده از توکن‌های ضدجعل (\`Anti-Forgery Tokens\`) و تنظیم \`SameSite=Strict\` روی کوکی‌ها است.`,
+  },
+  {
+    id: "dotnet-mid-q185",
+    stackId: "dotnet",
+    categoryId: "security-practices",
+    levelId: "mid",
+    questionTitle: "What is an XSS attack and how is it mitigated?",
+    questionTitle_fa: "حمله XSS چیست و چگونه مهار می‌شود؟",
+    answerContent: `### XSS (Cross-Site Scripting)
+
+Occurs when malicious JavaScript is injected into web pages viewed by other users.
+
+**Prevention:** HTML-encode all dynamic user inputs, use Content Security Policy (CSP) headers, and sanitize inputs.`,
+    answerContent_fa: `### حمله XSS و پیشگیری از آن
+
+تزریق کدهای مخرب جاوااسکریپت به صفحات وب است. راهکار، Encode کردن خروجی‌های ارسالی کاربر و تنظیم هدرهای CSP (Content Security Policy) است.`,
+  },
+  {
+    id: "dotnet-mid-q186",
+    stackId: "dotnet",
+    categoryId: "security-practices",
+    levelId: "mid",
+    questionTitle: "How do you prevent SQL Injection in EF Core and Dapper?",
+    questionTitle_fa: "جلوگیری از SQL Injection در EF Core و Dapper چگونه انجام می‌شود؟",
+    answerContent: `### Preventing SQL Injection
+
+1. **EF Core / LINQ:** Automatically parameterizes all queries.
+2. **Dapper / Raw SQL:** Always use parameterized queries (\`@parameter\`), NEVER string concatenation!`,
+    answerContent_fa: `### جلوگیری از SQL Injection
+
+در EF Core و Dapper همیشه باید از کوئری‌های پارامتری استفاده کرد و هرگز رشته‌های ورودی کاربر را با متن SQL ترکیب نکرد.`,
+  },
+  {
+    id: "dotnet-mid-q187",
+    stackId: "dotnet",
+    categoryId: "security-practices",
+    levelId: "mid",
+    questionTitle: "How do you handle large file uploads securely in ASP.NET Core?",
+    questionTitle_fa: "نحوه آپلود و مدیریت فایل‌های حجیم به صورت امن در یک Web API چگونه است؟",
+    answerContent: `### Secure Large File Uploads
+
+1. **Streaming Uploads:** Use streaming multipart parsers to avoid buffering multi-gigabyte files into server RAM.
+2. **Validation:** Validate magic file header bytes (not just extension) and scan for malware.
+3. **Storage:** Store on cloud blob storage (S3 / Azure Blob) rather than web server disk.`,
+    answerContent_fa: `### آپلود امن فایل‌های حجیم
+
+استفاده از رویکرد Streaming برای جلوگیری از اشغال حافظه رم، اعتبارسنجی بایت‌های واقعی هدر فایل (Magic Bytes) و ذخیره‌سازی در Object Storage (مانند S3 یا MinIO).`,
+  },
+  {
+    id: "dotnet-mid-q188",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    questionTitle: "What is the difference between IOptions, IOptionsSnapshot, and IOptionsMonitor?",
+    questionTitle_fa: "تفاوت IOptions، IOptionsSnapshot و IOptionsMonitor برای خواندن کانفیگ‌ها چیست؟",
+    answerContent: `### IOptions vs. IOptionsSnapshot vs. IOptionsMonitor
+
+- **\`IOptions<T>\`:** Registered as Singleton; does **not** read updated configuration files after startup.
+- **\`IOptionsSnapshot<T>\`:** Registered as Scoped; recomputes options on **every HTTP request** when configuration files change.
+- **\`IOptionsMonitor<T>\`:** Registered as Singleton; supports dynamic real-time change notifications via \`OnChange\`.`,
+    answerContent_fa: `### مقایسه اینترفیس‌های خواندن تنظیمات (Options Pattern)
+
+- **\`IOptions\`**: سینگلتون است و تغییرات فایل کانفیگ پس از استارت سرور را متوجه نمی‌شود.
+- **\`IOptionsSnapshot\`**: اسکوپد است و با هر ریکوئست مقادیر آپدیت‌شده را بازخوانی می‌کند.
+- **\`IOptionsMonitor\`**: سینگلتون است و امکان گوش دادن به رویداد تغییر کانفیگ را به صورت بلادرنگ دارد.`,
+  },
+  {
+    id: "dotnet-mid-q189",
+    stackId: "dotnet",
+    categoryId: "architecture-ddd",
+    levelId: "mid",
+    questionTitle: "What is the Polly library and how do you implement the Retry Pattern in C#?",
+    questionTitle_fa: "کتابخانه Polly چیست و Retry Pattern را چگونه پیاده‌سازی می‌کنی؟",
+    answerContent: `### Polly & Retry Pattern
+
+Polly is a .NET resilience and transient-fault-handling library.
+
+\`\`\`csharp
+var retryPolicy = Policy
+    .Handle<HttpRequestException>()
+    .WaitAndRetryAsync(3, retryAttempt => 
+        TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))); // Exponential Backoff
+\`\`\``,
+    answerContent_fa: `### کتابخانه Polly و الگوی Retry
+
+کتابخانه‌ای برای مدیریت خطاهای موقت شبکه و دیتابیس است که با الگوی Retry و فاصله زمانی تصاعدی (Exponential Backoff) درخواست‌ها را مجدداً تلاش می‌کند.`,
+  },
+  {
+    id: "dotnet-mid-q190",
+    stackId: "dotnet",
+    categoryId: "architecture-ddd",
+    levelId: "mid",
+    questionTitle: "What is the Circuit Breaker Pattern and how does it prevent cascading failures?",
+    questionTitle_fa: "الگوی Circuit Breaker چیست و در ارتباطات بین سرویس‌ها چه کمکی می‌کند؟",
+    answerContent: `### Circuit Breaker Pattern
+
+Prevents an application from repeatedly trying to execute an operation likely to fail:
+- **Closed:** Normal operations; calls go through.
+- **Open:** Tripped after repeated failures; requests fail fast immediately without hitting downstream servers.
+- **Half-Open:** Periodically sends trial requests to check if downstream service recovered.`,
+    answerContent_fa: `### الگوی Circuit Breaker
+
+مانع از ارسال درخواست‌های پیاپی به سرویسی می‌شود که هم‌اکنون از کار افتاده است و دارای ۳ وضعیت Closed (عادی)، Open (قطع کامل و پاسخ سریع خطا) و Half-Open (ارسال آزمایشی چند درخواست) است.`,
+  },
+  {
+    id: "dotnet-mid-q191",
+    stackId: "dotnet",
+    categoryId: "clean-code-testing",
+    levelId: "mid",
+    questionTitle: "What is your checklist and approach during a Code Review?",
+    questionTitle_fa: "چگونه کد ریویو (Code Review) انجام می‌دهی؟ چه چیزهایی برایت مهم است؟",
+    answerContent: `### Code Review Checklist
+
+1. **Correctness & Edge Cases:** Null checks, boundary conditions, thread-safety.
+2. **Architecture & Clean Code:** SRP, proper layering, readability, DRY.
+3. **Performance & Security:** N+1 queries, unindexed SQL filters, SQL injection, resource disposal.
+4. **Test Coverage:** Are unit/integration tests included?`,
+    answerContent_fa: `### چک‌لیست و اصول Code Review
+
+بررسی صحت منطق بیزینس و هندل کردن خطاهای نال، رعایت اصول معماری و SOLID، امنیت و پرفورمنس کوئری‌ها (عدم وجود N+1) و پوشش مناسب تست‌های واحد.`,
+  },
+  {
+    id: "dotnet-mid-q192",
+    stackId: "dotnet",
+    categoryId: "general-engineering",
+    levelId: "mid",
+    questionTitle: "How do you estimate complex engineering tasks?",
+    questionTitle_fa: "چگونه تخمین زمان (Estimation) برای تسک‌های پیچیده را انجام می‌دهی؟",
+    answerContent: `### Task Estimation Technique
+
+- **Decomposition:** Break large tasks into subtasks $<1$ day of effort.
+- **Spike:** If high architectural uncertainty exists, create a timeboxed Research Spike first.
+- **Buffer:** Factor in code reviews, integration testing, and deployment overhead.`,
+    answerContent_fa: `### نحوه تخمین تسک‌های پیچیده
+
+شکستن تسک به بخش‌های کوچک، ایجاد یک تسک تحقیقی محدود (Spike) در صورت وجود ابهام فنی و در نظر گرفتن زمان برای تست، ریویو و دیپلوی.`,
+  },
+  {
+    id: "dotnet-mid-q193",
+    stackId: "dotnet",
+    categoryId: "general-engineering",
+    levelId: "mid",
+    questionTitle: "How do you handle incomplete tasks at the end of a sprint?",
+    questionTitle_fa: "اگر یک تسک در اسپرینت تمام نشود، چه واکنشی نشان می‌دهی؟",
+    answerContent: `### Incomplete Sprint Tasks
+
+1. **Early Communication:** Raise risks during Daily Standups before sprint end.
+2. **Split Task:** Move unfinished work back to Product Backlog to be reprioritized by the Product Owner for the next sprint.
+3. **Retrospective:** Analyze root cause during retrospective.`,
+    answerContent_fa: `### مدیریت تسک‌های ناتمام در انتهای اسپرینت
+
+اطلاع‌رسانی زودهنگام در دیلی استندآپ، برگرداندن بخش ناتمام به بک‌لاگ برای اولویت‌بندی مجدد و بررسی علت تاخیر در جلسه Retrospective.`,
+  },
+  {
+    id: "dotnet-mid-q194",
+    stackId: "dotnet",
+    categoryId: "general-engineering",
+    levelId: "mid",
+    questionTitle: "How do you handle technical disagreements with teammates or tech leads?",
+    questionTitle_fa: "نحوه برخورد با اختلاف نظر فنی با هم‌تیمی‌ها یا مدیر فنی چگونه است؟",
+    answerContent: `### Resolving Technical Disagreements
+
+- Base arguments on **data, benchmarks, and architectural trade-offs** rather than personal opinions.
+- Create a quick Proof of Concept (PoC).
+- Practice "Disagree and Commit" once a team decision is finalized.`,
+    answerContent_fa: `### حل اختلاف نظر فنی در تیم
+
+گفتگوی مبتنی بر بنچمارک، شواهد فنی و بررسی Trade-offها، ساخت نمونه اولیه (PoC) و پایبندی به تصمیم نهایی تیم (Disagree and Commit).`,
+  },
+  {
+    id: "dotnet-mid-q195",
+    stackId: "dotnet",
+    categoryId: "general-engineering",
+    levelId: "mid",
+    questionTitle: "What is your approach to mentoring junior engineers?",
+    questionTitle_fa: "تجربه شما در منتور کردن کارآموزان چه چالش‌هایی دارد و چگونه آن را هدایت می‌کنی؟",
+    answerContent: `### Mentoring Junior Engineers
+
+- Practice Pair Programming to model debugging workflows.
+- Provide constructive, kind code review feedback explaining the **"Why"**.
+- Encourage autonomy by guiding them to answers rather than dictating solutions.`,
+    answerContent_fa: `### رویکرد منتورینگ نیروهای جونیور
+
+انجام Pair Programming، ارائه فیدبک‌های سازنده در کد ریویو با توضیح چرایی، و هدایت آنها به سمت کشف راهکار به جای دیکته کردن مستقیم پاسخ.`,
+  },
+  {
+    id: "dotnet-mid-q196",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    questionTitle: "How do you standardize API Responses across an enterprise application?",
+    questionTitle_fa: "فرمت کردن و استانداردسازی پاسخ‌های API را چگونه انجام می‌دهی؟",
+    answerContent: `### Standardized API Responses
+
+Use standard envelopes or RFC 7807 ProblemDetails:
+\`\`\`json
+{
+  "success": true,
+  "data": { "id": 1, "name": "Product A" },
+  "errors": null,
+  "traceId": "00-4bf92f3577b34da6a3ce929d0e0e4736-00"
+}
+\`\`\``,
+    answerContent_fa: `### استانداردسازی ساختار پاسخ‌های API
+
+استفاده از ساختار پاکت پاسخ یکپارچه (شامل \`data\`، \`success\` و \`errors\`) یا استاندارد جهانی **RFC 7807 (ProblemDetails)** برای خطاها.`,
+  },
+  {
+    id: "dotnet-mid-q197",
+    stackId: "dotnet",
+    categoryId: "clean-code-testing",
+    levelId: "mid",
+    questionTitle: "What is the role of Static Code Analyzers like SonarQube in .NET?",
+    questionTitle_fa: "ابزارهای Code Analyzer در دات‌نت مانند SonarQube چه نقشی دارند؟",
+    answerContent: `### SonarQube & Code Quality Gates
+
+Automates static code analysis in CI pipelines:
+- Detects security vulnerabilities and code smells.
+- Tracks test code coverage and duplicates.
+- Enforces Quality Gates before allowing pull request merges.`,
+    answerContent_fa: `### نقش SonarQube در تضمین کیفیت کد
+
+تحلیل ایستای سورس‌کد در پایپ‌لاین CI برای شناسایی آسیب‌پذیری‌های امنیتی، کد اسمِل‌ها و بررسی عبور از خطوط قرمز کیفی (Quality Gates).`,
+  },
+  {
+    id: "dotnet-mid-q198",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "mid",
+    questionTitle: "How do you prevent NullReferenceExceptions structurally (Nullable Reference Types & Result Pattern)?",
+    questionTitle_fa: "نحوه هندل کردن Null Reference Exception به طور ساختاری چیست؟",
+    answerContent: `### Structural Null Safety in C#
+
+1. **Nullable Reference Types (C# 8+):** Enable \`<Nullable>enable</Nullable>\` to get compile-time warnings.
+2. **Result Pattern:** Avoid returning null by returning a \`Result<T>\` object indicating success or failure.`,
+    answerContent_fa: `### جلوگیری ساختاری از خطای NullReferenceException
+
+فعال‌سازی قابلیت **Nullable Reference Types** در سی‌شارپ ۸ به بعد و استفاده از **الگوی Result** به جای بازگرداندن مقادیر \`null\`.`,
+  },
+  {
+    id: "dotnet-mid-q199",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "mid",
+    questionTitle: "How do you process a 500MB Excel/CSV file in .NET without exhausting server RAM?",
+    questionTitle_fa: "برای پردازش یک فایل اکسل ۵۰۰ مگابایتی در بک‌اند از چه رویکردی استفاده می‌کنی تا RAM پر نشود؟",
+    answerContent: `### Processing Large Files with Constant Memory
+
+- **DO NOT** load the entire file into memory using DOM parsers.
+- Use **Streaming / SAX readers** (e.g., \`ExcelDataReader\` in streaming mode, \`CsvHelper\` reading line-by-line via \`IEnumerable\`).
+- Process and batch-insert records into the database in chunks of $1,000$ rows.`,
+    answerContent_fa: `### پردازش فایل‌های فوق‌حجیم بدون اشغال رم
+
+استفاده از کتابخانه‌های استریمینگ (مانند \`ExcelDataReader\` یا \`CsvHelper\`) که سطرها را تک‌تک با \`yield\` می‌خوانند و درج دسته‌ای رکوردهای پردازش‌شده در دسته‌های ۱۰۰۰ تایی.`,
+  },
+  {
+    id: "dotnet-mid-q200",
+    stackId: "dotnet",
+    categoryId: "architecture-ddd",
+    levelId: "mid",
+    questionTitle: "How do you design background workers for bulk email or SMS sending?",
+    questionTitle_fa: "استفاده از Background Tasks برای ارسال ایمیل یا پیامک انبوه در سیستم.",
+    answerContent: `### High-Throughput Background Job Processing
+
+1. Enqueue job messages into a persistent queue (RabbitMQ / Redis / Hangfire).
+2. Worker services consume messages with rate limiting according to SMS provider limits.
+3. Use the **Outbox Pattern** to guarantee messages are never lost if database transactions commit.`,
+    answerContent_fa: `### طراحی سرویس‌های پس‌زمینه برای ارسال انبوه پیامک/ایمیل
+
+قرار دادن درخواست‌ها در صف‌های ناهمگام (RabbitMQ یا Hangfire)، پردازش دسته‌ای با اعمال محدودیت نرخ ارسال و استفاده از الگوی Outbox برای اطمینان از ثبت قطعی پیام.`,
+  },
+];
