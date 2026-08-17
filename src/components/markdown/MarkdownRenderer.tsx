@@ -21,17 +21,13 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) =
       dir={isRtl ? "rtl" : "ltr"}
       sx={{
         color: "#CBD5E1",
-        fontSize: { xs: "0.92rem", md: "0.98rem" },
+        fontSize: { xs: "0.85rem", md: "0.9rem" },
         lineHeight: isRtl ? 1.95 : 1.85,
-        textAlign: isRtl ? "right" : "left",
-        direction: isRtl ? "rtl" : "ltr",
 
         // ── Paragraphs ─────────────────────────────────────────
         "& p": {
           marginTop: 0,
           marginBottom: "1.4rem",
-          textAlign: isRtl ? "right" : "left",
-          direction: isRtl ? "rtl" : "ltr",
           "&:last-child": { marginBottom: 0 },
         },
 
@@ -42,33 +38,31 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) =
           marginBottom: "1rem",
           lineHeight: 1.45,
           color: "#F8FAFC",
-          textAlign: isRtl ? "right" : "left",
-          direction: isRtl ? "rtl" : "ltr",
           letterSpacing: isRtl ? "0" : "-0.015em",
           "&:first-of-type": { marginTop: "0.25rem" },
         },
         "& h1": {
-          fontSize: { xs: "1.35rem", md: "1.65rem" },
+          fontSize: { xs: "1.2rem", md: "1.45rem" },
           borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
           paddingBottom: "0.6rem",
         },
         "& h2": {
-          fontSize: { xs: "1.2rem", md: "1.42rem" },
+          fontSize: { xs: "1.08rem", md: "1.25rem" },
           color: "#F1F5F9",
           borderBottom: "1px solid rgba(255, 255, 255, 0.05)",
           paddingBottom: "0.45rem",
         },
         "& h3": {
-          fontSize: { xs: "1.1rem", md: "1.22rem" },
+          fontSize: { xs: "0.98rem", md: "1.1rem" },
           color: "#818CF8",
         },
         "& h4": {
-          fontSize: { xs: "0.98rem", md: "1.08rem" },
+          fontSize: { xs: "0.9rem", md: "0.98rem" },
           color: "#38BDF8",
           fontWeight: 600,
         },
         "& h5, & h6": {
-          fontSize: "0.95rem",
+          fontSize: "0.85rem",
           color: "#94A3B8",
           fontWeight: 600,
         },
@@ -79,14 +73,10 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) =
           paddingInlineEnd: "0",
           marginTop: "0.5rem",
           marginBottom: "1.4rem",
-          textAlign: isRtl ? "right" : "left",
-          direction: isRtl ? "rtl" : "ltr",
         },
         "& li": {
           marginBottom: "0.6rem",
           lineHeight: isRtl ? 1.9 : 1.8,
-          textAlign: isRtl ? "right" : "left",
-          direction: isRtl ? "rtl" : "ltr",
           "&::marker": {
             color: "#818CF8",
           },
@@ -114,10 +104,8 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) =
           backgroundColor: "rgba(99, 102, 241, 0.06)",
           borderRadius: isRtl ? "8px 0 0 8px" : "0 8px 8px 0",
           color: "#CBD5E1",
-          fontSize: "0.94rem",
+          fontSize: "0.85rem",
           lineHeight: isRtl ? 1.85 : 1.75,
-          textAlign: isRtl ? "right" : "left",
-          direction: isRtl ? "rtl" : "ltr",
           "& p": { marginBottom: 0 },
         },
 
@@ -127,8 +115,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) =
           borderCollapse: "separate",
           borderSpacing: 0,
           margin: "1.85rem 0",
-          fontSize: "0.86rem",
-          direction: isRtl ? "rtl" : "ltr",
+          fontSize: "0.8rem",
           borderRadius: "10px",
           overflow: "hidden",
           border: "1px solid rgba(255, 255, 255, 0.08)",
@@ -137,9 +124,8 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) =
         "& th": {
           backgroundColor: "#111625",
           padding: "12px 16px",
-          textAlign: isRtl ? "right" : "left",
           fontWeight: 700,
-          fontSize: "0.82rem",
+          fontSize: "0.76rem",
           borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
           color: "#F8FAFC",
         },
@@ -147,7 +133,6 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) =
           padding: "12px 16px",
           borderBottom: "1px solid rgba(255, 255, 255, 0.05)",
           color: "#CBD5E1",
-          textAlign: isRtl ? "right" : "left",
           verticalAlign: "top",
           lineHeight: 1.6,
         },
@@ -169,36 +154,38 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) =
           padding: "1px 7px",
           margin: "0 2px",
           borderRadius: "5px",
-          fontSize: "0.85em",
+          fontSize: "0.82em",
           fontFamily: MONO_FONT,
           fontWeight: 500,
           verticalAlign: "middle",
         },
 
-        // ── Code blocks (Strictly LTR) ─────────────────────────
+        // ── Code blocks (Strictly LTR in ALL modes) ─────────────
         "& pre": {
           direction: "ltr !important",
           textAlign: "left !important",
-          unicodeBidi: "isolate",
-          backgroundColor: "#06080F",
-          border: "1px solid rgba(255, 255, 255, 0.09)",
-          borderRadius: "10px",
+          unicodeBidi: "isolate !important",
+          backgroundColor: "#06080F !important",
+          border: "1px solid rgba(255, 255, 255, 0.09) !important",
+          borderRadius: "10px !important",
           padding: { xs: "16px 18px", md: "20px 24px" },
-          overflowX: "auto",
-          margin: "1.6rem 0",
-          boxShadow: "inset 0 1px 3px rgba(0, 0, 0, 0.5)",
+          overflowX: "auto !important",
+          margin: "1.6rem 0 !important",
+          boxShadow: "inset 0 1px 3px rgba(0, 0, 0, 0.5) !important",
           "& code": {
-            backgroundColor: "transparent",
-            color: "#E2E8F0",
-            padding: 0,
-            fontSize: "0.85rem",
-            lineHeight: 1.7,
-            display: "block",
+            backgroundColor: "transparent !important",
+            color: "#E2E8F0 !important",
+            padding: "0 !important",
+            fontSize: "0.78rem !important",
+            lineHeight: "1.7 !important",
+            display: "block !important",
             direction: "ltr !important",
             textAlign: "left !important",
-            fontFamily: MONO_FONT,
-            fontWeight: 400,
+            unicodeBidi: "isolate !important",
+            fontFamily: `${MONO_FONT} !important`,
+            fontWeight: "400 !important",
             tabSize: 4,
+            whiteSpace: "pre !important",
           },
         },
 
@@ -228,7 +215,12 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) =
           pre: ({ node, ...props }) => (
             <pre
               dir="ltr"
-              style={{ direction: "ltr", textAlign: "left", unicodeBidi: "isolate" }}
+              style={{
+                direction: "ltr",
+                textAlign: "left",
+                unicodeBidi: "isolate",
+                fontFamily: MONO_FONT,
+              }}
               {...props}
             />
           ),
@@ -236,7 +228,12 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) =
             return (
               <code
                 dir="ltr"
-                style={{ direction: "ltr", textAlign: "left", unicodeBidi: "isolate" }}
+                style={{
+                  direction: "ltr",
+                  textAlign: "left",
+                  unicodeBidi: "isolate",
+                  fontFamily: MONO_FONT,
+                }}
                 className={className}
                 {...props}
               >
@@ -244,6 +241,34 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) =
               </code>
             );
           },
+          img: ({ node, ...props }) => (
+            <Box
+              component="span"
+              sx={{
+                display: "block",
+                my: 3.5,
+                textAlign: "center",
+                direction: "ltr",
+              }}
+            >
+              <Box
+                component="img"
+                sx={{
+                  maxWidth: "100%",
+                  height: "auto",
+                  borderRadius: "12px",
+                  border: "1px solid rgba(255, 255, 255, 0.12)",
+                  boxShadow: "0 8px 30px rgba(0, 0, 0, 0.5)",
+                  display: "inline-block",
+                  transition: "transform 0.2s ease",
+                  "&:hover": {
+                    transform: "scale(1.01)",
+                  },
+                }}
+                {...props}
+              />
+            </Box>
+          ),
         }}
       >
         {content}

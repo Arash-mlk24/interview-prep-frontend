@@ -41,17 +41,7 @@ To solve these architectural challenges, .NET provides **\`System.Threading.Chan
 
 \`System.Threading.Channels\` is an asynchronous, high-performance, lock-free producer-consumer library designed specifically for asynchronous pipelines. It completely decouples data producers from data consumers.
 
-\`\`\`mermaid
-flowchart LR
-    P1[Producer 1] -->|WriteAsync| CW[ChannelWriter]
-    P2[Producer 2] -->|WriteAsync| CW
-    subgraph Channel["Channel&lt;T&gt; (Bounded Buffer)"]
-        CW --> Buffer["[Queue / RingBuffer: Slot 1 | Slot 2 | Slot 3]"]
-        Buffer --> CR[ChannelReader]
-    end
-    CR -->|ReadAsync / ReadAllAsync| C1[Consumer Worker 1]
-    CR -->|ReadAsync / ReadAllAsync| C2[Consumer Worker 2]
-\`\`\`
+![System.Threading.Channels Pipeline Architecture](/images/roadmaps/channels-concurrency-flow.jpg)
 
 ### 2.1 Channel Architecture & Separation of Concerns
 A \`Channel<T>\` separates ingestion from consumption into two distinct abstract types:
@@ -141,27 +131,9 @@ public class OrderProcessingWorker : BackgroundService
 
 ## 3. The .NET ThreadPool & ThreadPool Starvation
 
-The .NET ThreadPool manages a pool of worker threads to execute CPU-bound and asynchronous I/O completion callbacks efficiently without the massive overhead of creating and destroying OS threads ($1\\text{ MB}$ stack allocation per thread).
+The .NET ThreadPool manages a pool of worker threads to execute CPU-bound and asynchronous I/O completion callbacks efficiently without the massive overhead of creating and destroying OS threads ($1\text{ MB}$ stack allocation per thread).
 
-\`\`\`mermaid
-flowchart TD
-    subgraph GlobalQueue[ThreadPool Global FIFO Queue]
-        Work1[Work Item 1]
-        Work2[Work Item 2]
-    end
-
-    subgraph Core1[CPU Core 0 / Thread 1]
-        LocalQ1[Local LIFO Work-Stealing Queue]
-    end
-
-    subgraph Core2[CPU Core 1 / Thread 2]
-        LocalQ2[Local LIFO Work-Stealing Queue]
-    end
-
-    GlobalQueue -->|Dispatch| LocalQ1
-    GlobalQueue -->|Dispatch| LocalQ2
-    LocalQ1 -.->|Work Stealing if Idle| LocalQ2
-\`\`\`
+![.NET ThreadPool Internals & Work-Stealing Architecture](/images/roadmaps/threadpool-architecture.jpg)
 
 ### 3.1 ThreadPool Internals: Work-Stealing & Hill Climbing
 - **Global Queue vs. Local Queues:** Top-level work items go to the Global Queue (FIFO). Continuations scheduled by a running thread go to that thread's **Local Queue (LIFO)** for high CPU cache locality.
@@ -525,17 +497,7 @@ public class TelemetryBatchProcessorWorker : BackgroundService
 
 کتابخانه \`System.Threading.Channels\` یک ساختار داده ناهمگام، فوق‌سریع و بدون قفل (Lock-Free) برای سناریوهای Producer-Consumer است که فرآیند تولید داده را کاملاً از پردازش آن تفکیک می‌کند.
 
-\`\`\`mermaid
-flowchart LR
-    P1[تولیدکننده ۱] -->|WriteAsync| CW[ChannelWriter]
-    P2[تولیدکننده ۲] -->|WriteAsync| CW
-    subgraph Channel["کانال با ظرفیت مشخص (Bounded Channel)"]
-        CW --> Buffer["[بافر صفی: آیتم ۱ | آیتم ۲ | آیتم ۳]"]
-        Buffer --> CR[ChannelReader]
-    end
-    CR -->|ReadAsync / ReadAllAsync| C1[ورکر مصرف‌کننده ۱]
-    CR -->|ReadAsync / ReadAllAsync| C2[ورکر مصرف‌کننده ۲]
-\`\`\`
+![معماری پایپ‌لاین System.Threading.Channels](/images/roadmaps/channels-concurrency-flow.jpg)
 
 ### ۲.۱ معماری کانال‌ها و تفکیک وظایف
 هر \`Channel<T>\` از دو بخش کاملاً مجزا تشکیل شده است:
@@ -626,25 +588,7 @@ public class OrderProcessingWorker : BackgroundService
 
 موتور ThreadPool در دات‌نت وظیفه مدیریت مجموعه‌ای از نخ‌های کارگر (Worker Threads) را برای اجرای تسک‌ها و بازخوانی‌های I/O ناهمگام بر عهده دارد تا از ساخت و نابودی مداوم نخ‌های سیستم‌عامل (که هر کدام ۱ مگابایت رم اشغال می‌کنند) جلوگیری شود.
 
-\`\`\`mermaid
-flowchart TD
-    subgraph GlobalQueue[صف عمومی سراسری ThreadPool - حالت FIFO]
-        Work1[تسک ورودی ۱]
-        Work2[تسک ورودی ۲]
-    end
-
-    subgraph Core1[هسته پردازنده ۰ / نخ ۱]
-        LocalQ1[صف محلی با الگوریتم Work-Stealing]
-    end
-
-    subgraph Core2[هسته پردازنده ۱ / نخ ۲]
-        LocalQ2[صف محلی با الگوریتم Work-Stealing]
-    end
-
-    GlobalQueue -->|توزیع| LocalQ1
-    GlobalQueue -->|توزیع| LocalQ2
-    LocalQ1 -.->|دزدیدن کار در صورت بیکاری| LocalQ2
-\`\`\`
+![معماری داخلی ThreadPool و الگوریتم Work-Stealing](/images/roadmaps/threadpool-architecture.jpg)
 
 ### ۳.۱ سازوکار صف‌های محلی و الگوریتم Hill Climbing
 - **صف سراسری (Global Queue) در برابر صف محلی (Local Queue):** تسک‌های سطح بالا وارد صف سراسری می‌شوند. اما وقتی یک نخ کارهای بعدی را زمان‌بندی می‌کند، آن‌ها را در **صف محلی خود (LIFO)** قرار می‌دهد تا داده‌ها در حافظه نهان CPU (Cache Locality) باقی بمانند.

@@ -262,11 +262,9 @@ export const TopicPageView: React.FC<TopicPageViewProps> = ({
             sx={{
               fontWeight: 800,
               color: "#FFFFFF",
-              fontSize: { xs: "1.35rem", md: "1.75rem" },
+              fontSize: { xs: "1.25rem", md: "1.55rem" },
               mb: 1.5,
               lineHeight: 1.4,
-              textAlign: isRtl ? "right" : "left",
-              direction: isRtl ? "rtl" : "ltr",
             }}
           >
             {localizedTopicTitle}
@@ -276,11 +274,9 @@ export const TopicPageView: React.FC<TopicPageViewProps> = ({
             variant="body1"
             sx={{
               color: "#94A3B8",
-              fontSize: "0.94rem",
+              fontSize: "0.86rem",
               lineHeight: 1.75,
               maxWidth: 900,
-              textAlign: isRtl ? "right" : "left",
-              direction: isRtl ? "rtl" : "ltr",
             }}
           >
             {localizedTopicSummary}

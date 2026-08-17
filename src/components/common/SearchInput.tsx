@@ -157,8 +157,6 @@ export const SearchInput: React.FC<SearchInputProps> = ({
             fontFamily: "inherit",
             "& .MuiInputBase-input": {
               p: 0,
-              textAlign: isRtl ? "right" : "left",
-              direction: isRtl ? "rtl" : "ltr",
             },
           }}
         />

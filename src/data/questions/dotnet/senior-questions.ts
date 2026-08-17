@@ -2862,7 +2862,7 @@ flowchart TD
     stackId: "dotnet",
     categoryId: "csharp-advanced",
     levelId: "senior",
-    topicIds: ["topic-dotnet-concurrency-channels-memory"],
+    topicIds: ["topic-dotnet-concurrency-channels-memory", "topic-dotnet-span-memory"],
     questionTitle: "What are ref struct, Span<T>, and Memory<T>, why is Span<T> forbidden across await points in async state machines, and how do you achieve zero-copy I/O?",
     questionTitle_fa: "انواع ref struct، Span<T> و Memory<T> چه تفاوت‌هایی دارند، چرا استفاده از Span در طول دستورات await ممنوع است و چگونه I/O با صفر تخصیص حافظه پیاده‌سازی می‌شود؟",
     answerContent: `### Memory Architecture: ref struct, Span<T>, and Memory<T> in C#
@@ -3263,6 +3263,1371 @@ flowchart LR
 - هنگامی که تیم نیاز دارد قابلیت‌ها را با سرعت بالا و بدون تداخل با سایر بخش‌ها توسعه داده و دیپلوی کند.
 - هنگامی که سیستم دارای بارهای کاری ناهمگون است (برخی اندپوینت‌ها نیازمند Dapper با سرعت حداکثری و برخی نیازمند دامین مدل‌های غنی DDD هستند).`,
   },
+  {
+    id: "dotnet-senior-span-q1",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "senior",
+    topicIds: ["topic-dotnet-span-memory"],
+    questionTitle: "How does the CLR implement ref struct and managed interior pointers (ByReference<T>) under the hood, and how does the JIT compiler eliminate bounds checking for Span<T> in hot loops?",
+    questionTitle_fa: "موتور CLR چگونه انواع ref struct و اشاره‌گرهای مدیریت‌شده داخلی (ByReference<T>) را در لایه پایین پیاده‌سازی می‌کند و کامپایلر JIT چگونه بررسی مرزها (Bounds Checking) را در حلقه‌ها حذف می‌کند؟",
+    answerContent: `### CLR Internals: \`ref struct\`, Interior Pointers (\`ByReference<T>\`), and JIT Bounds Check Elimination
+
+\`Span<T>\` delivers native C-like speed while maintaining strict memory safety. Under the hood, this is made possible by two core CLR technologies: **Managed Interior Pointers** and **JIT Induction Variable Analysis**.
+
+\`\`\`mermaid
+flowchart TD
+    subgraph ManagedMemory["Managed Heap / Stack Frame"]
+        ObjHeader["Object Header + MethodTable (16B)"]
+        ArrayLength["Array Length Field (4B)"]
+        DataSlot0["Element [0]"]
+        DataSlot1["Element [1]"]
+        DataSlot2["Element [2]"]
+    end
+
+    subgraph SpanInternals["Span&lt;T&gt; (16 Bytes on Stack)"]
+        Ptr["_reference (ByReference&lt;T&gt;)"]
+        Len["_length = 3"]
+    end
+
+    Ptr -->|Points directly to DataSlot0 (Interior)| DataSlot0
+\`\`\`
+
+#### 1. The Anatomy of \`ByReference<T>\`:
+In source code, \`Span<T>\` appears to hold \`ref T _reference\`. Internally within CoreCLR, this is represented by an intrinsic type:
+\`\`\`csharp
+internal readonly ref struct ByReference<T>
+{
+    private readonly IntPtr _value; // Raw machine pointer tracked by GC
+}
+\`\`\`
+- **Interior Pointer Semantics:** A normal object reference points to the start of an object (its sync block/MethodTable pointer). An interior pointer points *inside* the object (e.g. element index 5 of a byte array).
+- **GC Relocation Awareness:** When the Garbage Collector runs a compaction phase and moves the underlying array to another memory address, it automatically updates all active \`ByReference<T>\` pointers on thread stacks to point to the new physical memory location.
+
+#### 2. How the JIT Eliminates Bounds Checking (BCE):
+By default, indexing a Span (\`span[i]\`) generates bounds-checking machine instructions:
+\`\`\`assembly
+cmp edx, [rcx+8]    ; Compare index (edx) against length
+jae ThrowIndexOutOfRange ; Branch if unsigned index >= length
+\`\`\`
+
+However, the .NET JIT compiler uses **Induction Variable Analysis** and **Range Assertion Elimination**:
+\`\`\`csharp
+// The JIT detects that 'i' is strictly bound from 0 to span.Length - 1
+for (int i = 0; i < span.Length; i++)
+{
+    span[i] = 0; // JIT ELIMINATES the bounds check instruction completely!
+}
+\`\`\`
+- The JIT emits a single loop comparison at the loop header and then executes direct raw pointer arithmetic in native assembly (\`mov [rax+rcx*4], 0\`), achieving performance identical to unmanaged C.`,
+    answerContent_fa: `### معماری داخلی CLR: نحوه عملکرد \`ref struct\`، اشاره‌گرهای داخلی (\`ByReference<T>\`) و حذف بررسی مرزها توسط JIT
+
+ساختار \`Span<T>\` سرعت زبان‌های سطح پایینی مثل C را با حفظ امنیت حافظه در سی‌شارپ فراهم می‌کند. این دستاورد به لطف دو تکنولوژی بنیادین در CLR محقق شده است: **اشاره‌گرهای مدیریت‌شده داخلی (Managed Interior Pointers)** و **آنالیز متغیرهای اندیس در کامپایلر JIT**.
+
+#### ۱. کالبدشکافی ساختار \`ByReference<T>\`:
+در لایه داخلی ران‌تایم دات‌نت (CoreCLR)، فیلد رفرنس درون Span با استراکت اینترینسیک \`ByReference<T>\` پیاده‌سازی شده است:
+- **اشاره‌گر داخلی (Interior Pointer):** برخلاف رفرنس‌های معمولی که به هدر شیء اشاره می‌کنند، این اشاره‌گر مستقیماً به بایت‌های میانی شیء (مثلاً خانه شماره ۵ از یک آرایه) اشاره دارد.
+- **هماهنگی با فازهای فشرده‌سازی GC:** اگر Garbage Collector در حین اجرای برنامه حافظه آرایه را جابجا کند، ران‌تایم تمام اشاره‌گرهای داخلی فعال روی استک را به آدرس فیزیکی جدید تغییر می‌دهد.
+
+#### ۲. مکانیزم حذف بررسی محدوده (Bounds Check Elimination):
+در حالت عادی، دسترسی به اندیس‌های Span با دستور اسمبلی \`cmp\` و \`jae\` بررسی می‌شود تا خارج از محدوده نباشد.
+اما کامپایلر Tier-1 JIT دات‌نت در حلقه‌های استانداردی مانند \`for (int i = 0; i < span.Length; i++)\`:
+- تشخیص می‌دهد که مقدار متغیر \`i\` همواره در بازه معتبر قرار دارد.
+- **دستور مقایسه مرزها را در هر تکرار حلقه کاملاً حذف (Elide) می‌کند** و مستقیماً با آدرس‌دهی مستقیم رجیسترهای CPU کد ماشین را با حداکثر سرعت اجرا می‌نماید.`,
+  },
+  {
+    id: "dotnet-senior-span-q2",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "senior",
+    topicIds: ["topic-dotnet-span-memory"],
+    questionTitle: "How does the C# 13 'allows ref struct' anti-constraint work, why was it historically impossible to use Span<T> with generics or interfaces, and how does it enable zero-allocation generic abstractions?",
+    questionTitle_fa: "قید منفی 'where T : allows ref struct' در C# 13 چگونه کار می‌کند، چرا در گذشته استفاده از Span<T> در ژنریک‌ها و اینترفیس‌ها ناممکن بود و چگونه انتزاع‌های ژنریک بدون آلیکیشن را ممکن می‌سازد؟",
+    answerContent: `### The C# 13 \`allows ref struct\` Anti-Constraint & Generic Zero-Allocation Pipelines
+
+Prior to C# 13 / .NET 9, \`Span<T>\` and all \`ref struct\` types were strictly excluded from generic programming.
+
+\`\`\`mermaid
+flowchart LR
+    subgraph PreCSharp13["Pre-C# 13 (Implicit Heap-Safe Assumption)"]
+        G["Generic Type T"] -->|Assumes T can be boxed or live on Heap| Reject["❌ Compile Error: Cannot use Span&lt;T&gt; as generic argument"]
+    end
+
+    subgraph CSharp13["C# 13 / .NET 9 (Anti-Constraint)"]
+        G2["Generic Type T where T : allows ref struct"] -->|Relaxes heap assumption| Accept["✅ Allows Span&lt;T&gt;, ReadOnlySpan&lt;T&gt; as generic type parameter"]
+    end
+\`\`\`
+
+#### 1. Why Generics Historically Forbade \`ref struct\`:
+When the C# compiler processes a generic type \`T\`, it implicitly assumes that:
+1. \`T\` can be stored inside a class or boxed into \`object\`.
+2. \`T\` can be placed inside an array (\`T[]\`).
+3. \`T\` can be captured inside closures and async methods.
+
+Because \`ref struct\` types violate every single one of these invariants, allowing \`Span<T>\` as \`T\` would cause runtime crashes whenever a generic class attempted to store \`T\` in a field.
+
+#### 2. The Solution: The \`allows ref struct\` Anti-Constraint:
+C# 13 introduced the **anti-constraint** \`where T : allows ref struct\`. It does not *require* a capability; it *removes* the compiler's default assumption that \`T\` is heap-safe:
+
+\`\`\`csharp
+// Generic interface supporting both heap types and ref structs
+public interface IDataConsumer<T> where T : allows ref struct
+{
+    void Consume(T data);
+}
+
+// Zero-allocation implementation taking a ReadOnlySpan directly!
+public class HighSpeedHasher : IDataConsumer<ReadOnlySpan<byte>>
+{
+    public void Consume(ReadOnlySpan<byte> data)
+    {
+        // Compute SIMD hash without boxing or array allocations
+    }
+}
+\`\`\`
+
+#### 3. Real-World Architectural Impact:
+- Enables standard generic algorithms (\`BinarySearch\`, \`Sort\`, parsers, formatters) to operate directly over \`ReadOnlySpan<T>\` without duplicating code into separate Span-specific overloads.
+- Allows library authors (e.g. serialization engines, logging pipelines) to build unified generic pipelines with zero heap allocations.`,
+    answerContent_fa: `### قید منفی \`allows ref struct\` در C# 13 و خطوط لوله ژنریک بدون تخصیص حافظه
+
+قبل از نسخه C# 13 و دات‌نت ۹، استفاده از ساختارهای \`ref struct\` (مانند \`Span<T>\` و \`ReadOnlySpan<T>\`) به عنوان پارامتر تایپ‌های ژنریک یا در اینترفیس‌ها غیرممکن بود.
+
+#### ۱. چرا ژنریک‌ها قبلاً از \`ref struct\` پشتیبانی نمی‌کردند؟
+کامپایلر دات‌نت هنگام پردازش تایپ ژنریک \`T\` به صورت پیش‌فرض فرض می‌کرد که:
+۱. نوع \`T\` می‌تواند درون یک کلاس ذخیره شود یا به \`object\` تبدیل (Box) شود.
+۲. نوع \`T\` می‌تواند به شکل آرایه (\`T[]\`) روی Heap قرار گیرد.
+۳. نوع \`T\` می‌تواند در متدهای ناهمگام (Async) استفاده شود.
+
+چون \`ref struct\`ها طبق قوانین CLR حبس در Stack هستند، نقض هر یک از این فرضیات می‌توانست باعث خرابی فاجعه‌بار حافظه شود.
+
+#### ۲. قید منفی \`where T : allows ref struct\`:
+در C# 13 مفهوم قید منفی (Anti-Constraint) اضافه شد که به کامپایلر اعلام می‌کند: «این متد یا اینترفیس تضمین می‌کند که نوع T را روی Heap ذخیره نخواهد کرد؛ بنابراین اجازه بده انواع ref struct نیز به عنوان پارامتر ژنریک ارسال شوند»:
+
+\`\`\`csharp
+public interface IDataConsumer<T> where T : allows ref struct
+{
+    void Consume(T data);
+}
+
+public class FastSpanParser : IDataConsumer<ReadOnlySpan<char>>
+{
+    public void Consume(ReadOnlySpan<char> data)
+    {
+        // پردازش مستقیم بدون حتی یک بایت Boxing
+    }
+}
+\`\`\`
+
+#### ۳. اثر معمارانه در سیستم‌های پرترافیک:
+این قابلیت اجازه می‌دهد فریم‌ورک‌های لاگینگ، سریالایزرها و پایپ‌لاین‌های با توان عملیاتی بالا، کدهای ژنریک مشترکی بنویسند که بدون نیاز به Overloadهای تکراری، مستقیماً روی Spans با صفر آلیکیشن کار کنند.`,
+  },
+  {
+    id: "dotnet-senior-span-q3",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "senior",
+    topicIds: ["topic-dotnet-span-memory"],
+    questionTitle: "Explain the internal architecture of ArrayPool<T>.Shared, how per-core locked stacks prevent lock contention across multiple CPU cores, and what are the critical safety rules when renting arrays in high-concurrency microservices?",
+    questionTitle_fa: "معماری داخلی ArrayPool<T>.Shared و نحوه جلوگیری از قفل‌شدگی با استک‌های اختصاصی هر هسته CPU (Per-Core Stacks) را توضیح داده و قوانین حیاتی اجاره بافر در مایکروسرویس‌های پرترافیک را بیان کنید.",
+    answerContent: `### Internal Architecture of \`ArrayPool<T>.Shared\` & High-Concurrency Safety Rules
+
+In high-throughput .NET services, allocating and collecting large byte arrays causes severe Gen 2 / LOH fragmentation. \`ArrayPool<T>.Shared\` resolves this by maintaining a pool of pre-allocated arrays categorized by size.
+
+\`\`\`mermaid
+flowchart TD
+    subgraph ArrayPoolArchitecture["ArrayPool&lt;T&gt;.Shared (TlsOverPerCoreLockedStacksArrayPool)"]
+        subgraph CoreCaches["Layer 1: Per-Core Stacks (Lock-Free / Core-Affinity)"]
+            C0["Core 0 Stack (Fast Local Cache)"]
+            C1["Core 1 Stack (Fast Local Cache)"]
+            C2["Core N Stack (Fast Local Cache)"]
+        end
+
+        subgraph GlobalBuckets["Layer 2: Global Power-of-Two Buckets"]
+            B1["Bucket 16B"]
+            B2["Bucket 32B"]
+            B3["Bucket 64B"]
+            B4["Bucket 128B ... 1MB+"]
+        end
+
+        CoreCaches -->|Cache Miss on Rent| GlobalBuckets
+    end
+\`\`\`
+
+#### 1. The Two-Tier Architecture (\`TlsOverPerCoreLockedStacksArrayPool\`):
+1. **Tier 1: Per-Core Locked Stacks:**
+   - To avoid multi-threaded lock contention, \`ArrayPool.Shared\` allocates dedicated array caches per CPU core.
+   - When a thread on Core 2 calls \`Rent()\`, it accesses Core 2's local stack. Multiple threads on different CPU cores execute \`Rent()\` and \`Return()\` concurrently without blocking one another.
+2. **Tier 2: Global Bucketed Pools:**
+   - If the local core stack is empty, it falls back to the global bucket system.
+   - Arrays are sized in powers of two ($16, 32, 64, 128, \\dots, 1\\text{ MB}, \\dots, 2\\text{ MB}$).
+
+#### 2. The 4 Critical Safety Invariants:
+1. **The Size Invariant:** \`ArrayPool.Rent(minBufferSize)\` returns an array whose \`.Length\` is $\\ge \\text{minBufferSize}$. If you rent 100 bytes, you may receive a 128-byte or 256-byte array. **Never use \`buffer.Length\`! Always slice to exact count: \`buffer.AsSpan(0, requestedCount)\`**.
+2. **Guaranteed Return via \`finally\`:** If an exception occurs, failing to return the buffer causes a pool drain, forcing the pool to allocate new arrays and defeating the purpose of the pool.
+3. **Prevention of Double-Returning:** Returning an array twice corrupts the internal free-list pointer graph, leading to simultaneous data races across unrelated requests.
+4. **Data Sanitization with \`clearArray: true\`:** When handling authentication tokens, credit card data, or cryptographic keys, always pass \`clearArray: true\` on return to zero out memory and prevent data leaks.`,
+    answerContent_fa: `### معماری داخلی ArrayPool<T>.Shared و قوانین ایمنی در مایکروسرویس‌های پرترافیک
+
+کلاس \`ArrayPool<T>.Shared\` برای حذف آلیکیشن‌های مکرر آرایه‌های بایت روی حافظه Heap و ناحیه LOH طراحی شده است.
+
+#### ۱. معماری دو لایه‌ای (\`TlsOverPerCoreLockedStacksArrayPool\`):
+۱. **لایه ۱: استک‌های اختصاصی هر هسته CPU (Per-Core Stacks):**
+   - برای حذف قفل‌های سراسری و تداخل نخ‌ها در سرورهای چند‌هسته‌ای، به ازای هر هسته پردازنده یک کش محلی بافر اختصاص داده شده است.
+   - نخ‌هایی که روی هسته‌های مختلف اجرا می‌شوند، عملیات \`Rent\` و \`Return\` را بدون مسدود کردن یکدیگر با سرعت حداکثری انجام می‌دهند.
+۲. **لایه ۲: باکت‌های سراسری با مضارب توان‌های ۲:**
+   - اگر کش محلی خالی باشد، درخواست به باکت‌های سراسری هدایت می‌شود که آرایه‌ها را در اندازه‌های توانی از ۲ (۱۶، ۳۲، ۶۴، ۱۲۸ تا چند مگابایت) دسته‌بندی کرده‌اند.
+
+#### ۲. ۴ قانون حیاتی و شکست‌ناپذیر در استفاده از ArrayPool:
+۱. **تفاوت طول واقعی با طول درخواستی:** متد \`Rent(100)\` آرایه‌ای با طول حداقل ۱۰۰ (مثلاً ۱۲۸ یا ۲۵۶) بازمی‌گرداند. هرگز نباید از \`buffer.Length\` استفاده کرد؛ همیشه باید طول دقیق را اسلایس کنید: \`buffer.AsSpan(0, count)\`.
+۲. **استفاده اجباری از try/finally:** برای جلوگیری از نشت حافظه (Pool Exhaustion)، متد \`Return\` باید حتماً در بلوک \`finally\` قرار گیرد.
+۳. **جلوگیری از Double-Return:** بازگرداندن دوباره یک بافر باعث خرابی کلاستر استخر و تداخل داده‌ای بین درخواست‌های مختلف سرور می‌شود.
+۴. **پاکسازی داده‌های حساس با \`clearArray: true\`:** هنگام پردازش داده‌های هویتی یا پسوردها، باید \`clearArray: true\` تنظیم شود تا بایت‌های حافظه با مقدار صفر بازنویسی شوند.`,
+  },
+  {
+    id: "dotnet-senior-span-q4",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "senior",
+    topicIds: ["topic-dotnet-span-memory"],
+    questionTitle: "How does SearchValues<T> in .NET 8/9 achieve multi-fold performance improvements over IndexOfAny, how does the JIT compile it into AVX2/AVX-512 vector instructions, and what are the memory trade-offs?",
+    questionTitle_fa: "کلاس SearchValues<T> در دات‌نت ۸ و ۹ چگونه سرعتی تا چندین برابر بیشتر از IndexOfAny فراهم می‌کند، کامپایلر JIT چگونه آن را به دستورات برداری AVX2/AVX-512 تبدیل می‌کند و چه تریدآف‌های حافظه‌ای دارد؟",
+    answerContent: `### SIMD Vectorization Internals with \`SearchValues<T>\` in .NET 8/9
+
+Searching for specific delimiters (e.g. \`,\`, \`;\`, \`\\r\`, \`\\n\`, \` \`) in text streams or network headers is a fundamental hot path in web servers. Traditional \`IndexOfAny(char[])\` incurs overhead by re-analyzing the character set on every invocation.
+
+.NET 8 and .NET 9 introduced **\`SearchValues<T>\`**, which shifts set-analysis from execution time to **pre-computation startup time**, unlocking hardware vectorization.
+
+\`\`\`mermaid
+flowchart LR
+    Init["SearchValues.Create(\",;\\t\\r\\n\")"] -->|Pre-compute at Startup| Strategy{Character Set Analysis}
+    Strategy -->|Small ASCII Range| Bitmask["AVX2 / AVX-512 Vector Bitmask (vpshufb / vpternlogd)"]
+    Strategy -->|Sparse Multi-Byte Set| Bitmap["Probabilistic Bloom Filter Vector"]
+    
+    Bitmask --> Runtime["input.IndexOfAny(Delimiters)"]
+    Runtime --> Result["Processes 32/64 bytes per CPU cycle (5x-8x faster)"]
+\`\`\`
+
+#### 1. Internal Strategy Selection:
+When you call \`SearchValues.Create(targets)\`, the CLR analyzes the distribution of target values and instantiates an optimal internal strategy:
+1. **Single / Pair Strategy:** Compiles into hardware broadcast instructions (\`_mm256_set1_epi8\`) with direct comparison.
+2. **ASCII Bitmap Table:** If target characters are within ASCII range (0-127), it builds a 128-bit / 256-bit SIMD lookup mask executed via the **\`vpshufb\`** (vector shuffle) instruction.
+3. **Probabilistic Vector Filter:** For broader Unicode ranges, it uses vectorized bloom filters to quickly reject non-matching blocks.
+
+#### 2. Benchmark Comparison (Parsing 100,000 HTTP Headers):
+| Implementation | Mean Time | Allocations | CPU Instructions |
+| :--- | :--- | :--- | :--- |
+| Scalar \`foreach\` Loop | $12.4\\text{ ms}$ | $0\\text{ B}$ | $184,000,000$ |
+| \`ReadOnlySpan.IndexOfAny(char[])\` | $4.2\\text{ ms}$ | $0\\text{ B}$ | $52,000,000$ |
+| **\`ReadOnlySpan.IndexOfAny(SearchValues)\`** | **$0.8\\text{ ms}$** | **$0\\text{ B}$** | **$9,800,000$ (5.2x Faster)** |
+
+#### 3. Production Best Practices:
+- Always cache \`SearchValues<T>\` instances in \`static readonly\` fields to amortize initialization cost.
+- Use \`SearchValues<byte>\` for raw network socket pipelines and \`SearchValues<char>\` for string/text parsers.`,
+    answerContent_fa: `### کالبدشکافی پردازش وکتوری SIMD با \`SearchValues<T>\` در دات‌نت ۸ و ۹
+
+جستجوی کاراکترهای جداکننده (مانند \`,\`، \`;\`، خط جدید یا اسپیس) در جریان‌های متنی، یکی از پرتکرارترین عملیات‌های موتورهای وب و پارسرها است. متد سنتی \`IndexOfAny\` در هر بار فراخوانی باید آرایه کاراکترها را بررسی و تحلیل کند.
+
+در دات‌نت ۸ و ۹، کلاس **\`SearchValues<T>\`** فرآیند بهینه‌سازی را از زمان اجرای درخواست به **زمان راه‌اندازی برنامه (Startup Pre-computation)** منتقل کرده و مستقیماً از رجیسترهای وکتوری پردازنده (**AVX2، AVX-512 و ARM Neon**) استفاده می‌کند.
+
+#### ۱. استراتژی‌های داخلی انتخاب الگوریتم:
+هنگام فراخوانی \`SearchValues.Create()\`:
+۱. **ماسک بیتی وکتوری (ASCII Vector Bitmask):** اگر کاراکترها در محدوده اسکی باشند، جدول ماسک ۲۵۶ بیتی در رجیسترهای CPU ساخته می‌شود و با دستور اسمبلی \`vpshufb\` (Vector Shuffle)، در هر سیکل کلاک پردازنده **۳۲ یا ۶۴ بایت به صورت همزمان** پردازش می‌شوند.
+۲. **فیلترهای بیتی احتمالاتی:** برای کاراکترهای با گستره بزرگ یونیکد، از ساختارهای شبه بلوم‌فیلتر برداری استفاده می‌شود تا بلوک‌های نامرتبط در کسری از نانوثانیه رد شوند.
+
+#### ۲. مقایسه کارایی در پردازش ۱۰۰,۰۰۰ هدر HTTP:
+- متد معمولی \`IndexOfAny\`: زمان اجرا ۴.۲ میلی‌ثانیه.
+- **استفاده از \`SearchValues\`:** **۰.۸ میلی‌ثانیه (بیش از ۵ برابر سریع‌تر)** با مصرف صفر بایت حافظه و کاهش ۹۰ درصدی تعداد دستورات CPU.
+
+#### ۳. نکات طلایی استفاده:
+- نمونه \`SearchValues\` باید حتماً در فیلدهای \`static readonly\` تعریف شود تا هزینه پیش‌محاسبه فقط یک‌بار در زمان لود کلاس پرداخت گردد.`,
+  },
+  {
+    id: "dotnet-senior-span-q5",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "senior",
+    topicIds: ["topic-dotnet-span-memory"],
+    questionTitle: "How do you implement a custom MemoryManager<T> to wrap unmanaged native memory (e.g. shared memory mapped files or native C library buffers) into a safe ReadOnlyMemory<T> and Span<T> pipeline?",
+    questionTitle_fa: "چگونه با پیاده‌سازی یک MemoryManager<T> سفارشی، حافظه‌های Unmanaged و فایل‌های Memory-Mapped سیستم‌عامل را در قالب یک پایپ‌لاین امن ReadOnlyMemory<T> و Span<T> بدون کپی داده کپسوله می‌کنید؟",
+    answerContent: `### Custom \`MemoryManager<T>\`: Bridging Native Unmanaged Memory to Safe Async .NET Pipelines
+
+When integrating with native C/C++ libraries, GPU memory, or Operating System Shared Memory-Mapped Files, allocating managed \`byte[]\` copies introduces unacceptable latency overhead.
+
+\`System.Buffers.MemoryManager<T>\` is the abstract bridge that enables wrapping **arbitrary native memory pointers** into first-class, heap-safe \`Memory<T>\` instances that support \`IMemoryOwner<T>\` deterministic disposal.
+
+\`\`\`mermaid
+flowchart TD
+    subgraph NativeOS["Native OS Unmanaged Space"]
+        NativeMem["Native Ptr / Shared Memory (mmap)"]
+    end
+
+    subgraph MemoryManagerBridge["Custom NativeMemoryManager : MemoryManager&lt;byte&gt;"]
+        Owner["IMemoryOwner&lt;byte&gt; (.Memory)"]
+        Pin["Pin(elementIndex) -> MemoryHandle"]
+        GetSpan["GetSpan() -> Span&lt;byte&gt;"]
+        Dispose["Dispose() -> NativeMemory.Free()"]
+    end
+
+    subgraph ManagedDotNet["Safe Managed C# Pipeline"]
+        AsyncIO["await ProcessAsync(owner.Memory)"]
+    end
+
+    NativeMem <--> MemoryManagerBridge
+    MemoryManagerBridge --> ManagedDotNet
+\`\`\`
+
+#### 1. Implementation of a Production-Ready \`NativeMemoryManager\`:
+
+\`\`\`csharp
+using System.Buffers;
+using System.Runtime.InteropServices;
+
+public sealed unsafe class NativeMemoryManager : MemoryManager<byte>
+{
+    private readonly byte* _ptr;
+    private readonly int _length;
+    private bool _disposed;
+
+    public NativeMemoryManager(int length)
+    {
+        _length = length;
+        _ptr = (byte*)NativeMemory.Alloc((nuint)length);
+    }
+
+    public override Span<byte> GetSpan()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return new Span<byte>(_ptr, _length);
+    }
+
+    public override MemoryHandle Pin(int elementIndex = 0)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if ((uint)elementIndex > (uint)_length)
+            throw new ArgumentOutOfRangeException(nameof(elementIndex));
+
+        // Native memory is already unmovable, so handle GCHandle is not needed
+        return new MemoryHandle(_ptr + elementIndex);
+    }
+
+    public override void Unpin() { /* No-op for unmanaged memory */ }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (!_disposed)
+        {
+            _disposed = true;
+            NativeMemory.Free(_ptr);
+        }
+    }
+}
+\`\`\`
+
+#### 2. Usage in High-Performance Async Pipelines:
+
+\`\`\`csharp
+public async Task ProcessNativeSharedBufferAsync(CancellationToken ct)
+{
+    // 1. Allocate unmanaged native buffer wrapped as IMemoryOwner
+    using (var memoryManager = new NativeMemoryManager(65536))
+    {
+        Memory<byte> memory = memoryManager.Memory;
+
+        // 2. Safely pass across async methods without pinning GC objects
+        await ReadFromSocketAsync(memory, ct);
+
+        // 3. Process with zero-copy synchronous Span
+        ReadOnlySpan<byte> span = memory.Span;
+        ProcessTelemetry(span);
+    } // Deterministically frees unmanaged memory via Dispose()
+}
+\`\`\`
+
+#### 3. Why This Pattern is Superior:
+- **Zero GC Tracking:** The memory lives entirely outside the CLR Managed Heap, producing zero Gen 0/1/2 or LOH GC pressure.
+- **Full Async Compatibility:** Exposes \`Memory<T>\` which passes cleanly across \`await\` boundaries.
+- **Deterministic Lifetime:** Conforms to \`IDisposable\`, guaranteeing that native OS handles and mapped files are freed immediately upon completion.`,
+    answerContent_fa: `### پیاده‌سازی \`MemoryManager<T>\` سفارشی برای اتصال حافظه‌های Native به پایپ‌لاین‌های امن دات‌نت
+
+هنگام کار با کتابخانه‌های C/C++، حافظه GPU یا فایل‌های اشتراکی در حافظه سیستم‌عامل (Memory-Mapped Files)، کپی کردن داده‌ها درون آرایه‌های دات‌نت (\`byte[]\`) باعث افت محسوس کارایی می‌شود.
+
+کلاس انتزاعی \`MemoryManager<T>\` پلی معمارانه است که اجازه می‌دهد **اشاره‌گرهای حافظه خام Unmanaged** را درون اشیاء ایمن \`Memory<T>\` بسته‌بندی کرده و همراه با اینترفیس \`IMemoryOwner<T>\` در سراسر برنامه‌های دات‌نت استفاده کنید.
+
+#### ۱. پیاده‌سازی کلاس \`NativeMemoryManager\`:
+- متد **\`GetSpan()\`**: یک \`Span<byte>\` همگام از روی آدرس حافظه خام بازمی‌گرداند.
+- متد **\`Pin()\`**: ساختار \`MemoryHandle\` را بدون نیاز به قفل کردن GC تولید می‌کند (چون حافظه Native در رم ثابت است و توسط ران‌تایم جابجا نمی‌شود).
+- متد **\`Dispose()\`**: در زمان اتمام کار با بلوک \`using\`، حافظه خام را با متد \`NativeMemory.Free\` به سیستم‌عامل بازمی‌گرداند.
+
+#### ۲. مزایای معمارانه این الگو:
+۱. **فشار صفر به Garbage Collector:** حافظه کاملاً خارج از رم مدیریت‌شده دات‌نت قرار دارد و هیچ وقفه‌ای در GC ایجاد نمی‌کند.
+۲. **سازگاری کامل با متدهای Async:** این ساختار یک \`Memory<T>\` ایمن تولید می‌کند که به راحتی از مرزهای \`await\` عبور می‌کند.
+۳. **آزادسازی قطعی و آنی (Deterministic Lifetime):** با استفاده از الگوی \`IDisposable\`، حافظه Unmanaged دقیقاً در پایان پردازش آزاد شده و نشت حافظه رخ نمی‌دهد.`,
+  },
+  {
+    id: "dotnet-senior-async-q1",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "senior",
+    topicIds: ["topic-dotnet-async-state-machine"],
+    questionTitle: "Explain the complete compiler lowering transformation of an async Task<T> method into an IAsyncStateMachine struct, how AsyncTaskMethodBuilder<T> manages the fast path vs suspension path, and what happens to the state machine during heap boxing.",
+    questionTitle_fa: "فرآیند کامل بازنویسی کامپایلر (Compiler Lowering) یک متد async Task<T> به ساختار IAsyncStateMachine، نحوه مدیریت مسیر سریع (Fast Path) در برابر مسیر تعلیق (Suspension Path) توسط AsyncTaskMethodBuilder<T> و فرآیند Boxing به حافظه Heap را تشریح کنید.",
+    answerContent: `### Deep Mechanics: C# Compiler Lowering & \`IAsyncStateMachine\` Execution Lifecycle
+
+When the Roslyn C# compiler encounters an \`async Task<T>\` method, it rewrites the method into an explicit state machine struct that implements **\`IAsyncStateMachine\`**.
+
+\`\`\`mermaid
+flowchart TD
+    Method["Caller invokes async Task&lt;int&gt; FetchAsync()"] --> Init["Allocate struct <FetchAsync>d__1 on Stack (State = -1)"]
+    Init --> Start["builder.Start(ref stateMachine) -> Calls MoveNext()"]
+    
+    Start --> FastCheck{"awaiter.IsCompleted?"}
+    FastCheck -- "true (Fast Path)" --> FastExec["Execute synchronously on current thread stack -> Zero Heap Allocations!"]
+    
+    FastCheck -- "false (Suspension)" --> Box["1. Box struct to Heap via builder.AwaitUnsafeOnCompleted()"]
+    Box --> Free["2. Current thread returns immediately to ThreadPool"]
+    Free --> Wait["3. OS Kernel / Hardware completes I/O via IOCP"]
+    Wait --> Resume["4. ThreadPool thread picks up boxed state machine and calls MoveNext()"]
+\`\`\`
+
+#### 1. The Anatomy of the Generated \`struct\`:
+\`\`\`csharp
+[CompilerGenerated]
+private struct <FetchAsync>d__1 : IAsyncStateMachine
+{
+    public int <>1__state;                          // Current state indicator (-1, 0, 1, ..., -2 completed)
+    public AsyncTaskMethodBuilder<int> <>t__builder; // Bridges state machine to Task<T>
+    public string url;                              // Method parameters
+    private string <data>5__1;                      // Hoisted local variable
+    private TaskAwaiter<string> <>u__1;             // Awaiter instance
+
+    public void MoveNext() { /* state dispatch switch */ }
+}
+\`\`\`
+
+#### 2. The Fast Path vs. The Suspension Path:
+1. **The Fast Path (\`awaiter.IsCompleted == true\`):**
+   - If the task is already completed (e.g. data returned from cache or synchronous completion), \`MoveNext()\` executes linearly.
+   - The state machine struct **remains strictly on the stack** and is destroyed when the method exits. **Zero heap allocation occurs.**
+2. **The Suspension Path (\`awaiter.IsCompleted == false\`):**
+   - When hitting an incomplete asynchronous operation, \`<>t__builder.AwaitUnsafeOnCompleted(ref awaiter, ref this)\` is called.
+   - The CLR boxes the entire \`struct\` from the thread stack onto the **Managed Heap** (creating an \`IAsyncStateMachineBox<T>\` object) to preserve local state across threads.
+   - The executing thread immediately returns to the ThreadPool.
+   - When the underlying I/O completes via I/O Completion Ports (IOCP), the CLR queues the boxed state machine's \`MoveNext()\` onto the ThreadPool queue to resume.`,
+    answerContent_fa: `### کالبدشکافی فرآیند بازنویسی کامپایلر (Compiler Lowering) و موتور ماشین وضعیت \`IAsyncStateMachine\`
+
+هنگامی که یک متد حاوی \`async Task<T>\` می‌نویسید، کامپایلر Roslyn آن را به یک ساختار ماشین وضعیت با اینترفیس **\`IAsyncStateMachine\`** تبدیل می‌کند تا اجرای کد بتواند بدون مسدودسازی نخ در زمان I/O متوقف و مجدداً از سر گرفته شود.
+
+#### ۱. ساختار داخلی استراکت تولیدشده:
+- **\`<>1__state\`**: وضعیت فعلی اجرا را نگه می‌دارد (مقدار ۱- شروع، ۰ و ۱ نشان‌دهنده توقف در دستورات مختلف \`await\`، و ۲- اتمام متد).
+- **\`<>t__builder\`**: سازنده تسک از نوع \`AsyncTaskMethodBuilder<T>\` که پل ارتباطی میان ماشین وضعیت و شیء \`Task\` بازگشتی است.
+- **متغیرهای Hoist شده**: تمام متغیرهای محلی متد به فیلدهای این استراکت تبدیل می‌شوند تا با اتمام تابع از بین نروند.
+
+#### ۲. مقایسه مسیر سریع همگام با مسیر تعلیق ناهمگام:
+۱. **مسیر سریع (Fast Path - \`awaiter.IsCompleted == true\`):**
+   - اگر نتیجه عملیات از قبل آماده باشد (مثلاً داده درون کش باشد)، متد \`MoveNext\` بلافاصله تا انتها روی نخ جاری اجرا می‌شود.
+   - استراکت ماشین وضعیت روی استک باقی می‌ماند و **هیچ شیئی روی Heap کپی (Box) نمی‌شود**.
+۲. **مسیر تعلیق (Suspension Path - \`awaiter.IsCompleted == false\`):**
+   - هنگامی که عملیات ناهمگام در حال انجام است، متد \`AwaitUnsafeOnCompleted\` فراخوانی می‌شود.
+   - ران‌تایم دات‌نت کل استراکت را از روی استک به **حافظه Heap کپی (Box)** می‌کند تا با تعویض نخ‌ها، اطلاعات متغیرهای محلی حفظ شود.
+   - نخ جاری فوراً به **ThreadPool** بازمی‌گردد تا درخواست‌های دیگر را پردازش کند.
+   - پس از اتمام I/O سخت‌افزاری، یک نخ آزاد از ThreadPool نمونه موجود روی Heap را برداشته و متد \`MoveNext\` را برای ادامه مسیر فراخوانی می‌کند.`,
+  },
+  {
+    id: "dotnet-senior-async-q2",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "senior",
+    topicIds: ["topic-dotnet-async-state-machine"],
+    questionTitle: "What is ExecutionContext, how does it differ from SynchronizationContext, how does AsyncLocal<T> flow across asynchronous boundaries, and when should you call ExecutionContext.SuppressFlow()?",
+    questionTitle_fa: "مفهوم ExecutionContext چیست، چه تفاوتی با SynchronizationContext دارد، کلاس AsyncLocal<T> چگونه در طول مرزهای ناهمگام منتقل می‌شود و در چه سناریوهایی باید از ExecutionContext.SuppressFlow() استفاده کرد؟",
+    answerContent: `### \`ExecutionContext\` vs \`SynchronizationContext\` & The Mechanics of \`AsyncLocal<T>\`
+
+Understanding the distinction between \`ExecutionContext\` and \`SynchronizationContext\` is vital for architecting distributed context propagation and high-throughput background pipelines.
+
+\`\`\`mermaid
+flowchart TD
+    subgraph ExecutionContextSection["ExecutionContext (The Ambient State)"]
+        EC1["Flows ambient environmental data across threads"]
+        EC2["Transfers: AsyncLocal&lt;T&gt;, ClaimsPrincipal, Activity.Current (TraceId)"]
+        EC3["Captured by CLR at every 'await' and restored on resumption thread"]
+    end
+
+    subgraph SynchronizationContextSection["SynchronizationContext (The Execution Target)"]
+        SC1["Controls WHICH specific thread executes the continuation"]
+        SC2["Legacy ASP.NET / WPF Dispatcher: Marshals back to UI or Request thread"]
+        SC3["ASP.NET Core: SynchronizationContext.Current == null (Runs on any ThreadPool thread)"]
+    end
+\`\`\`
+
+#### 1. How \`AsyncLocal<T>\` Flows with \`ExecutionContext\`:
+- \`AsyncLocal<T>\` provides ambient storage that is local to an asynchronous control flow.
+- When an \`await\` yields, the CLR captures \`ExecutionContext.Capture()\`.
+- When the continuation resumes on a completely different ThreadPool worker thread, the CLR restores that captured \`ExecutionContext\`, ensuring \`AsyncLocal<T>.Value\` retains its logical cascade value without thread contamination.
+
+\`\`\`csharp
+public static class RequestTelemetryContext
+{
+    private static readonly AsyncLocal<string> _traceCorrelationId = new();
+
+    public static string TraceId
+    {
+        get => _traceCorrelationId.Value ?? string.Empty;
+        set => _traceCorrelationId.Value = value;
+    }
+}
+\`\`\`
+
+#### 2. Performance Optimization: \`ExecutionContext.SuppressFlow()\`:
+Capturing and restoring \`ExecutionContext\` on every asynchronous hop incurs memory allocation and CPU overhead.
+- In ultra-high-throughput infrastructure services (e.g. custom threadpool workers, messaging dispatchers) where \`AsyncLocal\` or security claims are not needed:
+\`\`\`csharp
+// Suppress context flow to achieve maximum throughput:
+using (ExecutionContext.SuppressFlow())
+{
+    ThreadPool.UnsafeQueueUserWorkItem(static state => {
+        // Runs with ZERO ExecutionContext capture overhead
+    }, null);
+}
+\`\`\``,
+    answerContent_fa: `### تفاوت بنیادین \`ExecutionContext\` و \`SynchronizationContext\` و سازوکار \`AsyncLocal<T>\`
+
+#### ۱. مفهوم \`ExecutionContext\` (کانتکست محیطی):
+کانتکست اجرایی محیط منطقی و متادیتاهای درخواست را نمایندگی می‌کند.
+- **جریان ناهمگام (Context Flow):** هنگامی که یک متد \`async\` روی یک نخ تعلیق شده و ادامه‌اش روی یک نخ دیگر از ThreadPool اجرا می‌شود، CLR به صورت خودکار \`ExecutionContext\` را کپچر کرده و روی نخ جدید بارگذاری می‌کند.
+- **انتقال با \`AsyncLocal<T>\`:** این سازوکار اجازه می‌دهد متغیرهایی مانند **Correlation ID، شناسه کاربر لاگین‌شده و کانتکست چندمستأجری (Multi-Tenancy)** در تمام لایه‌ها و متدهای تودرتو بدون نیاز به ارسال به عنوان پارامتر متد، به صورت ایمن در دسترس باشند.
+
+#### ۲. مفهوم \`SynchronizationContext\` (مقصد اجرا):
+کانتکست همگام‌سازی مشخص می‌کند که ادامه‌ کد پس از دستور \`await\` روی **چه نخی** باید اجرا شود:
+- در برنامه‌های قدیمی دسکتاپ (WPF)، ادامه کار را به نخ اصلی UI می‌فرستد تا کنترل‌های صفحه قابل ویرایش باشند.
+- در **ASP.NET Core مدرن**، مقدار \`SynchronizationContext.Current\` برابر **\`null\`** است و ادامه کد به هر نخ آزادی از ThreadPool واگذار می‌شود.
+
+#### ۳. بهینه‌سازی سرعت با \`ExecutionContext.SuppressFlow()\`:
+کپچر و بازیابی مداوم کانتکست محیطی دارای اندکی سربار پردازشی است. در خطوط لوله بسیار پرترافیک داخلی (مانند موتورهای انتقال پیام یا سوکت‌های Kestrel) که نیازی به انتقال \`AsyncLocal\` ندارند، با فراخوانی \`ExecutionContext.SuppressFlow()\` می‌توان این فرآیند را غیرفعال کرد تا مصرف CPU و حافظه به صفر نزدیک شود.`,
+  },
+  {
+    id: "dotnet-senior-async-q3",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "senior",
+    topicIds: ["topic-dotnet-async-state-machine"],
+    questionTitle: "How do ValueTask<T> and IValueTaskSource<T> (via ManualResetValueTaskSourceCore<T>) achieve zero-allocation asynchronous I/O in high-performance networking pipelines like Kestrel, and what are the fatal anti-patterns when consuming ValueTask?",
+    questionTitle_fa: "ساختارهای ValueTask<T> و اینترفیس IValueTaskSource<T> (با کلاس ManualResetValueTaskSourceCore<T>) چگونه ارتباطات شبکه‌ای پرترافیک با تخصیص صفر حافظه را ممکن می‌سازند و خطاهای کشنده در مصرف ValueTask کدامند؟",
+    answerContent: `### Zero-Allocation Async I/O with \`ValueTask<T>\` & \`IValueTaskSource<T>\` in High-Throughput Pipelines
+
+In web servers processing $100,000+\\text{ requests/sec}$, allocating a standard \`Task<T>\` reference object for every network read generates severe Gen 0 Garbage Collection pressure.
+
+\`\`\`mermaid
+flowchart LR
+    subgraph StandardTask["Standard Task&lt;T&gt; (Heap Object)"]
+        T["Task&lt;T&gt; Instance (64+ Bytes)"] --> Heap["Allocates new object on Heap on EVERY async operation"]
+    end
+
+    subgraph ValueTaskEngine["ValueTask&lt;T&gt; + IValueTaskSource&lt;T&gt; (Zero-Allocation)"]
+        VT["ValueTask&lt;T&gt; Struct (16 Bytes on Stack)"]
+        VTS["Reusable Socket/Channel Buffer (IValueTaskSource)"]
+        VT -->|Points to reusable pooled instance| VTS
+        VTS -->|Reset via ManualResetValueTaskSourceCore| Reuse["0 Heap Allocations across millions of reads!"]
+    end
+\`\`\`
+
+#### 1. The Discriminated Union Architecture of \`ValueTask<T>\`:
+\`ValueTask<T>\` is a 16-byte stack struct that handles two distinct scenarios:
+1. **Synchronous Fast Path (Cache Hits / Ready Buffers):** \`_obj\` is \`null\`, and the result is stored directly inside the struct's \`_result\` field on the stack (**$0\\text{ B}$ allocation**).
+2. **Asynchronous Slow Path (Pending I/O):** \`_obj\` references an **\`IValueTaskSource<T>\`** reusable state object.
+
+#### 2. Reusing State Objects with \`ManualResetValueTaskSourceCore<T>\`:
+Used internally by **Kestrel socket transport** and **\`System.Threading.Channels\`**:
+\`\`\`csharp
+public sealed class PooledSocketReader : IValueTaskSource<int>
+{
+    private ManualResetValueTaskSourceCore<int> _sourceCore;
+
+    public ValueTask<int> ReadAsync(Socket socket, Memory<byte> buffer)
+    {
+        _sourceCore.Reset(); // Reset version and state for reuse
+        // Issue async OS socket receive...
+        return new ValueTask<int>(this, _sourceCore.Version);
+    }
+
+    public int GetResult(short token) => _sourceCore.GetResult(token);
+    public ValueTaskSourceStatus GetStatus(short token) => _sourceCore.GetStatus(token);
+    public void OnCompleted(Action<object?> continuation, object? state, short token, ValueTaskSourceOnCompletedFlags flags)
+        => _sourceCore.OnCompleted(continuation, state, token, flags);
+}
+\`\`\`
+
+#### 3. Fatal Anti-Patterns When Consuming \`ValueTask\`:
+1. **Never \`await\` a \`ValueTask\` more than once:** Because the underlying \`IValueTaskSource\` may be reset and reused for another operation, awaiting it twice causes data corruption or invalid state exceptions.
+2. **Never call \`.GetAwaiter().GetResult()\` on an incomplete \`ValueTask\`:** Blocks the thread and corrupts the reset token.
+3. **Never pass a \`ValueTask\` directly to \`Task.WhenAll\` / \`Task.WhenAny\`:** Always convert to a standard \`Task\` first using **\`.AsTask()\`**.`,
+    answerContent_fa: `### معماری پردازش ناهمگام با صفر تخصیص حافظه توسط \`ValueTask<T>\` و \`IValueTaskSource<T>\`
+
+در موتورهای وب پرترافیک (مانند Kestrel)، ساخت مکرر اشیاء \`Task<T>\` برای هر عملیات خواندن سوکت، حافظه Heap را اشباع می‌کند.
+
+#### ۱. ساختار داخلی \`ValueTask<T>\`:
+استراکت ۱۶ بایتی \`ValueTask<T>\` دو مسیر مجزا را پشتیبانی می‌کند:
+۱. **مسیر سریع همگام (Fast Path):** اگر بایت‌های داده از قبل در بافر سوکت آماده باشند، نتیجه مستقیماً درون فیلد استراکت روی استک قرار می‌گیرد (**صفر بایت آلیکیشن روی Heap**).
+۲. **مسیر ناهمگام کند (Slow Path):** به یک نمونه از اینترفیس بازیافتی \`IValueTaskSource<T>\` ارجاع می‌دهد.
+
+#### ۲. استفاده مجدد از اشیاء با \`ManualResetValueTaskSourceCore<T>\`:
+در کتابخانه Kestrel و \`System.Threading.Channels\`، به جای ساخت تسک جدید در هر بار خواندن از شبکه، از یک شیء استخرشده ثابت استفاده می‌شود. متد \`_sourceCore.Reset()\` وضعیت شیء را ریست کرده و توکن امنیتی نسخه را تغییر می‌دهد تا **میلیون‌ها درخواست بدون حتی یک بایت تخصیص جدید در Heap** پردازش شوند.
+
+#### ۳. اشتباهات مهلک در استفاده از \`ValueTask\`:
+۱. **اعمال چندباره \`await\` روی یک \`ValueTask\` ممنوع است:** زیرا ممکن است شیء داخلی آن ریست شده و برای درخواست دیگری در حال استفاده باشد.
+۲. **فراخوانی همگام \`.GetAwaiter().GetResult()\` روی تسک تکمیل‌نشده ممنوع است.**
+۳. **عدم ارسال مستقیم به \`Task.WhenAll\`:** ابتدا باید با متد \`.AsTask()\` به یک شیء Task استاندارد تبدیل شود.`,
+  },
+  {
+    id: "dotnet-senior-async-q4",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "senior",
+    topicIds: ["topic-dotnet-async-state-machine"],
+    questionTitle: "Why is ConfigureAwait(false) not required in modern ASP.NET Core applications, under what specific scenarios can omitting it still trigger deadlocks in reusable .NET libraries, and how does the .NET runtime handle continuations when SynchronizationContext.Current == null?",
+    questionTitle_fa: "چرا استفاده از ConfigureAwait(false) در کنترلرها و اندپوینت‌های ASP.NET Core الزامی نیست، در چه شرایطی عدم استفاده از آن در پکیج‌های عمومی NuGet باعث Deadlock می‌شود و ران‌تایم در غیاب SynchronizationContext چگونه ادامه‌ کار را زمان‌بندی می‌کند؟",
+    answerContent: `### \`ConfigureAwait(false)\` in ASP.NET Core vs. Reusable Class Libraries
+
+The advice to "always use \`ConfigureAwait(false)\`" originated in legacy .NET Framework. Understanding how ASP.NET Core transformed asynchronous dispatching is essential for clean architecture.
+
+\`\`\`mermaid
+flowchart TD
+    subgraph LegacyDotNet["Legacy ASP.NET (System.Web) & UI Apps"]
+        SC["SynchronizationContext.Current != null (Single Thread Lock)"]
+        SyncCall["Client calls .Result / .Wait() on UI Thread"]
+        Continuation["Continuation queued back to SynchronizationContext"]
+        Deadlock["❌ DEADLOCK: UI Thread is blocked waiting for Task, while Task is waiting for UI Thread!"]
+        SyncCall --> Deadlock
+        Continuation --> Deadlock
+    end
+
+    subgraph ModernAspNetCore["ASP.NET Core (.NET 6 / 7 / 8 / 9)"]
+        NoSC["SynchronizationContext.Current == null"]
+        ThreadPoolDispatch["Continuation dispatched directly to ANY free ThreadPool worker"]
+        NoDeadlock["✅ Zero context capturing -> No UI thread deadlock possible"]
+        NoSC --> ThreadPoolDispatch --> NoDeadlock
+    end
+\`\`\`
+
+#### 1. Why \`ConfigureAwait(false)\` is Not Needed in ASP.NET Core:
+- In ASP.NET Core, **\`SynchronizationContext.Current\` is always \`null\`**.
+- When an \`await\` completes, the CLR runtime inspects \`SynchronizationContext.Current\`. Finding it \`null\`, it immediately schedules the continuation onto any available worker thread in the **ThreadPool**.
+- Setting \`ConfigureAwait(false)\` in ASP.NET Core controllers, Minimal API endpoints, or business services does nothing because there is no \`SynchronizationContext\` to bypass in the first place!
+
+#### 2. Why \`ConfigureAwait(false)\` is STILL Mandatory in Reusable NuGet Libraries:
+If you author a reusable NuGet package or domain library:
+- A developer might consume your library inside a **WPF, Windows Forms, or .NET MAUI desktop app**.
+- If that developer writes synchronous blocking code (e.g. \`var res = myLibrary.FetchAsync().Result;\`), and your library omitted \`ConfigureAwait(false)\`, the continuation will attempt to marshal back to the UI thread's \`DispatcherSynchronizationContext\`.
+- Because the UI thread is already blocked waiting for \`.Result\`, a **Deadlock occurs and the desktop application freezes permanently**.
+- Adding \`ConfigureAwait(false)\` tells the awaiter: *"Do not capture the current SynchronizationContext; execute continuation on any ThreadPool thread."*`,
+    answerContent_fa: `### تحلیل کاربرد \`ConfigureAwait(false)\` در ASP.NET Core و کتابخانه‌های عمومی دات‌نت
+
+#### ۱. چرا در اندپوینت‌ها و بیزینس لاجیک ASP.NET Core نیازی به \`ConfigureAwait(false)\` نیست؟
+- در معماری مدرن ASP.NET Core، **\`SynchronizationContext.Current\` همواره مقدار \`null\` دارد**.
+- هنگام اتمام دستور \`await\`، ران‌تایم کانتکست همگام‌سازی را بررسی می‌کند؛ وقتی با مقدار \`null\` روبرو می‌شود، ادامه‌ اجرای کد را مستقیماً به اولین نخ آزاد در **ThreadPool** واگذار می‌کند.
+- بنابراین قرار دادن \`ConfigureAwait(false)\` در کنترلرها یا سرویس‌های وب اپلیکیشن هیچ تغییر رفتاری ایجاد نمی‌کند و صرفاً کد را شلوغ می‌سازد.
+
+#### ۲. چرا در پکیج‌های عمومی NuGet استفاده از \`ConfigureAwait(false)\` حیاتی است؟
+اگر کتابخانه‌ای می‌نویسید که قرار است در پروژه‌های مختلف استفاده شود:
+- ممکن است یک توسعه‌دهنده متد شما را درون یک برنامه دسکتاپ (WPF، WinForms یا .NET MAUI) صدا بزند.
+- اگر آن توسعه‌دهنده به صورت اشتباه از کد مسدودکننده (مانند \`myLib.GetDataAsync().Result\`) روی نخ اصلی UI استفاده کند و شما \`ConfigureAwait(false)\` نگذاشته باشید، ادامه کد تلاش می‌کند روی نخ UI اجرا شود.
+- چون نخ UI مسدود شده و منتظر نتیجه تسک است و تسک هم منتظر آزاد شدن نخ UI است، **Deadlock قطعی رخ داده و برنامه هنگ می‌کند**.
+- نوشتن \`ConfigureAwait(false)\` به ران‌تایم دستور می‌دهد که کانتکست UI را نادیده گرفته و ادامه را روی ThreadPool اجرا کند تا از بن‌بست جلوگیری شود.`,
+  },
+  {
+    id: "dotnet-senior-async-q5",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "senior",
+    topicIds: ["topic-dotnet-async-state-machine"],
+    questionTitle: "How do you diagnose and resolve production ThreadPool Starvation in high-traffic .NET microservices using dotnet-counters, dotnet-dump, and thread dump callstack analysis?",
+    questionTitle_fa: "چگونه معضل بحرانی قفل‌شدگی و گرسنگی نخ‌ها (ThreadPool Starvation) را در مایکروسرویس‌های پرترافیک با ابزارهای dotnet-counters و dotnet-dump و تحلیل لاگ Callstack نخ‌ها ریشه‌یابی و حل می‌کنید؟",
+    answerContent: `### Production Diagnostics: Identifying & Resolving ThreadPool Starvation
+
+ThreadPool Starvation occurs when worker threads in the ThreadPool are synchronously blocked (e.g. \`.Result\`, \`.Wait()\`, database connection pool timeouts), preventing the runtime from dispatching new requests or completing asynchronous I/O continuations.
+
+\`\`\`mermaid
+flowchart LR
+    Symptom["Symptom: High Latency Spikes (P99 > 15s) + Low CPU Usage (< 10%)"] --> Tool1["1. dotnet-counters monitor"]
+    Tool1 --> Check["ThreadPool Thread Count climbing steadily (1 per 500ms) + Queue Length exploding"]
+    Check --> Tool2["2. dotnet-dump collect & analyze"]
+    Tool2 --> Clrstack["Execute: clrstack -all"]
+    Clrstack --> RootCause["Found: System.Threading.Tasks.Task.Wait or GetResult on multiple threads!"]
+\`\`\`
+
+#### 1. Real-Time Detection with \`dotnet-counters\`:
+Run \`dotnet-counters\` against the live production PID:
+\`\`\`bash
+dotnet-counters monitor --process-id <PID> --counters System.Runtime
+\`\`\`
+- **The "Smoking Gun" Metric Signature:**
+  1. **ThreadPool Queue Length:** Continuously increasing (e.g. thousands of queued work items waiting for an available thread).
+  2. **ThreadPool Thread Count:** Slowly creeping upward by 1 thread every 500ms (Hill-Climbing throttle).
+  3. **CPU Usage:** Very low (e.g. $5\\% - 15\\%$), proving that threads are not busy computing, but rather **synchronously blocked in sleep/wait states**.
+
+#### 2. Root Cause Analysis with \`dotnet-dump\`:
+Capture and inspect a live memory dump:
+\`\`\`bash
+dotnet-dump collect --process-id <PID> -o /tmp/crash_dump.dmp
+dotnet-dump analyze /tmp/crash_dump.dmp
+\`\`\`
+
+Inside the analyzer, list all thread stack traces:
+\`\`\`text
+> clrstack -all
+\`\`\`
+- Look for repeating patterns across 50+ threads:
+\`\`\`text
+OS Thread 0x1A4F:
+  System.Threading.Monitor.Wait
+  System.Threading.ManualResetEventSlim.Wait
+  System.Threading.Tasks.Task.GetResultCore
+  System.Threading.Tasks.Task\`1.get_Result
+  MyApp.Services.OrderService.GetCustomerDetails(int customerId)
+\`\`\`
+
+#### 3. Resolution Strategy:
+1. **Eradicate Sync-over-Async:** Replace all \`.Result\`, \`.Wait()\`, and \`.GetAwaiter().GetResult()\` with pure \`await\`.
+2. **Configure Minimum Threads (Temporary Emergency Hotfix):**
+   \`\`\`csharp
+   // Prevents hill-climbing delay during traffic spikes:
+   ThreadPool.SetMinThreads(workerThreads: 200, completionPortThreads: 200);
+   \`\`\`
+3. **Audit Third-Party SDKs:** Ensure all database drivers and HTTP clients are using non-blocking asynchronous APIs.`,
+    answerContent_fa: `### ریشه‌یابی و حل مشکل بحرانی ThreadPool Starvation در پروداکشن با ابزارهای دات‌نت
+
+پدیده ThreadPool Starvation زمانی رخ می‌دهد که نخ‌های کارگر دات‌نت به دلیل کدهای همگام و مسدودکننده (مانند \`.Result\` یا \`.Wait()\`) قفل شده و هیچ نخی برای پردازش ادامه‌ درخواست‌ها باقی نماند.
+
+#### ۱. پایش بلادرنگ با \`dotnet-counters\`:
+با اجرای دستور زیر وضعیت ران‌تایم را مانیتور می‌کنیم:
+\`\`\`bash
+dotnet-counters monitor --process-id <PID> --counters System.Runtime
+\`\`\`
+- **نشانه‌های قطعی بروز Starvation:**
+  ۱. **طول صف ThreadPool (Queue Length):** به سرعت در حال افزایش است و هزاران تسک معطل مانده‌اند.
+  ۲. **تعداد نخ‌ها (Thread Count):** هر ۵۰۰ میلی‌ثانیه ۱ عدد افزایش می‌یابد.
+  ۳. **میزان مصرف CPU:** بسیار پایین است (مثلاً کمتر از ۱۰٪) که نشان می‌دهد نخ‌ها کار پردازشی انجام نمی‌دهند بلکه **همگی در حالت انتظار مسدود شده‌اند**.
+
+#### ۲. تحلیل دامپ حافظه با \`dotnet-dump\`:
+یک دامپ از حافظه پروسس می‌گیریم و استک تمام نخ‌ها را بررسی می‌کنیم:
+\`\`\`bash
+dotnet-dump collect --process-id <PID>
+dotnet-dump analyze <dump_file>
+> clrstack -all
+\`\`\`
+با مشاهده استک‌تریس نخ‌ها، متدهای مسدودکننده (مانند \`Task.get_Result\` یا \`Monitor.Wait\`) و خط دقیق کدی که باعث قفل شدن شده است شناسایی می‌شود.
+
+#### ۳. راهکارهای رفع مشکل:
+۱. **حذف قطعی کدهای Sync-Over-Async:** جایگزینی تمام \`.Result\` و \`.Wait()\` با \`await\` ناهمگام در کل کدهای پروژه.
+۲. **تنظیم کف تعداد نخ‌های اولیه (راهکار اورژانسی برای ترافیک‌های جهشی):**
+\`\`\`csharp
+ThreadPool.SetMinThreads(workerThreads: 200, completionPortThreads: 200);
+\`\`\``,
+  },
+  {
+    id: "dotnet-senior-gc-q1",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "senior",
+    topicIds: ["topic-dotnet-clr-gc-internals"],
+    questionTitle: "How does the CLR Generational Garbage Collector work under the hood (Gen 0, 1, 2), what triggers GC promotion, and why are Gen 2 Full GC collections the primary source of latency spikes?",
+    questionTitle_fa: "موتور Garbage Collector نسل‌بندی‌شده CLR چگونه کار می‌کند، چه عواملی باعث ارتقای اشیاء به نسل‌های بالاتر می‌شوند و چرا پاکسازی‌های Full GC نسل ۲ عامل اصلی جهش‌های تاخیر (Latency Spikes) هستند؟",
+    answerContent: `### CLR Generational Garbage Collector Internals & Generation Promotion
+
+The .NET Garbage Collector operates on the **Generational Hypothesis**: *new objects have short lifespans ($>90\\%$ die in Gen 0), while surviving objects live for extended periods*.
+
+\`\`\`mermaid
+flowchart LR
+    Alloc["new Object() (< 85KB)"] --> G0["Gen 0 (Ephemeral)"]
+    G0 -->|Survives Gen 0 GC| G1["Gen 1 (Buffer Zone)"]
+    G1 -->|Survives Gen 1 GC| G2["Gen 2 (Tenured Long-Lived)"]
+    
+    G0 -.->|Sub-millisecond Pause (< 1ms)| Collect0["Fast Gen 0 Sweep"]
+    G2 -.->|Stop-The-World Pause (10ms - 200ms+)| Collect2["Expensive Full GC Sweep + Compact"]
+\`\`\`
+
+#### 1. The Generational Hierarchy:
+- **Gen 0 (Ephemeral):** The entry point for all allocations $< 85\\text{ KB}$. It is sized to fit within CPU L2/L3 cache budgets so that allocating and sweeping objects is blazing fast ($< 1\\text{ ms}$).
+- **Gen 1 (Buffer Zone):** Acts as a shock absorber. Objects that were in-flight during a Gen 0 collection get a second chance to die here before being tenured.
+- **Gen 2 (Tenured):** Long-lived singletons, static references, configuration objects, and long-lived domain caches.
+
+#### 2. What Triggers Object Promotion (Aging):
+Promotion occurs when an object is still referenced by an active **GC Root** (e.g. CPU registers, stack slots of running threads, static fields, or pinned handles) at the moment a collection executes:
+- $\\text{Gen 0} \\rightarrow \\text{Gen 1}$: Survives one GC cycle.
+- $\\text{Gen 1} \\rightarrow \\text{Gen 2}$: Survives a second GC cycle.
+
+#### 3. Why Gen 2 Full GC Collections Cause Latency Spikes:
+1. **Heap Graph Traversal Volume:** Gen 2 collections must traverse the entire object graph of all generations (Gen 0 + 1 + 2 + LOH).
+2. **Stop-The-World (STW) Pauses:** Execution threads must be suspended while references are patched during the Compact phase.
+3. **Cache Line Eviction:** Full sweeps touch large regions of physical RAM, evicting cache-hot application memory from CPU L1/L2/L3 caches.`,
+    answerContent_fa: `### کالبدشکافی عملکرد Garbage Collector نسل‌بندی‌شده و چرایی ایجاد Latency Spikes توسط نسل ۲
+
+موتور مدیریت حافظه دات‌نت بر اساس **فرضیه نسل‌ها (Generational Hypothesis)** کار می‌کند که بیان می‌دارد بیش از ۹۰٪ از اشیاء طول عمر کوتاهی دارند.
+
+#### ۱. ساختار نسل‌های سه‌گانه حافظه:
+- **نسل ۰ (Gen 0):** محل تولد تمام اشیای زیر ۸۵ کیلوبایت است. اندازه این نسل طوری تنظیم شده که درون کش سریع L2/L3 پردازنده جا شود و پاکسازی آن کمتر از ۱ میلی‌ثانیه زمان ببرد.
+- **نسل ۱ (Gen 1):** به عنوان لایه بافر و ضربه‌گیر عمل می‌کند تا اشیایی که در حین اجرای یک درخواست زنده بوده‌اند، شانس از بین رفتن داشته باشند و سریعاً وارد نسل ۲ نشوند.
+- **نسل ۲ (Gen 2):** محل استقرار اشیای پایدار مانند سرویس‌های Singleton، کش‌های درون حافظه و جداول ثابت است.
+
+#### ۲. چه عواملی باعث ارتقای نسل (Promotion) می‌شوند؟
+اگر در زمان شروع فرآیند GC یک شیء هنوز از طریق **ریشه‌ها (GC Roots)** مانند استک نخ‌های فعال، رجیسترهای CPU یا فیلدهای Static در دسترس باشد، زنده در نظر گرفته شده و به نسل بعدی ارتقا می‌یابد.
+
+#### ۳. چرا پاکسازی نسل ۲ (Full GC) باعث نوسان تاخیر می‌شود؟
+۱. **حجم بالای اسکن گراف اشیاء:** در Full GC تمام فضای حافظه (نسل‌های ۰ و ۱ و ۲ و LOH) باید به صورت کامل اسکن شوند.
+۲. **وقفه‌های Stop-The-World:** برای فشرده‌سازی و جابجایی آدرس اشاره‌گرها، تمام نخ‌های برنامه موقتاً متوقف می‌شوند.
+۳. **تخریب کش پردازنده:** اسکن مگابایت‌ها و گیگابایت‌ها حافظه در رم، کش‌های سریع CPU را پاکسازی کرده و سرعت سیستم را پس از پایان GC کاهش می‌دهد.`,
+  },
+  {
+    id: "dotnet-senior-gc-q2",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "senior",
+    topicIds: ["topic-dotnet-clr-gc-internals"],
+    questionTitle: "What is the Large Object Heap (LOH), why does it suffer from memory fragmentation, and what architectural strategies (e.g. POH, ArrayPool, LOH Compaction) prevent OutOfMemoryException crashes?",
+    questionTitle_fa: "حافظه اشیای بزرگ (LOH) چیست، چرا دچار تکه‌تکه‌شدگی حافظه می‌شود و چه استراتژی‌های معمارانه‌ای (POH، ArrayPool و فشرده‌سازی LOH) مانع از خطای OutOfMemoryException می‌شوند؟",
+    answerContent: `### The Large Object Heap (LOH) Mechanics, Fragmentation & Mitigation Strategies
+
+In .NET, any object whose size exceeds **$85,000\\text{ bytes}$** is placed directly on the **Large Object Heap (LOH)**.
+
+\`\`\`mermaid
+flowchart TD
+    Alloc["Allocation >= 85,000 Bytes"] --> LOH["Placed on Large Object Heap (LOH)"]
+    LOH --> Collect["GC Collection on LOH"]
+    Collect --> Sweep["Sweep Phase Only (NO Compaction by Default)"]
+    Sweep --> SwissCheese["Memory Gaps Created ('Swiss Cheese' Fragmentation)"]
+    SwissCheese --> OOM["New Large Allocation Fails -> OutOfMemoryException!"]
+\`\`\`
+
+#### 1. Why LOH Causes Memory Fragmentation:
+- **Sweep-Only Policy:** The CLR does not compact LOH by default because moving multi-megabyte memory blocks requires expensive memory copies that freeze CPU execution.
+- **The "Swiss Cheese" Effect:** When large objects are collected, they leave free holes. If a subsequent request needs a contiguous 1 MB block, but available free space consists of disjointed 256 KB holes, allocation fails with an \`OutOfMemoryException\` even though total free RAM is plentiful.
+
+#### 2. Architectural Prevention Strategies:
+1. **Buffer Pooling with \`ArrayPool<T>.Shared\`:**
+   - Instead of allocating new \`byte[100_000]\` buffers per request, rent and return pooled buffers:
+   \`\`\`csharp
+   byte[] buffer = ArrayPool<byte>.Shared.Rent(100_000);
+   try { Process(buffer); }
+   finally { ArrayPool<byte>.Shared.Return(buffer); }
+   \`\`\`
+2. **Pinned Object Heap (POH) for Native Buffers:**
+   - In .NET 5+, allocate pinned interop buffers directly on POH with \`GC.AllocateArray<byte>(length, pinned: true)\` to eliminate SOH pinning fragmentation.
+3. **On-Demand LOH Compaction:**
+   - Force compaction during off-peak scheduled maintenance:
+   \`\`\`csharp
+   GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
+   GC.Collect(2, GCCollectionMode.Optimized);
+   \`\`\``,
+    answerContent_fa: `### کالبدشکافی حافظه اشیای بزرگ (LOH)، معضل فرگمنتیشن و راهکارهای جلوگیری از خطای OOM
+
+اشیایی با حجم ۸۵,۰۰۰ بایت یا بیشتر مستقیماً وارد ناحیه **Large Object Heap (LOH)** می‌شوند.
+
+#### ۱. چرا LOH دچار تکه‌تکه‌شدگی (Fragmentation) می‌شود؟
+- **فقط جاروب کردن بدون فشرده‌سازی:** کپی کردن بلوک‌های بزرگ حافظه در فاز Compaction باعث فریز شدن طولانی CPU می‌شود؛ بنابراین LOH به صورت پیش‌فرض فشرده‌سازی نمی‌شود.
+- **اثر سوراخ‌های پنیر سوئیسی:** با حذف اشیای بزرگ، حفره‌های خالی پراکنده در حافظه ایجاد می‌شود. اگر درخواست جدیدی نیازمند ۱ مگابایت حافظه پیوسته باشد ولی حافظه‌های خالی به شکل تکه‌های ۲۵۶ کیلوبایتی پراکنده باشند، سیستم با اینکه رم آزاد دارد با خطای \`OutOfMemoryException\` کرش می‌کند.
+
+#### ۲. استراتژی‌های معمارانه برای حل مشکل:
+۱. **استفاده از \`ArrayPool<T>.Shared\`:** بازیافت بافرهای بزرگ به جای ساخت مداوم آن‌ها روی LOH.
+۲. **استفاده از Pinned Object Heap (POH):** ساخت بافرهای قفل‌شده Native مستقیماً روی POH تا SOH دچار فرگمنتیشن نشود.
+۳. **فشرده‌سازی کنترل‌شده LOH در ساعات کم‌ترافیک:** با تنظیم \`GCLargeObjectHeapCompactionMode.CompactOnce\`.`,
+  },
+  {
+    id: "dotnet-senior-gc-q3",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "senior",
+    topicIds: ["topic-dotnet-clr-gc-internals"],
+    questionTitle: "Explain the architectural differences between Server GC and Workstation GC in .NET, how Server GC achieves lock-free multi-core parallelism, and how does DATAP optimize high-density Kubernetes containers in .NET 8/9?",
+    questionTitle_fa: "تفاوت‌های معمارانه Server GC و Workstation GC در دات‌نت چیست، Server GC چگونه موازی‌سازی بدون قفل روی پردازنده‌های چند‌هسته‌ای ایجاد می‌کند و قابلیت DATAP در دات‌نت ۸ و ۹ چگونه مصرف منابع در کانتینرهای کوبرنتیز را بهینه می‌سازد؟",
+    answerContent: `### Server GC vs. Workstation GC Architecture & Container Tuning (DATAP)
+
+The CLR runtime offers two distinct Garbage Collector implementations designed for opposite operational profiles.
+
+\`\`\`mermaid
+flowchart LR
+    subgraph WorkstationGC["Workstation GC (Single Shared Heap)"]
+        W_Heap["Single Managed Heap"]
+        W_Thread["Runs GC on User Thread / 1 Background GC Thread"]
+        W_Goal["Optimized for Low Latency & Responsive UI"]
+    end
+
+    subgraph ServerGC["Server GC (1 Heap + 1 GC Thread per CPU Core)"]
+        S_Heaps["Heap 0 | Heap 1 | Heap 2 ... Heap N"]
+        S_Threads["GC Thread 0 | Thread 1 | Thread 2 ... Thread N"]
+        S_Goal["Optimized for Maximum Multi-Core Throughput"]
+    end
+\`\`\`
+
+#### 1. Architectural Differences:
+| Dimension | Workstation GC | Server GC |
+| :--- | :--- | :--- |
+| **Number of Managed Heaps** | Exactly 1 Shared Heap | **1 Dedicated Heap per Logical CPU Core** |
+| **GC Execution Threads** | Requesting user thread or 1 background thread | **1 Dedicated High-Priority GC Thread per Core** |
+| **Allocation Contention** | Threads contend on single allocation pointer | **Zero Contention:** Threads allocate on their local core heap |
+| **Target Workload** | Desktop (WPF/WinForms), CLI tools, Mobile (MAUI) | High-throughput web servers (ASP.NET Core) |
+
+#### 2. High-Density Container Tuning & DATAP in .NET 8/9:
+- **The Kubernetes Problem:** Running Server GC on a 64-core host machine inside a pod with a $1\\text{ CPU}$ limit would create 64 heaps and 64 GC threads, consuming hundreds of megabytes of baseline memory and triggering OOMKills.
+- **Dynamic Adaptation to Application Sizes (DATAP):** In .NET 8/9, the CLR auto-tunes heap counts dynamically based on container memory limits (\`cgroup\`), scaling from a single heap up to the container's CPU quota.`,
+    answerContent_fa: `### مقایسه عمیق Server GC و Workstation GC و بهینه‌سازی کانتینرهای کوبرنتیز با DATAP
+
+#### ۱. تفاوت‌های معمارانه:
+- **مدل Workstation GC:** تنها یک Managed Heap واحد دارد و عملیات پاکسازی را روی همان نخ کاربر اجرا می‌کند تا حافظه کمتری مصرف کند و رابط کاربری دچار مکث نشود.
+- **مدل Server GC:** به ازای **هر هسته CPU یک Heap مجزا و یک نخ اختصاصی GC** می‌سازد. نخ‌های پردازشی دات‌نت بدون هیچ رقابت یا قفل‌شدگی، روی هیپ هسته خود حافظه تخصیص می‌دهند و توان پردازشی سرور به حداکثر می‌رسد.
+
+#### ۲. حل معضل کانتینرهای کوبرنتیز با قابلیت DATAP در دات‌نت ۸ و ۹:
+در گذشته، اگر پادی با محدودیت ۱ گیگابایت رم روی یک سرور فیزیکی ۶۴ هسته‌ای دیپلوی می‌شد، Server GC تعداد ۶۴ هیپ مجزا می‌ساخت که رم پاد بلافاصله پر شده و توسط لینوکس با خطای OOMKill نابود می‌شد.
+قابلیت **DATAP** در دات‌نت ۸ و ۹ به صورت خودکار محدودیت‌های cgroups کانتینر را خوانده و تعداد هیپ‌ها و بودجه حافظه را دقیقاً متناسب با سایز کانتینر تنظیم می‌کند.`,
+  },
+  {
+    id: "dotnet-senior-gc-q4",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "senior",
+    topicIds: ["topic-dotnet-clr-gc-internals"],
+    questionTitle: "How do Tiered JIT Compilation and Dynamic Profile-Guided Optimization (Dynamic PGO) work in .NET 8/9, how does the JIT devirtualize interface calls, and how does it compare with Native AOT?",
+    questionTitle_fa: "فرآیند کامپایل چند‌سطحی Tiered JIT و بهینه‌سازی مبتنی بر پروفایل پویا (Dynamic PGO) در دات‌نت ۸ و ۹ چگونه کار می‌کنند، کامپایلر چگونه فراخوانی اینترفیس‌ها را Devirtualize می‌کند و چه تفاوت‌هایی با Native AOT دارد؟",
+    answerContent: `### Tiered JIT Compilation, Dynamic PGO & Devirtualization in .NET 8/9
+
+The CoreCLR JIT compiler uses a multi-tier pipeline to balance fast application startup with maximum steady-state throughput.
+
+\`\`\`mermaid
+flowchart TD
+    Call["Method Invocations (Tier 0 Quick JIT)"] --> Count{Calls > 30?}
+    Count -- Yes --> PGO["Dynamic PGO: Inspects runtime types & branch frequencies"]
+    PGO --> Tier1["Tier 1 JIT: Emits optimized machine code"]
+    Tier1 --> Devirt["Interface Devirtualization & Direct Inlining"]
+\`\`\`
+
+#### 1. The Compilation Tiers:
+1. **Tier 0 (Quick JIT):** Compiles methods into unoptimized native code in $< 1\\text{ ms}$ with instrumentation stubs to enable instant startup.
+2. **Dynamic PGO (Profile-Guided Optimization - Default in .NET 8/9):** Collects runtime telemetry: Which branches are taken? What concrete types implement this interface?
+3. **Tier 1 (Optimized JIT):** Re-compiles hot methods with aggressive vectorization (AVX-512), loop unrolling, and devirtualization.
+
+#### 2. Interface Devirtualization in Action:
+\`\`\`csharp
+public interface IPaymentService { void Pay(); }
+
+// If Dynamic PGO observes that 99.9% of calls pass CreditCardPayment:
+public void Process(IPaymentService svc)
+{
+    // Tier 1 JIT generates an inline fast-path check:
+    if (svc is CreditCardPayment cc)
+    {
+        // DIRECT INLINE: Zero vtable jump, raw native instructions!
+        cc.ExecuteDirect();
+    }
+    else
+    {
+        svc.Pay(); // Fallback to slow virtual dispatch
+    }
+}
+\`\`\`
+
+#### 3. JIT vs. Native AOT:
+- **Tiered JIT with Dynamic PGO:** Yields higher maximum peak throughput because it optimizes based on live runtime execution data.
+- **Native AOT:** Pre-compiles everything ahead-of-time to native binaries with **instant startup ($< 10\\text{ ms}$)** and minimal RAM footprint, ideal for micro-VMs and AWS Lambda cold starts.`,
+    answerContent_fa: `### نحوه عملکرد Tiered JIT، بهینه‌سازی Dynamic PGO و Devirtualization در دات‌نت ۸ و ۹
+
+کامپایلر JIT دات‌نت برای دستیابی همزمان به استارت‌آپ سریع و حداکثر توان پردازشی، از معماری چند‌سطحی استفاده می‌کند:
+
+#### ۱. سطوح کامپایل:
+۱. **سطح Tier 0 (Quick JIT):** متدها را در کسری از میلی‌ثانیه و بدون بهینه‌سازی کامپایل می‌کند تا برنامه بلافاصله اجرا شود.
+۲. **تحلیل پروفایل پویا (Dynamic PGO):** در حین اجرای برنامه، فرکانس اجرای شرط‌ها و کلاس‌های واقعی پشت اینترفیس‌ها را مانیتور می‌کند.
+۳. **سطح Tier 1 (Optimized JIT):** متدهای پرتکرار را با دستورات برداری SIMD، باز کردن حلقه‌ها و اینلاین کردن کدهای تکراری بازنویسی می‌کند.
+
+#### ۲. مکانیزم Devirtualization:
+در برنامه‌نویسی شیءگرا، فراخوانی متدهای اینترفیس نیازمند جستجو در جدول متدها (vtable) است. اگر کامپایلر تشخیص دهد که ۹۹٪ فراخوانی‌های یک اینترفیس به کلاس \`CreditCardPayment\` ختم می‌شود، یک شرط مستقیم در اسمبلی تولید کرده و **کد متد مقصد را مستقیماً اینلاین می‌کند** تا پرش غیرمستقیم حذف شود.
+
+#### ۳. مقایسه با Native AOT:
+- **کامپایلر JIT + Dynamic PGO:** در کارهای طولانی‌مدت به دلیل بهینه‌سازی بر اساس رفتار زنده سرور، توان عملیاتی بالاتری نسبت به کامپایل ایستا دارد.
+- **مدل Native AOT:** بدون JIT کل کد را به باینری خالص لینوکس/ویندوز کامپایل می‌کند و استارت‌آپ فوق‌سریع (زیر ۱۰ میلی‌ثانیه) با حداقل مصرف رم فراهم می‌سازد.`,
+  },
+  {
+    id: "dotnet-senior-gc-q5",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "senior",
+    topicIds: ["topic-dotnet-clr-gc-internals"],
+    questionTitle: "How do you detect and investigate memory leaks, unmanaged handle leaks, and GC pressure in production .NET services using dotnet-dump, dotnet-gcdump, and PerfView?",
+    questionTitle_fa: "چگونه نشت حافظه (Memory Leaks)، نشت هندل‌های مدیریت‌نشده و فشار به Garbage Collector را در سرویس‌های پروداکشن دات‌نت با ابزارهای dotnet-dump، dotnet-gcdump و PerfView تحلیل و رفع می‌کنید؟",
+    answerContent: `### Production Diagnostics: Memory Leak Detection & GC Root Analysis
+
+Managed memory leaks in .NET occur when unreachable objects remain referenced by **active GC Roots** (e.g. static event subscriptions, captive DI dependencies, or unreleased Timer handles).
+
+\`\`\`mermaid
+flowchart LR
+    Symptom["Symptom: Memory steadily climbs upward -> Container OOMKills"] --> Step1["1. Capture fast heap snapshot with dotnet-gcdump"]
+    Step1 --> Step2["2. Diff two snapshots in Visual Studio / PerfView"]
+    Step2 --> Step3["3. Inspect GC Root Retention Path (gcroot)"]
+    Step3 --> Fix["Fix: Unsubscribe events, fix singleton caching, or dispose unmanaged handles"]
+\`\`\`
+
+#### 1. Capturing Live Snapshots with \`dotnet-gcdump\`:
+\`\`\`bash
+# Capture lightweight heap snapshot without pausing process:
+dotnet-gcdump collect --process-id <PID> -o /tmp/snapshot1.gcdump
+# Wait 10 minutes under load...
+dotnet-gcdump collect --process-id <PID> -o /tmp/snapshot2.gcdump
+\`\`\`
+
+#### 2. Investigating Retention Paths with \`dotnet-dump\`:
+For deep inspection of raw memory and unmanaged handles:
+\`\`\`bash
+dotnet-dump collect --process-id <PID> -o /tmp/memdump.dmp
+dotnet-dump analyze /tmp/memdump.dmp
+\`\`\`
+
+Inside the analyzer, find the top memory-consuming types:
+\`\`\`text
+> dumpheap -stat
+# Output: Lists object count and total memory per type:
+# MT               Count     TotalSize Class Name
+# 00007ff8a123    450,000   36,000,000 MyApp.Models.CustomerSession
+
+> dumpheap -type MyApp.Models.CustomerSession
+# Grab an address: 0x000001dfa234b670
+
+> gcroot 0x000001dfa234b670
+# Output: Traces the exact root path keeping the object alive:
+# -> static System.EventHandler MyApp.Events.Bus.OnOrderPlaced
+#   -> MyApp.Services.NotificationService (Subscribed but never unsubscribed!)
+\`\`\`
+
+#### 3. The 3 Most Common .NET Memory Leak Culprits:
+1. **Unsubscribed Static Events:** Static event handlers hold strong references to subscriber instances indefinitely.
+2. **Captive DI Singletons:** Injecting a Scoped or Transient service into a Singleton keeps all related dependencies in Gen 2 forever.
+3. **Unreleased Native / GCHandles:** Forgetting to free \`GCHandle.Alloc(pinned: true)\` or native \`NativeMemory.Alloc\` pointers.`,
+    answerContent_fa: `### ریشه‌یابی نشت حافظه (Memory Leak) و فشار به GC در پروداکشن
+
+نشت حافظه در دات‌نت زمانی رخ می‌دهد که اشیاء بی‌استفاده، ناخواسته از طریق ریشه‌های زنده (مانند ایونت‌های Static یا سرویس‌های Singleton) در حافظه نگه داشته شوند.
+
+#### ۱. ثبت اسنپ‌شات با \`dotnet-gcdump\`:
+\`\`\`bash
+dotnet-gcdump collect --process-id <PID> -o /tmp/snap1.gcdump
+# ۱۰ دقیقه بعد زیر بار ترافیکی:
+dotnet-gcdump collect --process-id <PID> -o /tmp/snap2.gcdump
+\`\`\`
+با مقایسه دو فایل در ویژوال استودیو، کلاس‌هایی که تعداد نمونه‌های آن‌ها به طور غیرطبیعی در حال افزایش است مشخص می‌شوند.
+
+#### ۲. ردیابی ریشه نگه‌دارنده با دستور \`gcroot\` در \`dotnet-dump\`:
+\`\`\`bash
+dotnet-dump analyze /tmp/memdump.dmp
+> dumpheap -stat
+# مشاهده اشیای با بیشترین حجم رم
+> gcroot <Object_Address>
+\`\`\`
+دستور \`gcroot\` مسیر دقیق اتصال شیء را نشان می‌دهد؛ مثلاً مشخص می‌کند که یک ایونت \`static\` مانع از جمع‌آوری شیء توسط GC شده است.
+
+#### ۳. سه دلیل اصلی نشت حافظه در دات‌نت:
+۱. **ایونت‌های Static بدون Unsubscribe:** ایونت‌های استاتیک تا پایان عمر پروسس رفرنس تمام مشترکین خود را در رم نگه می‌دارند.
+۲. **وابستگی‌های اسیر در DI (Captive Dependencies):** تزریق یک سرویس Scoped به یک کلاس Singleton که باعث ماندگاری دائم شیء در نسل ۲ می‌شود.
+۳. **هندل‌های مدیریت‌نشده:** فراموش کردن آزادسازی بافرهای Unmanaged یا هندل‌های Pinned.`,
+  },
+  {
+    id: "dotnet-senior-expr-q1",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "senior",
+    topicIds: ["topic-dotnet-expression-trees"],
+    questionTitle: "How do Expression Trees represent code as an Abstract Syntax Tree (AST) in C#, how does ExpressionVisitor recursively traverse and mutate expressions, and what is the difference between Func<T, bool> and Expression<Func<T, bool>>?",
+    questionTitle_fa: "درخت عبارات (Expression Trees) چگونه کد را به صورت یک ساختار داده انتزاعی (AST) مدل‌سازی می‌کنند، الگوی ExpressionVisitor چگونه درخت را پیمایش و بازنویسی می‌کند و تفاوت بنیادین میان Func و Expression چیست؟",
+    answerContent: `### Expression Trees as Abstract Syntax Trees (AST) & The \`ExpressionVisitor\` Pattern
+
+An **Expression Tree** represents executable code not as compiled Intermediate Language (IL) instructions, but as an in-memory tree data structure composed of nodes inheriting from \`System.Linq.Expressions.Expression\`.
+
+\`\`\`mermaid
+flowchart TD
+    Lambda["Lambda: p => p.Price > 100 && p.IsActive"] --> Root["BinaryExpression (AndAlso)"]
+    Root --> Left["BinaryExpression (GreaterThan)"]
+    Root --> Right["MemberExpression (p.IsActive)"]
+    Left --> LeftProp["MemberExpression (p.Price)"]
+    Left --> LeftConst["ConstantExpression (100)"]
+\`\`\`
+
+#### 1. Fundamental Difference: \`Func<T, bool>\` vs. \`Expression<Func<T, bool>>\`:
+- **\`Func<T, bool>\` (Delegate):** Compiled IL bytecode pointer. It is executed directly by the CPU in application RAM against \`IEnumerable<T>\`. It is an opaque black box that cannot be inspected at runtime.
+- **\`Expression<Func<T, bool>>\` (AST):** A transparent, inspectable tree of C# objects. It can be analyzed, rewritten, and translated into another language (such as SQL by EF Core's \`IQueryProvider\`).
+
+#### 2. Traversing and Mutating Expressions with \`ExpressionVisitor\`:
+The **Visitor Pattern** allows traversing and rewriting immutable expression nodes:
+
+\`\`\`csharp
+public class MultiplyByTwoVisitor : ExpressionVisitor
+{
+    protected override Expression VisitConstant(ConstantExpression node)
+    {
+        if (node.Value is int val)
+        {
+            // Replaces constant 100 with 200 in the tree:
+            return Expression.Constant(val * 2);
+        }
+        return base.VisitConstant(node);
+    }
+}
+\`\`\``,
+    answerContent_fa: `### کالبدشکافی درخت عبارات (Expression Trees) به عنوان درخت گره‌های AST و الگوی \`ExpressionVisitor\`
+
+#### ۱. تفاوت بنیادین میان \`Func\` و \`Expression\`:
+- **دلیگیت \`Func<T, bool>\`:** مستقیماً به بایت‌کدهای اجرایی IL کامپایل شده و در حافظه RAM اپلیکیشن روی کالکشن‌های \`IEnumerable\` اجرا می‌شود؛ این ساختار برای برنامه یک جعبه سیاه غیرقابل تحلیل است.
+- **درخت \`Expression<Func<T, bool>>\`:** کدهای لامبدا را به صورت یک ساختار درختی از اشیاء شیءگرا (**Abstract Syntax Tree**) در حافظه نگهداری می‌کند تا موتورهای ORM بتوانند گره‌های شرط را بخوانند و به دستورات SQL ترجمه نمایند.
+
+#### ۲. پیمایش و بازنویسی درخت با کلاس \`ExpressionVisitor\`:
+گره‌های درخت عبارات ذاتا **غیرقابل تغییر (Immutable)** هستند. برای دستکاری یا ترجمه درخت، از الگوی دیزاین پترن Visitor استفاده می‌شود:
+متدهای کلاس \`ExpressionVisitor\` (مانند \`VisitBinary\`، \`VisitMember\` و \`VisitConstant\`) به صورت بازگشتی گره‌ها را بررسی کرده و در صورت نیاز گره‌های اصلاح‌شده جدیدی را جایگزین می‌کنند.`,
+  },
+  {
+    id: "dotnet-senior-expr-q2",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "senior",
+    topicIds: ["topic-dotnet-expression-trees"],
+    questionTitle: "How does Entity Framework Core translate LINQ Expression Trees into parameterized SQL, how does parameter extraction prevent SQL injection, and why was Client Evaluation disabled in EF Core 3.0+?",
+    questionTitle_fa: "موتور Entity Framework Core چگونه درخت عبارات LINQ را به کوئری‌های پارامتریزه SQL ترجمه می‌کند، فرآیند استخراج متغیرها چگونه مانع از SQL Injection می‌شود و چرا ارزیابی کلاینت (Client Evaluation) در نسخه‌های مدرن EF Core غیرفعال شد؟",
+    answerContent: `### EF Core Query Translation Engine & Parameter Extraction Mechanics
+
+When querying with LINQ-to-Entities (\`dbContext.Products.Where(p => p.Price > minPrice)\`), EF Core does not execute the filter in memory; it translates the AST into native SQL.
+
+\`\`\`mermaid
+flowchart LR
+    Linq["IQueryable.Where(p => p.Price > minPrice)"] --> Visitor["RelationalQueryableMethodTranslatingExpressionVisitor"]
+    Visitor --> ParamExtract["Parameter Extractor: minPrice -> @__minPrice_0"]
+    Visitor --> SqlGen["SQL Generator"]
+    SqlGen --> SqlOut["SELECT [p].[Id], [p].[Price] FROM [Products] AS [p] WHERE [p].[Price] > @__minPrice_0"]
+\`\`\`
+
+#### 1. The Translation Pipeline:
+1. **Node Mapping:**
+   - \`MemberExpression (p.Price)\` $\to$ Column \`[p].[Price]\`.
+   - \`BinaryExpression (GreaterThan)\` $\to$ SQL \`>\`.
+   - \`MemberExpression (minPrice)\` (captured local closure) $\to$ Extracted into parameterized SQL variable \`@__minPrice_0\`.
+2. **Security & Performance (Parameter Extraction):**
+   - Captured variables are **never inlined as raw string literals**. Parameterization prevents **SQL Injection** and allows SQL Server / PostgreSQL to cache and reuse the compiled query execution plan.
+
+#### 2. Why Client Evaluation Was Disabled (EF Core 3.0+):
+- In EF Core 2.x, if a LINQ query contained a C# method that could not be translated to SQL (e.g. \`Where(p => CustomEncrypt(p.Code) == "abc")\`), EF Core would silently fetch the **entire database table into RAM** and evaluate the filter in C#.
+- In production, this caused massive memory exhaustion and network saturation.
+- **EF Core 3.0+ Policy:** Throws an **\`InvalidOperationException\`** at runtime, requiring developers to either rewrite the expression into translatable SQL constructs or explicitly invoke \`.AsEnumerable()\` to opt into in-memory filtering.`,
+    answerContent_fa: `### فرآیند ترجمه کوئری در EF Core و دلیل غیرفعال شدن Client Evaluation
+
+#### ۱. مراحل ترجمه درخت به SQL:
+۱. موتور \`ExpressionVisitor\` گره‌های شرط را اسکن می‌کند:
+   - گره‌های دسترسی به فیلد (\`p.Price\`) به نام ستون‌های دیتابیس (\`[p].[Price]\`) نگاشت می‌شوند.
+   - گره‌های متغیرهای خارجی (Closureها) به پارامترهای دیتابیسی (\`@__minPrice_0\`) تبدیل می‌شوند.
+۲. **امنیت و کارایی (Parameter Extraction):** تبدیل متغیرها به پارامترهای SQL مانع از حملات **SQL Injection** شده و اجازه می‌دهد سرور دیتابیس پلن اجرای کوئری (Execution Plan) را کش کند.
+
+#### ۲. چرا Client Evaluation در EF Core 3.0 به بعد غیرفعال شد؟
+در نسخه‌های قدیمی، اگر شرطی حاوی متد سفارشی سی‌شارپ بود که دیتابیس آن را نمی‌فهمید (مانند یک تابع هش)، EF Core بدون هشدار **تمام میلیون‌ها رکورد جدول دیتابیس را به رم سرور دانلود می‌کرد** تا شرط را در C# بسنجد که باعث کرش حافظه سرورها می‌شد.
+در نسخه‌های مدرن، در صورت عدم امکان ترجمه، ران‌تایم خطای صریح \`InvalidOperationException\` پرتاب می‌کند تا از فاجعه عملکردی در پروداکشن جلوگیری شود.`,
+  },
+  {
+    id: "dotnet-senior-expr-q3",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "senior",
+    topicIds: ["topic-dotnet-expression-trees"],
+    questionTitle: "How do you build a dynamic, composable search filter (PredicateBuilder) at runtime using Expression Trees, and how do you resolve the ParameterRebinding issue when combining lambda expressions?",
+    questionTitle_fa: "چگونه یک فیلتر جستجوی داینامیک و ترکیب‌پذیر (PredicateBuilder) با Expression Trees در زمان اجرا پیاده‌سازی می‌کنید و مشکل تطابق پارامترها (Parameter Rebinding) را در زمان ترکیب عبارات با چه الگویی حل می‌نمایید؟",
+    answerContent: `### Dynamic Query Composition & The Parameter Rebinding Pattern
+
+When building dynamic search filters (e.g. e-commerce search with multiple optional checkboxes), combining multiple \`Expression<Func<T, bool>>\` instances using \`Expression.AndAlso\` causes a runtime failure if parameters are not unified.
+
+\`\`\`csharp
+// Expression 1: (p1 => p1.Price > 100)  [Parameter: p1]
+// Expression 2: (p2 => p2.IsActive)      [Parameter: p2]
+// Naive BinaryExpression.AndAlso(expr1.Body, expr2.Body) -> Invalid! Two distinct parameters!
+\`\`\`
+
+#### 1. The \`ParameterReplacerVisitor\` Solution:
+\`\`\`csharp
+public static class PredicateBuilder
+{
+    public static Expression<Func<T, bool>> And<T>(
+        this Expression<Func<T, bool>> left,
+        Expression<Func<T, bool>> right)
+    {
+        // 1. Create a unified single parameter
+        var unifiedParam = Expression.Parameter(typeof(T), "x");
+
+        // 2. Rewrite both expression bodies to reference the unified parameter
+        var leftBody = new ParameterReplacer(left.Parameters[0], unifiedParam).Visit(left.Body);
+        var rightBody = new ParameterReplacer(right.Parameters[0], unifiedParam).Visit(right.Body);
+
+        // 3. Combine with AndAlso
+        var combinedBody = Expression.AndAlso(leftBody!, rightBody!);
+        return Expression.Lambda<Func<T, bool>>(combinedBody, unifiedParam);
+    }
+
+    private sealed class ParameterReplacer : ExpressionVisitor
+    {
+        private readonly ParameterExpression _source;
+        private readonly ParameterExpression _target;
+
+        public ParameterReplacer(ParameterExpression source, ParameterExpression target)
+        {
+            _source = source;
+            _target = target;
+        }
+
+        protected override Expression VisitParameter(ParameterExpression node)
+            => node == _source ? _target : base.VisitParameter(node);
+    }
+}
+\`\`\`
+
+#### 2. Clean Business Usage in Repositories:
+\`\`\`csharp
+var filter = PredicateBuilder.True<Product>();
+
+if (searchDto.MinPrice.HasValue)
+    filter = filter.And(p => p.Price >= searchDto.MinPrice.Value);
+
+if (!string.IsNullOrEmpty(searchDto.Category))
+    filter = filter.And(p => p.Category == searchDto.Category);
+
+var results = await dbContext.Products.Where(filter).ToListAsync();
+\`\`\``,
+    answerContent_fa: `### پیاده‌سازی PredicateBuilder داینامیک و حل معضل Parameter Rebinding
+
+هنگام ترکیب دو عبارت لامبدا (مثلاً \`p1 => p1.Price > 10\` و \`p2 => p2.IsActive\`)، استفاده مستقیم از \`Expression.AndAlso\` به خطا می‌خورد چون بدنه اول با پارامتر \`p1\` و بدنه دوم با پارامتر \`p2\` تعریف شده است.
+
+#### حل معضل با کلاس \`ParameterReplacer\`:
+با پیاده‌سازی یک \`ExpressionVisitor\` سفارشی، پارامترهای هر دو عبارت با یک پارامتر مشترک و واحد (\`unifiedParam\`) جایگزین می‌شوند تا یک عبارت معتبر و قابل ترجمه به SQL برای Entity Framework Core تولید شود.
+
+این الگو امکان ساخت فرم‌های جستجوی پیشرفته با چندین فیلتر اختیاری را بدون ساخت رشته‌های ناامن SQL فراهم می‌سازد.`,
+  },
+  {
+    id: "dotnet-senior-expr-q4",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "senior",
+    topicIds: ["topic-dotnet-expression-trees"],
+    questionTitle: "How do micro-ORMs like Dapper use Reflection.Emit (DynamicMethod) to generate high-performance CIL row mappers, and why is this significantly faster than standard Reflection?",
+    questionTitle_fa: "میکرواورم‌هایی مانند Dapper چگونه با کلاس Reflection.Emit.DynamicMethod کدهای بایت‌کد واسط (CIL) برای مپ کردن سریع رکوردهای دیتابیس تولید می‌کنند و چرا این روش به مراتب سریع‌تر از رفلکشن سنتی است؟",
+    answerContent: `### Micro-ORM Dynamic Code Generation: \`Reflection.Emit\` & Dapper Architecture
+
+Standard runtime reflection (\`PropertyInfo.SetValue\`) suffers from heavy overhead:
+1. Method metadata lookup table searches.
+2. Value type Boxing / Unboxing (converting integers to \`object\`).
+3. Inability of the JIT compiler to inline property setters.
+
+\`\`\`mermaid
+flowchart TD
+    DB["IDataRecord (ADO.NET Reader)"] --> Dapper["Dapper First Call for Type Customer"]
+    Dapper --> Emit["Emit DynamicMethod with raw CIL Bytecode (Ldarg, Callvirt, SetProperty)"]
+    Emit --> Cache["Cache compiled Func<IDataRecord, Customer> delegate in ConcurrentDictionary"]
+    Cache --> Exec["Subsequent 100,000 DB Rows execute at raw C# speed with ZERO boxing!"]
+\`\`\`
+
+#### 1. How Dapper Generates Dynamic CIL Row Mappers:
+\`\`\`csharp
+public static Func<IDataRecord, Customer> CreateCustomerMapper()
+{
+    // Create an anonymous dynamic method in memory
+    var dynamicMethod = new DynamicMethod(
+        name: "MapCustomerRow",
+        returnType: typeof(Customer),
+        parameterTypes: new[] { typeof(IDataRecord) },
+        restrictedSkipVisibility: true);
+
+    ILGenerator il = dynamicMethod.GetILGenerator();
+
+    // 1. var customer = new Customer();
+    il.Emit(OpCodes.Newobj, typeof(Customer).GetConstructor(Type.EmptyTypes)!);
+    
+    // 2. customer.Id = reader.GetInt32(0);
+    il.Emit(OpCodes.Dup); // Duplicate customer reference on stack
+    il.Emit(OpCodes.Ldarg_0); // Load IDataRecord argument
+    il.Emit(OpCodes.Ldc_I4_0); // Column index 0
+    il.Emit(OpCodes.Callvirt, typeof(IDataRecord).GetMethod("GetInt32")!);
+    il.Emit(OpCodes.Callvirt, typeof(Customer).GetProperty("Id")!.GetSetMethod()!);
+
+    // 3. return customer;
+    il.Emit(OpCodes.Ret);
+
+    return (Func<IDataRecord, Customer>)dynamicMethod.CreateDelegate(typeof(Func<IDataRecord, Customer>));
+}
+\`\`\`
+
+#### 2. Why This is Ultra-Fast:
+- **Zero Boxing:** Values like \`int\` and \`DateTime\` are read and assigned directly via typed CPU registers.
+- **Cached Execution:** Once emitted, the delegate is cached in a \`ConcurrentDictionary\`, achieving the exact same speed as handwritten C# mapper code.`,
+    answerContent_fa: `### معماری تولید بایت‌کد CIL در میکرواورم Dapper با \`Reflection.Emit\`
+
+رفلکشن سنتی دات‌نت (\`PropertyInfo.SetValue\`) به دلیل جستجوی مداوم در متادیتاها و تبدیل نوع‌های مقداری به شیء (**Boxing**)، سرعت پایینی دارد.
+
+#### نحوه کارکرد Dapper با تولید بایت‌کد در زمان اجرا:
+۱. در اولین باری که کوئری اجرا می‌شود، Dapper با استفاده از کلاس \`DynamicMethod\` مستقیماً دستورات ماشین CIL تولید می‌کند که ستون‌های دیتابیس را بدون واسطه به فیلدهای کلاس مپ می‌کند.
+۲. این دلیگیت تولیدشده در یک \`ConcurrentDictionary\` کش می‌شود.
+۳. برای میلیون‌ها رکورد بعدی، انتساب مقادیر دقیقاً با **سرعت کدهای دستی C# و بدون حتی یک بایت تخصیص حافظه اضافه (Zero Boxing)** انجام می‌گیرد.`,
+  },
+  {
+    id: "dotnet-senior-expr-q5",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "senior",
+    topicIds: ["topic-dotnet-expression-trees"],
+    questionTitle: "What are Roslyn Incremental Source Generators (IIncrementalGenerator), how do they differ from runtime reflection, and why are they mandatory for Native AOT and high-performance JSON serialization in .NET 8/9?",
+    questionTitle_fa: "سورس جنریتورهای افزایشی Roslyn با اینترفیس IIncrementalGenerator چیستند، چه تفاوت بنیادینی با رفلکشن در زمان اجرا دارند و چرا در معماری‌های Native AOT و سریالایزرهای دات‌نت ۸ و ۹ اجباری هستند؟",
+    answerContent: `### Roslyn Incremental Source Generators (\`IIncrementalGenerator\`) & Native AOT
+
+Modern .NET 8 and 9 shift metaprogramming from *runtime memory reflection* to *compile-time source generation*.
+
+\`\`\`mermaid
+flowchart LR
+    Source["C# Source Code with [JsonSerializable]"] --> Roslyn["Roslyn Compiler Engine"]
+    Roslyn --> Gen["IIncrementalGenerator (SyntaxValueProvider)"]
+    Gen --> Emit["Emits *.g.cs strongly-typed code files"]
+    Emit --> Binary["Final Executable / Native AOT Binary (0 Runtime Overhead)"]
+\`\`\`
+
+#### 1. Why Runtime Reflection Fails in Modern Cloud-Native Environments:
+- **Startup Latency:** Scanning assemblies for attributes and building metadata caches at startup causes slow container boot times.
+- **Trimming & Native AOT Incompatibility:** In Native AOT, the compiler trims away unused code and strips metadata to produce a tiny binary. Runtime reflection cannot find stripped properties, causing crashes.
+
+#### 2. The Mechanics of \`IIncrementalGenerator\`:
+Incremental Source Generators run directly inside the IDE and compiler:
+- **Pipeline Architecture:** Uses \`SyntaxValueProvider\` to filter only relevant syntax nodes (e.g. classes decorated with specific attributes).
+- **Incremental Caching:** Only re-runs code generation for files that actually changed, keeping Visual Studio compilation instant.
+
+#### 3. Real-World Production Applications in .NET 8/9:
+1. **\`System.Text.Json\` Source Generator:**
+   \`\`\`csharp
+   [JsonSerializable(typeof(UserDto))]
+   public partial class UserJsonContext : JsonSerializerContext { }
+   
+   // Serialization is 3x faster with 0 reflection and full Native AOT safety:
+   string json = JsonSerializer.Serialize(user, UserJsonContext.Default.UserDto);
+   \`\`\`
+2. **Compile-Time Regular Expressions (\`[GeneratedRegex]\`):**
+   \`\`\`csharp
+   [GeneratedRegex(@"^\\d{4}-\\d{2}-\\d{2}$")]
+   public static partial Regex DatePattern();
+   \`\`\`
+3. **High-Performance Logging with \`[LoggerMessage]\`:**
+   - Emits optimized \`ILogger\` extension methods with zero string allocations and zero boxing.`,
+    answerContent_fa: `### سورس جنریتورهای Roslyn و اهمیت معمارانه آن‌ها برای Native AOT در دات‌نت مدرن
+
+در دات‌نت ۸ و ۹، متاپروگرمینگ از رفلکشن زمان اجرا به **تولید کد در زمان کامپایل (Compile-Time Generation)** تغییر مسیر داده است.
+
+#### ۱. معایب رفلکشن سنتی در معماری‌های ابری:
+- **افت زمان استارت‌آپ:** اسکن کردن صدها اسمبلی در رم در زمان بوت کانتینر، سرعت بالا آمدن سرویس را کاهش می‌دهد.
+- **ناسازگاری با Native AOT و Trimming:** در کامپایل AOT کدهای استفاده‌نشده حذف می‌شوند؛ در نتیجه رفلکشن به متادیتا دسترسی نداشته و برنامه کرش می‌کند.
+
+#### ۲. نحوه عملکرد \`IIncrementalGenerator\`:
+سورس جنریتورها در حین تایپ و کامپایل کد، درخت سینتکس Roslyn را بررسی کرده و کدهای بهینه سی‌شارپ (\`*.g.cs\`) تولید می‌کنند. این فایل‌ها مانند کدهای دست‌نویس کامپایل می‌شوند:
+- **سرعت اجرای فوق‌العاده با صفر سربار زمان اجرا.**
+- **سازگاری ۱۰۰٪ با کامپایل Native AOT بدون نیاز به JIT.**
+
+#### ۳. کاربردهای کلیدی در دات‌نت ۸ و ۹:
+۱. **سریالایزر \`System.Text.Json\` با \`[JsonSerializable]\`:** سریالایز سریع‌تر با صفر بایت آلیکیشن.
+۲. **عبارات منظم با \`[GeneratedRegex]\`:** تبدیل ریجکس به کدهای لوپ بهینه C#.
+۳. **لاگینگ پرسرعت با \`[LoggerMessage]\`:** ثبت لاگ‌های ساختاریافته بدون نیاز به Boxing داده‌های عددی.`,
+  },
 ];
+
+
+
+
 
 

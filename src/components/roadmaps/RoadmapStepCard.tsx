@@ -114,8 +114,8 @@ export const RoadmapStepCard: React.FC<RoadmapStepCardProps> = ({
         {/* Neon Number Badge or Completed Checkmark */}
         <Box
           sx={{
-            width: 44,
-            height: 44,
+            width: 40,
+            height: 40,
             borderRadius: 2.5,
             background: isStepComplete
               ? "linear-gradient(135deg, rgba(16, 185, 129, 0.25) 0%, rgba(5, 150, 105, 0.2) 100%)"
@@ -127,25 +127,23 @@ export const RoadmapStepCard: React.FC<RoadmapStepCardProps> = ({
             justifyContent: "center",
             color: isStepComplete ? "#34D399" : "#818CF8",
             fontWeight: 800,
-            fontSize: "1.1rem",
+            fontSize: "0.95rem",
             flexShrink: 0,
           }}
         >
-          {isStepComplete ? <CheckIcon sx={{ fontSize: 22 }} /> : stepIndex + 1}
+          {isStepComplete ? <CheckIcon sx={{ fontSize: 20 }} /> : stepIndex + 1}
         </Box>
 
         {/* Step Title & Description */}
-        <Box sx={{ flexGrow: 1 }}>
+        <Box sx={{ flexGrow: 1, minWidth: 0 }}>
           <Typography
             variant="h6"
             sx={{
               fontWeight: 700,
               color: "#FFFFFF",
-              fontSize: { xs: "1.05rem", md: "1.2rem" },
+              fontSize: { xs: "0.96rem", md: "1.08rem" },
               mb: 0.5,
               lineHeight: 1.4,
-              textAlign: isRtl ? "right" : "left",
-              direction: isRtl ? "rtl" : "ltr",
             }}
           >
             {localizedStepTitle}
@@ -155,17 +153,15 @@ export const RoadmapStepCard: React.FC<RoadmapStepCardProps> = ({
             variant="body2"
             sx={{
               color: "#94A3B8",
-              fontSize: "0.86rem",
+              fontSize: "0.8rem",
               lineHeight: 1.6,
-              textAlign: isRtl ? "right" : "left",
-              direction: isRtl ? "rtl" : "ltr",
             }}
           >
             {localizedStepDesc}
           </Typography>
         </Box>
 
-        {/* Header Right: Meta Badges + Animated Chevron */}
+        {/* Header Trailing: Meta Badges + Animated Chevron */}
         <Box
           sx={{
             display: "flex",
@@ -216,7 +212,7 @@ export const RoadmapStepCard: React.FC<RoadmapStepCardProps> = ({
           sx={{
             px: { xs: 2.5, sm: 3, md: 3.5 },
             pb: { xs: 2.5, sm: 3, md: 3.5 },
-            pt: 0.5,
+            pt: { xs: 2.5, sm: 3, md: 3.5 },
             borderTop: "1px solid rgba(255, 255, 255, 0.05)",
             display: "flex",
             flexDirection: "column",
@@ -270,14 +266,13 @@ export const RoadmapStepCard: React.FC<RoadmapStepCardProps> = ({
                     alignItems: "flex-start",
                     gap: 1.75,
                     flexGrow: 1,
-                    textAlign: isRtl ? "right" : "left",
-                    direction: isRtl ? "rtl" : "ltr",
+                    minWidth: 0,
                   }}
                 >
                   <Box
                     sx={{
-                      width: 26,
-                      height: 26,
+                      width: 24,
+                      height: 24,
                       borderRadius: "50%",
                       backgroundColor: isCompleted
                         ? "rgba(16, 185, 129, 0.18)"
@@ -286,21 +281,21 @@ export const RoadmapStepCard: React.FC<RoadmapStepCardProps> = ({
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      fontSize: "0.75rem",
+                      fontSize: "0.7rem",
                       fontWeight: 700,
                       flexShrink: 0,
                       mt: 0.2,
                     }}
                   >
-                    {isCompleted ? <CheckIcon sx={{ fontSize: 15 }} /> : topicIdx + 1}
+                    {isCompleted ? <CheckIcon sx={{ fontSize: 14 }} /> : topicIdx + 1}
                   </Box>
 
-                  <Box sx={{ flexGrow: 1 }}>
+                  <Box sx={{ flexGrow: 1, minWidth: 0 }}>
                     <Typography
                       sx={{
                         color: isCompleted ? "#F1F5F9" : "#F8FAFC",
                         fontWeight: 600,
-                        fontSize: "0.95rem",
+                        fontSize: "0.86rem",
                         mb: 0.4,
                         lineHeight: 1.45,
                       }}
@@ -310,7 +305,7 @@ export const RoadmapStepCard: React.FC<RoadmapStepCardProps> = ({
                     <Typography
                       sx={{
                         color: "#64748B",
-                        fontSize: "0.82rem",
+                        fontSize: "0.76rem",
                         lineHeight: 1.5,
                         display: "-webkit-box",
                         WebkitLineClamp: 1,
@@ -359,8 +354,6 @@ export const RoadmapStepCard: React.FC<RoadmapStepCardProps> = ({
                       color: "#64748B",
                       display: "flex",
                       alignItems: "center",
-                      ml: isRtl ? 0 : 0.5,
-                      mr: isRtl ? 0.5 : 0,
                     }}
                   >
                     {isRtl ? (

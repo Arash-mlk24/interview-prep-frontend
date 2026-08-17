@@ -51,7 +51,6 @@ export const TopicNavigationFooter: React.FC<TopicNavigationFooterProps> = ({
           sx={{
             flex: 1,
             justifyContent: "flex-start",
-            textAlign: isRtl ? "right" : "left",
             p: 2,
             backgroundColor: "#0F121C",
             borderColor: "rgba(255, 255, 255, 0.08)",
@@ -64,11 +63,11 @@ export const TopicNavigationFooter: React.FC<TopicNavigationFooterProps> = ({
             },
           }}
         >
-          <Box sx={{ ml: isRtl ? 0 : 1, mr: isRtl ? 1 : 0 }}>
-            <Typography variant="caption" sx={{ color: "#64748B", display: "block", fontSize: "0.7rem" }}>
+          <Box sx={{ ml: 1 }}>
+            <Typography variant="caption" sx={{ color: "#64748B", display: "block", fontSize: "0.68rem" }}>
               {t("previousTopic")}
             </Typography>
-            <Typography sx={{ color: "#F8FAFC", fontWeight: 600, fontSize: "0.88rem" }}>
+            <Typography sx={{ color: "#F8FAFC", fontWeight: 600, fontSize: "0.82rem" }}>
               {getLocalized(prevTopic.title, prevTopic.title_fa)}
             </Typography>
           </Box>
@@ -87,7 +86,6 @@ export const TopicNavigationFooter: React.FC<TopicNavigationFooterProps> = ({
           sx={{
             flex: 1,
             justifyContent: "flex-end",
-            textAlign: isRtl ? "left" : "right",
             p: 2,
             backgroundColor: "#0F121C",
             borderColor: "rgba(255, 255, 255, 0.08)",
@@ -100,11 +98,11 @@ export const TopicNavigationFooter: React.FC<TopicNavigationFooterProps> = ({
             },
           }}
         >
-          <Box sx={{ mr: isRtl ? 0 : 1, ml: isRtl ? 1 : 0 }}>
-            <Typography variant="caption" sx={{ color: "#64748B", display: "block", fontSize: "0.7rem" }}>
+          <Box sx={{ mr: 1 }}>
+            <Typography variant="caption" sx={{ color: "#64748B", display: "block", fontSize: "0.68rem" }}>
               {t("nextTopic")}
             </Typography>
-            <Typography sx={{ color: "#F8FAFC", fontWeight: 600, fontSize: "0.88rem" }}>
+            <Typography sx={{ color: "#F8FAFC", fontWeight: 600, fontSize: "0.82rem" }}>
               {getLocalized(nextTopic.title, nextTopic.title_fa)}
             </Typography>
           </Box>

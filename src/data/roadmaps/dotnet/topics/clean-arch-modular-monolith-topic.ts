@@ -42,26 +42,7 @@ Modern architectures invert this relationship: **the Core Business Domain sits a
 
 Clean Architecture (also known as Onion or Hexagonal Architecture) structures applications into concentric layers governed by the **Dependency Rule**: *dependencies must only point inward toward the core domain*.
 
-\`\`\`mermaid
-flowchart TD
-    subgraph Outer["Outer Layer: Infrastructure & Presentation"]
-        P[Web API / Controllers / FastEndpoints]
-        I[Infrastructure: EF Core DbContext, Redis, RabbitMQ, SendGrid]
-    end
-
-    subgraph Middle["Application Layer (Use Cases)"]
-        A[CQRS Commands & Queries, DTOs, FluentValidation, Interfaces]
-    end
-
-    subgraph Core["Domain Layer (Enterprise Core)"]
-        D[Entities, Value Objects, Domain Events, Enums, Business Invariants]
-    end
-
-    P -->|Depends On| A
-    I -->|Implements Ports / Interfaces| A
-    A -->|Depends On| D
-    I -.->|Prohibited Direct Access| D
-\`\`\`
+![Clean Architecture Concentric Layers & Dependency Rule](/images/roadmaps/clean-arch-layers.jpg)
 
 ### 2.1 The Four Concentric Layers in .NET
 
@@ -197,31 +178,7 @@ public class CreateProductEndpoint : Endpoint<CreateProductRequest, CreateProduc
 
 Many organizations mistakenly adopt microservices prematurely, ending up with a **Distributed Monolith**: an architecture with all the operational complexity of distributed systems (network latency, distributed transaction failures, deployment coordination) and none of the benefits.
 
-\`\`\`mermaid
-flowchart TD
-    subgraph ModularMonolith["Single Deployable Unit (.NET Process)"]
-        subgraph UsersModule["Users Module (Schema: users)"]
-            U_API[Public Facade / API]
-            U_Core[Domain &amp; DbContext]
-        end
-
-        subgraph OrdersModule["Orders Module (Schema: orders)"]
-            O_API[Public Facade / API]
-            O_Core[Domain &amp; DbContext]
-        end
-
-        subgraph BillingModule["Billing Module (Schema: billing)"]
-            B_API[Public Facade / API]
-            B_Core[Domain &amp; DbContext]
-        end
-
-        EventBus["In-Process Event Bus / MediatR Publisher"]
-    end
-
-    OrdersModule -->|1. Emits OrderCreatedEvent| EventBus
-    EventBus -->|2. Asynchronously Dispatches| BillingModule
-    EventBus -->|3. Asynchronously Dispatches| UsersModule
-\`\`\`
+![Modular Monolith Single Deployable Unit Architecture](/images/roadmaps/modular-monolith-architecture.jpg)
 
 ### 4.1 What is a Modular Monolith?
 A **Modular Monolith** is a software design approach where a single deployable application is partitioned into strictly encapsulated, loosely coupled **business modules** (matching DDD Bounded Contexts).
@@ -414,26 +371,7 @@ public class ArchitectureTests
 
 معماری تمیز بر اساس **قانون وابستگی (Dependency Rule)** سازماندهی می‌شود: *جهت تمام وابستگی‌ها باید همواره از لایه‌های بیرونی به سمت لایه درونی (Domain) باشد*.
 
-\`\`\`mermaid
-flowchart TD
-    subgraph Outer["لایه بیرونی: Infrastructure و Presentation"]
-        P[کنترلرها، Minimal APIs و FastEndpoints]
-        I[پیاده‌سازی EF Core، کلاینت ردیس، ربیت‌ام‌کیو و ایمیل]
-    end
-
-    subgraph Middle["لایه کاربرد (Application Layer)"]
-        A[دستورات و کوئری‌های CQRS، اینترفیس‌ها، اعتبارسنجی‌ها]
-    end
-
-    subgraph Core["لایه هسته دامنه (Domain Layer)"]
-        D[انتیتی‌ها، Value Objects، رویدادهای دامنه، قوانین بیزینس]
-    end
-
-    P -->|وابسته به| A
-    I -->|پیاده‌سازی اینترفیس‌های| A
-    A -->|وابسته به| D
-    I -.->|ممنوعیت وابستگی مستقیم به| D
-\`\`\`
+![لایه‌های متمرکز Clean Architecture و قانون وابستگی](/images/roadmaps/clean-arch-layers.jpg)
 
 ### ۲.۱ وظایف ۴ لایه اصلی در Clean Architecture
 1. **لایه دامنه (Domain Layer):**
@@ -551,31 +489,7 @@ public class CreateProductEndpoint : Endpoint<CreateProductRequest, CreateProduc
 
 بسیاری از تیم‌ها بدون ارزیابی دقیق به سمت میکروسرویس حرکت می‌کنند و در نهایت به یک **Distributed Monolith** می‌رسند که معایب هر دو را به همراه دارد (تأخیر شبکه، پیچیدگی دیپلوی، تراکنش‌های ناقص و لاگ‌های پراکنده).
 
-\`\`\`mermaid
-flowchart TD
-    subgraph ModularMonolith["یک پروسس واحد دات‌نت (Single Process)"]
-        subgraph UsersModule["ماژول کاربران (اسکیما: users)"]
-            U_API[فاساد عمومی / Public API]
-            U_Core[Domain و DbContext اختصاصی]
-        end
-
-        subgraph OrdersModule["ماژول سفارشات (اسکیما: orders)"]
-            O_API[فاساد عمومی / Public API]
-            O_Core[Domain و DbContext اختصاصی]
-        end
-
-        subgraph BillingModule["ماژول مالی (اسکیما: billing)"]
-            B_API[فاساد عمومی / Public API]
-            B_Core[Domain و DbContext اختصاصی]
-        end
-
-        EventBus["Event Bus درون‌پروسسی / اعلان‌های MediatR"]
-    end
-
-    OrdersModule -->|۱. انتشار رویداد OrderCreated| EventBus
-    EventBus -->|۲. ارسال ناهمگام به| BillingModule
-    EventBus -->|۳. ارسال ناهمگام به| UsersModule
-\`\`\`
+![معماری مونوپروژه ماژولار در یک پروسس واحد](/images/roadmaps/modular-monolith-architecture.jpg)
 
 ### ۴.۱ مونوپروژه ماژولار چیست؟
 رویکردی که در آن کل سیستم به عنوان **یک واحد قابل استقرار (Single Deployable Unit)** اجرا می‌شود، اما کدهای آن به ماژول‌های کاملاً ایزوله، خودمختار و مستقل (منطبق با Bounded Contextهای DDD) تفکیک شده‌اند.

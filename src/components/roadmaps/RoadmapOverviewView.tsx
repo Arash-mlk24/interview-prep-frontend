@@ -257,11 +257,9 @@ export const RoadmapOverviewView: React.FC<RoadmapOverviewViewProps> = ({
                 sx={{
                   fontWeight: 800,
                   color: "#FFFFFF",
-                  fontSize: { xs: "1.45rem", md: "1.9rem" },
+                  fontSize: { xs: "1.25rem", md: "1.6rem" },
                   mb: 1.5,
                   lineHeight: 1.35,
-                  textAlign: isRtl ? "right" : "left",
-                  direction: isRtl ? "rtl" : "ltr",
                 }}
               >
                 {localizedRoadmapTitle}
@@ -271,11 +269,9 @@ export const RoadmapOverviewView: React.FC<RoadmapOverviewViewProps> = ({
                 variant="body1"
                 sx={{
                   color: "#94A3B8",
-                  fontSize: "0.95rem",
+                  fontSize: "0.86rem",
                   lineHeight: 1.75,
                   mb: 3,
-                  textAlign: isRtl ? "right" : "left",
-                  direction: isRtl ? "rtl" : "ltr",
                 }}
               >
                 {localizedRoadmapDesc}
@@ -293,7 +289,7 @@ export const RoadmapOverviewView: React.FC<RoadmapOverviewViewProps> = ({
                 >
                   <Typography
                     variant="caption"
-                    sx={{ color: "#94A3B8", fontSize: "0.78rem", fontWeight: 500 }}
+                    sx={{ color: "#94A3B8", fontSize: "0.72rem", fontWeight: 500 }}
                   >
                     {t("progress")}
                   </Typography>
@@ -301,7 +297,7 @@ export const RoadmapOverviewView: React.FC<RoadmapOverviewViewProps> = ({
                     variant="caption"
                     sx={{
                       color: progress.completed > 0 ? "#34D399" : "#64748B",
-                      fontSize: "0.78rem",
+                      fontSize: "0.72rem",
                       fontWeight: 600,
                     }}
                   >
@@ -349,11 +345,11 @@ export const RoadmapOverviewView: React.FC<RoadmapOverviewViewProps> = ({
               >
                 <Typography
                   variant="caption"
-                  sx={{ color: "#64748B", display: "block", fontSize: "0.72rem", mb: 0.25 }}
+                  sx={{ color: "#64748B", display: "block", fontSize: "0.68rem", mb: 0.25 }}
                 >
                   {t("steps")}
                 </Typography>
-                <Typography sx={{ fontWeight: 700, color: "#818CF8", fontSize: "1.2rem" }}>
+                <Typography sx={{ fontWeight: 700, color: "#818CF8", fontSize: "1.05rem" }}>
                   {roadmap.steps.length}
                 </Typography>
               </Box>
@@ -370,11 +366,11 @@ export const RoadmapOverviewView: React.FC<RoadmapOverviewViewProps> = ({
               >
                 <Typography
                   variant="caption"
-                  sx={{ color: "#64748B", display: "block", fontSize: "0.72rem", mb: 0.25 }}
+                  sx={{ color: "#64748B", display: "block", fontSize: "0.68rem", mb: 0.25 }}
                 >
                   {t("topics")}
                 </Typography>
-                <Typography sx={{ fontWeight: 700, color: "#38BDF8", fontSize: "1.2rem" }}>
+                <Typography sx={{ fontWeight: 700, color: "#38BDF8", fontSize: "1.05rem" }}>
                   {totalTopics}
                 </Typography>
               </Box>
@@ -391,11 +387,11 @@ export const RoadmapOverviewView: React.FC<RoadmapOverviewViewProps> = ({
               >
                 <Typography
                   variant="caption"
-                  sx={{ color: "#64748B", display: "block", fontSize: "0.72rem", mb: 0.25 }}
+                  sx={{ color: "#64748B", display: "block", fontSize: "0.68rem", mb: 0.25 }}
                 >
                   {t("questions")}
                 </Typography>
-                <Typography sx={{ fontWeight: 700, color: "#F43F5E", fontSize: "1.2rem" }}>
+                <Typography sx={{ fontWeight: 700, color: "#F43F5E", fontSize: "1.05rem" }}>
                   {totalQuestions}
                 </Typography>
               </Box>
