@@ -8,6 +8,7 @@ import rtlPlugin from "stylis-plugin-rtl";
 import { prefixer } from "stylis";
 import { getAppTheme } from "./theme";
 import { LanguageProvider, useLanguage } from "../context/LanguageContext";
+import { RoadmapProgressProvider } from "../context/RoadmapProgressContext";
 import { Language } from "../i18n/translations";
 
 function ThemeRegistryInner({ children }: { children: React.ReactNode }) {
@@ -39,7 +40,9 @@ export default function ThemeRegistry({
 }) {
   return (
     <LanguageProvider initialLocale={initialLocale}>
-      <ThemeRegistryInner>{children}</ThemeRegistryInner>
+      <RoadmapProgressProvider>
+        <ThemeRegistryInner>{children}</ThemeRegistryInner>
+      </RoadmapProgressProvider>
     </LanguageProvider>
   );
 }

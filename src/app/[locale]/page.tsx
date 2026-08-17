@@ -1,7 +1,7 @@
 import React from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { stackRepository, categoryRepository } from "../../repositories";
+import { stackRepository, categoryRepository, roadmapRepository } from "../../repositories";
 import { HomeView } from "../../components/home/HomeView";
 
 interface PageProps {
@@ -41,12 +41,14 @@ export default async function HomePage({ params }: PageProps) {
 
   const totalQuestions = stacksData.reduce((acc, item) => acc + item.stats.questionCount, 0);
   const totalConcepts = stacksData.reduce((acc, item) => acc + item.stats.conceptCount, 0);
+  const totalRoadmaps = roadmapRepository.getAllRoadmaps().length;
 
   return (
     <HomeView
       stacksData={stacksData}
       totalQuestions={totalQuestions}
       totalConcepts={totalConcepts}
+      totalRoadmaps={totalRoadmaps}
     />
   );
 }

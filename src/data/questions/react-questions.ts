@@ -6,6 +6,7 @@ export const reactQuestions: Question[] = [
     stackId: "react",
     categoryId: "react-fundamentals",
     levelId: "junior",
+    topicIds: ["topic-react-fiber-reconciliation"],
     questionTitle: "What is the Virtual DOM and how does React reconciliation (Diffing) work?",
     questionTitle_fa: "Virtual DOM چیست و فرآیند تطبیق (Reconciliation / Diffing) در ری‌اکت چگونه کار می‌کند؟",
     answerContent: `### Virtual DOM & Reconciliation
@@ -45,6 +46,7 @@ The **Virtual DOM (VDOM)** is an in-memory representation of real DOM elements p
     stackId: "react",
     categoryId: "react-performance",
     levelId: "mid",
+    topicIds: ["topic-react-fiber-reconciliation", "topic-react-concurrent-rendering"],
     questionTitle: "When should you use useMemo, useCallback, and React.memo?",
     questionTitle_fa: "چه زمانی باید از useMemo، useCallback و React.memo استفاده کرد؟",
     answerContent: `### Optimization Tools in React
@@ -93,6 +95,7 @@ const handleClick = useCallback(() => {
     stackId: "react",
     categoryId: "nextjs-app-router",
     levelId: "senior",
+    topicIds: ["topic-react-rsc-server-components"],
     questionTitle: "What are React Server Components (RSC) vs Client Components in Next.js App Router?",
     questionTitle_fa: "تفاوت کامپوننت‌های سروری ری‌اکت (RSC) با کامپوننت‌های کلاینت در Next.js App Router چیست؟",
     answerContent: `### React Server Components (RSC) vs. Client Components
@@ -139,6 +142,7 @@ export default async function ProductPage({ params }: { params: { id: string } }
     stackId: "react",
     categoryId: "state-management",
     levelId: "senior",
+    topicIds: ["topic-react-concurrent-rendering"],
     questionTitle: "How does React 18/19 Concurrent Rendering and useTransition improve UX?",
     questionTitle_fa: "رندرینگ همروند (Concurrent Rendering) و هوک useTransition چگونه تجربه کاربری را بهبود می‌دهند؟",
     answerContent: `### Concurrent Rendering & \`useTransition\`
@@ -174,10 +178,10 @@ function handleSearch(query: string) {
 const [isPending, startTransition] = useTransition();
 
 function handleSearch(query: string) {
-  // فوری: اینپوت بلافاصله تایپ کاربر را نشان می‌دهد
+  // Urgent: input immediately reflects typed character
   setInputValue(query);
 
-  // غیرفوری: در صورت تایپ حرف بعدی، متوقف و مجدداً اجرا می‌شود
+  // Non-urgent: can be interrupted if new characters are typed
   startTransition(() => {
     setFilteredResults(expensiveFilter(query));
   });

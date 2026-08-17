@@ -16,18 +16,22 @@ import NavigateBeforeIcon from "@mui/icons-material/NavigateBefore";
 import HomeIcon from "@mui/icons-material/Home";
 import QuizOutlinedIcon from "@mui/icons-material/QuizOutlined";
 import LightbulbOutlinedIcon from "@mui/icons-material/LightbulbOutlined";
+import AltRouteIcon from "@mui/icons-material/AltRoute";
 import TerminalIcon from "@mui/icons-material/Terminal";
 import WebIcon from "@mui/icons-material/Web";
 import IntegrationInstructionsIcon from "@mui/icons-material/IntegrationInstructions";
+import HubIcon from "@mui/icons-material/Hub";
 import {
   Stack,
   Category,
   GroupedByLevelNode,
   GroupedByCategoryNode,
   Concept,
+  Roadmap,
 } from "../../data/models";
 import { QuestionsExplorer } from "../questions/QuestionsExplorer";
 import { ConceptsExplorer } from "../concepts/ConceptsExplorer";
+import { RoadmapsList } from "../roadmaps/RoadmapsList";
 import { useLanguage } from "../../context/LanguageContext";
 
 interface StackDashboardViewProps {
@@ -36,11 +40,13 @@ interface StackDashboardViewProps {
     questionCount: number;
     conceptCount: number;
     categoryCount: number;
+    roadmapCount?: number;
   };
   categories: Category[];
   byLevelData: GroupedByLevelNode[];
   byCategoryData: GroupedByCategoryNode[];
   concepts: Concept[];
+  roadmaps: Roadmap[];
 }
 
 function getStackIcon(iconName: string) {
@@ -51,6 +57,8 @@ function getStackIcon(iconName: string) {
       return <WebIcon sx={{ fontSize: 24, color: "#38BDF8" }} />;
     case "typescript":
       return <TerminalIcon sx={{ fontSize: 24, color: "#60A5FA" }} />;
+    case "system-design":
+      return <HubIcon sx={{ fontSize: 24, color: "#F59E0B" }} />;
     default:
       return <TerminalIcon sx={{ fontSize: 24, color: "#818CF8" }} />;
   }
@@ -63,12 +71,14 @@ export const StackDashboardView: React.FC<StackDashboardViewProps> = ({
   byLevelData,
   byCategoryData,
   concepts,
+  roadmaps,
 }) => {
   const [activeTab, setActiveTab] = useState(0);
   const { language, t, getLocalized, isRtl } = useLanguage();
 
   const localizedName = getLocalized(stack.name, stack.name_fa);
   const localizedDesc = getLocalized(stack.description, stack.description_fa);
+  const roadmapCount = roadmaps.length;
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue);
@@ -210,6 +220,26 @@ export const StackDashboardView: React.FC<StackDashboardViewProps> = ({
                 {stats.conceptCount}
               </Typography>
             </Box>
+
+            {roadmapCount > 0 && (
+              <Box
+                sx={{
+                  px: 1.5,
+                  py: 0.75,
+                  borderRadius: 2,
+                  backgroundColor: "rgba(255, 255, 255, 0.03)",
+                  border: "1px solid rgba(255, 255, 255, 0.06)",
+                  textAlign: "center",
+                }}
+              >
+                <Typography variant="caption" sx={{ color: "#64748B", display: "block", fontSize: "0.68rem" }}>
+                  {t("roadmaps")}
+                </Typography>
+                <Typography sx={{ fontWeight: 700, color: "#F43F5E", fontSize: "0.95rem" }}>
+                  {roadmapCount}
+                </Typography>
+              </Box>
+            )}
           </Box>
         </Box>
 
@@ -234,6 +264,15 @@ export const StackDashboardView: React.FC<StackDashboardViewProps> = ({
               id="stack-tab-1"
               aria-controls="stack-tabpanel-1"
             />
+            {roadmapCount > 0 && (
+              <Tab
+                icon={<AltRouteIcon sx={{ fontSize: 17 }} />}
+                iconPosition="start"
+                label={t("roadmapsTab", { count: roadmapCount })}
+                id="stack-tab-2"
+                aria-controls="stack-tabpanel-2"
+              />
+            )}
           </Tabs>
         </Box>
 
@@ -252,6 +291,13 @@ export const StackDashboardView: React.FC<StackDashboardViewProps> = ({
         {activeTab === 1 && (
           <Box role="tabpanel" id="stack-tabpanel-1" aria-labelledby="stack-tab-1">
             <ConceptsExplorer concepts={concepts} stackName={localizedName} />
+          </Box>
+        )}
+
+        {/* Tab 2: Roadmaps List */}
+        {activeTab === 2 && roadmapCount > 0 && (
+          <Box role="tabpanel" id="stack-tabpanel-2" aria-labelledby="stack-tab-2">
+            <RoadmapsList roadmaps={roadmaps} stackSlug={stack.slug} />
           </Box>
         )}
       </Container>

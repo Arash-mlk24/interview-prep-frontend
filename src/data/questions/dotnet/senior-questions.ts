@@ -337,45 +337,147 @@ Commands touching multiple keys (transactions, \`MGET\`, multi-key scripts) fail
     stackId: "dotnet",
     categoryId: "csharp-advanced",
     levelId: "senior",
-    questionTitle: "What techniques do you use to reduce GC Memory Allocations in high-traffic .NET services?",
-    questionTitle_fa: "برای کاهش Memory Allocation در اپلیکیشن‌های High-traffic دات‌نت چه تکنیک‌هایی به کار می‌برید؟",
-    answerContent: `### High-Performance Memory Optimization in .NET
+    topicIds: ["topic-dotnet-concurrency-channels-memory"],
+    questionTitle: "What architectural and coding techniques do you use to reduce GC Memory Allocations in high-traffic .NET services?",
+    questionTitle_fa: "برای کاهش پایدار Memory Allocation و سربار Garbage Collector در اپلیکیشن‌های پرترافیک دات‌نت چه تکنیک‌هایی به کار می‌برید؟",
+    answerContent: `### High-Performance Memory Optimization in .NET Services
 
-1. **Use \`Span<T>\` and \`ReadOnlySpan<T>\`** for zero-allocation string slicing and parsing.
-2. **Leverage \`ArrayPool<T>.Shared\`** for byte buffers instead of allocating new byte arrays per request.
-3. **Use \`ValueTask<T>\`** for async methods that frequently complete synchronously (e.g. cache hits).
-4. **Prefer \`readonly struct\`** for small short-lived data containers.`,
-    answerContent_fa: `### تکنیک‌های کاهش مصرف حافظه در دات‌نت
+To sustain high throughput ($50,000+$ req/sec) without GC Gen 0/1/2 pause spikes, senior engineers apply a multi-layered allocation minimization strategy:
 
-استفاده از **\`Span<T>\`** برای برش رشته‌ها بدون Allocation، استفاده از **\`ArrayPool<T>\`** برای استفاده مجدد از بافرهای بایت، استفاده از **\`ValueTask<T>\`** در توابع با خروجی‌های کش‌شده و استفاده از استراکت‌های تغییرناپذیر.`,
+#### 1. Zero-Allocation String Parsing with \`ReadOnlySpan<char>\`
+Standard string operations like \`text.Split()\`, \`text.Substring()\`, and \`text.Trim()\` allocate new heap objects for every fragment.
+- **Solution:** Use \`ReadOnlySpan<char>\` with \`MemoryExtensions\` (e.g. \`text.AsSpan().Slice()\`, \`int.Parse(span)\`) which creates zero heap allocations:
+\`\`\`csharp
+// 0 Heap Allocations parsing "ORDER:104958"
+ReadOnlySpan<char> span = rawHeader.AsSpan();
+if (span.StartsWith("ORDER:"))
+{
+    int orderId = int.Parse(span.Slice(6));
+}
+\`\`\`
+
+#### 2. Reusing Heavy Byte Buffers with \`ArrayPool<T>.Shared\`
+Allocating large arrays ($>85\\text{ KB}$) places objects on the **Large Object Heap (LOH)**, leading to fragmentation and full Gen 2 GC sweeps.
+- **Solution:** Rent buffers from \`ArrayPool<byte>.Shared\` and return them in a \`finally\` block with \`clearArray: true\` if sensitive data was processed.
+
+#### 3. Optimizing Async Fast Paths with \`ValueTask<T>\`
+When a method frequently returns cached data or completes synchronously, returning \`Task<T>\` still allocates a \`Task\` heap object.
+- **Solution:** Return \`ValueTask<T>\` which stores the result directly in a stack struct when completing synchronously.
+
+#### 4. Avoiding Boxing and Closure Allocations
+- Use \`struct\` based enumerators and static lambda expressions with state overloads (e.g., \`concurrentDictionary.GetOrAdd(key, static (k, arg) => ..., factoryArgument)\`) to prevent compiler-generated closure classes on the heap.
+
+#### 5. Lock-Free Background Offloading with \`System.Threading.Channels\`
+- Offload non-critical side effects (audit logs, metrics, notifications) to a bounded \`Channel<T>\` with a \`BackgroundService\` consumer to keep the hot request path ultra-lean.`,
+    answerContent_fa: `### استراتژی‌های کاهش سربار Garbage Collector در سیستم‌های پرترافیک دات‌نت
+
+برای مدیریت ترافیک‌های سنگین (بیش از ۵۰,۰۰۰ ریکوئست در ثانیه) بدون مواجهه با مکث‌های (GC Pauses) نسل‌های Gen 1 و Gen 2، از راهکارهای چندلایه زیر استفاده می‌شود:
+
+#### ۱. پارس داده‌ها بدون آلیکیشن با \`ReadOnlySpan<char>\`:
+توابع سنتی مانند \`text.Substring\` یا \`text.Split\` برای هر بخش از رشته یک شیء جدید روی Heap می‌سازند. با استفاده از \`ReadOnlySpan<char>\` و متدهای برشی \`.Slice()\`، عملیات با اشاره‌گر مستقیم روی استک و **با صفر بایت تخصیص حافظه** انجام می‌شود.
+
+#### ۲. استفاده از استخر آرایه‌ها (\`ArrayPool<T>.Shared\`):
+ساخت آرایه‌های بزرگ بایت (بزرگتر از ۸۵ کیلوبایت) باعث ورود داده به ناحیه **Large Object Heap (LOH)** و فرگمنتیشن حافظه می‌شود. با قرض گرفتن آرایه از \`ArrayPool<byte>.Shared.Rent()\` و پس دادن آن در بلوک \`finally\`، این بافرها بارها بازیافت می‌شوند.
+
+#### ۳. استفاده از \`ValueTask<T>\` در مسیرهای سریع همگام:
+در متدهایی که در اکثر مواقع نتیجه را از کش درون حافظه (MemoryCache) برمی‌گردانند، استفاده از \`ValueTask<T>\` به جای \`Task<T>\` مانع از ساخته شدن شیء تسک روی Heap در مسیرهای Fast-Path می‌شود.
+
+#### ۴. جلوگیری از Boxing و Closure در توابع لامبدا:
+استفاده از توابع \`static\` در متدهایی مانند \`ConcurrentDictionary.GetOrAdd\` به همراه ارسال فکتوری آرگومان برای جلوگیری از ایجاد کلاس‌های Closure کامپایلر روی Heap.
+
+#### ۵. انتقال کارهای جانبی به صف‌های بدون قفل با \`System.Threading.Channels\`:
+انتقال ثبت لاگ‌ها و متریک‌ها به کانال‌های صف‌بندی‌شده Bounded برای آزادسازی سریع نخ‌های پاسخ‌دهی به کاربر.`,
   },
   {
     id: "dotnet-senior-q220",
     stackId: "dotnet",
     categoryId: "csharp-advanced",
     levelId: "senior",
+    topicIds: ["topic-dotnet-concurrency-channels-memory"],
     questionTitle: "How do you use ArrayPool, MemoryPool, and Span<T> in C# for high-performance data processing?",
-    questionTitle_fa: "نحوه استفاده از ArrayPool، MemoryPool و Span<T> برای پردازش داده‌های بزرگ در C#؟",
-    answerContent: `### Zero-Allocation Buffer Pooling & Span<T>
+    questionTitle_fa: "نحوه استفاده از ArrayPool، MemoryPool و Span<T> برای پردازش داده‌های بزرگ در C# با حداقل تخصیص حافظه چگونه است؟",
+    answerContent: `### Zero-Allocation Buffer Pooling & Memory Management in C#
+
+In high-throughput I/O pipelines (e.g. gRPC streaming, file uploads, network socket parsing), creating \`byte[]\` buffers per request quickly triggers Gen 2 GC collections.
 
 \`\`\`csharp
-// Renting buffer from ArrayPool to avoid Heap allocations
-byte[] buffer = ArrayPool<byte>.Shared.Rent(4096);
-try
+public async Task ProcessLargeStreamAsync(Stream stream, int payloadSize, CancellationToken ct)
 {
-    int bytesRead = await stream.ReadAsync(buffer, 0, 4096);
-    // Zero-allocation slice using Span
-    ReadOnlySpan<byte> slice = buffer.AsSpan(0, bytesRead);
-    ProcessPayload(slice);
-}
-finally
-{
-    ArrayPool<byte>.Shared.Return(buffer); // Must return to pool!
-}
-\`\`\``,
-    answerContent_fa: `### استفاده از ArrayPool و Span<T>
+    // 1. Rent reusable buffer from the shared ArrayPool
+    byte[] buffer = ArrayPool<byte>.Shared.Rent(payloadSize);
+    
+    try
+    {
+        int bytesRead = 0;
+        while (bytesRead < payloadSize)
+        {
+            // 2. Read asynchronously into rented buffer using Memory<T>
+            int read = await stream.ReadAsync(buffer.AsMemory(bytesRead, payloadSize - bytesRead), ct);
+            if (read == 0) break;
+            bytesRead += read;
+        }
 
-قرض گرفتن آرایه‌ها از استخر حافظه (\`ArrayPool<T>.Shared.Rent\`) برای جلوگیری از تخصیص مداوم حافظه روی Heap و بازگرداندن آن در بلوک \`finally\`، به همراه پردازش سریع تکه‌های بایت با استفاده از ساختار بدون تخصیص حافظه \`Span<T>\`.`,
+        // 3. Process payload using Span<T> slice with ZERO heap allocations
+        ReadOnlySpan<byte> validData = buffer.AsSpan(0, bytesRead);
+        ParseProtocolFrame(validData);
+    }
+    finally
+    {
+        // 4. CRITICAL: Always return the buffer to prevent pool depletion
+        // clearArray: true wipes sensitive data (tokens, PII) before reuse
+        ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
+    }
+}
+
+private void ParseProtocolFrame(ReadOnlySpan<byte> frame)
+{
+    // Direct zero-copy binary primitives reading
+    int messageType = BinaryPrimitives.ReadInt32LittleEndian(frame.Slice(0, 4));
+    long timestamp = BinaryPrimitives.ReadInt64LittleEndian(frame.Slice(4, 8));
+}
+\`\`\`
+
+#### Key Architecture Rules for ArrayPool & Span:
+1. **Rented Buffer Size Invariant:** \`ArrayPool.Rent(minSize)\` returns an array that is **at least** \`minSize\`, but often larger (rounded up to powers of 2). Always use the exact \`bytesRead\` slice (\`buffer.AsSpan(0, bytesRead)\`) rather than \`buffer.Length\`.
+2. **Guaranteed Return Lifecycle:** Always return buffers inside a \`finally\` block. Failing to return leads to pool starvation and subsequent new heap allocations.
+3. **Memory Safety:** Once returned, never touch the buffer reference again.`,
+    answerContent_fa: `### پردازش داده‌های پرترافیک با استفاده از ArrayPool، Memory و Span در سی‌شارپ
+
+در خطوط لوله ورودی/خروجی حجیم، ساخت مداوم بافرهای بایت (\`new byte[]\`) به سرعت باعث اشباع حافظه و توقف سیستم به دلیل GC می‌شود.
+
+#### الگوی استاندارد پیاده‌سازی:
+\`\`\`csharp
+public async Task ProcessLargeStreamAsync(Stream stream, int payloadSize, CancellationToken ct)
+{
+    // ۱. قرض گرفتن بافر اشتراکی از استخر حافظه
+    byte[] buffer = ArrayPool<byte>.Shared.Rent(payloadSize);
+    
+    try
+    {
+        int bytesRead = 0;
+        while (bytesRead < payloadSize)
+        {
+            // ۲. خواندن داده‌های ناهمگام با استفاده از Memory<T>
+            int read = await stream.ReadAsync(buffer.AsMemory(bytesRead, payloadSize - bytesRead), ct);
+            if (read == 0) break;
+            bytesRead += read;
+        }
+
+        // ۳. پردازش برش داده‌ها با ساختار فوق‌سریع Span<T> بدون ۱ بایت آلیکیشن جدید
+        ReadOnlySpan<byte> validData = buffer.AsSpan(0, bytesRead);
+        ParseProtocolFrame(validData);
+    }
+    finally
+    {
+        // ۴. بازگرداندن حتمی بافر به استخر در بلوک finally
+        ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
+    }
+}
+\`\`\`
+
+#### نکات حیاتی در مصاحبه:
+۱. **طول بافر:** متد \`Rent(size)\` آرایه‌ای با طول **حداقل** \`size\` (معمولاً توانی از ۲) بازمی‌گرداند. همیشه باید از تکه واقعی خوانده‌شده (\`buffer.AsSpan(0, bytesRead)\`) استفاده کرد نه \`buffer.Length\`.
+۲. **پاکسازی بایت‌ها:** با تنظیم \`clearArray: true\` در زمان بازگرداندن، داده‌های حساس امنیتی برای درخواست‌های بعدی پاک می‌شوند.`,
   },
   {
     id: "dotnet-senior-q221",
@@ -1209,17 +1311,48 @@ A **Bounded Context** defines the explicit boundary within which a specific doma
     stackId: "dotnet",
     categoryId: "architecture-ddd",
     levelId: "senior",
-    questionTitle: "When should you prefer a Modular Monolith over Microservices?",
-    questionTitle_fa: "چه زمانی ترجیح می‌دهید به جای میکروسرویس از الگوی Modular Monolith استفاده کنید؟",
-    answerContent: `### Modular Monolith vs. Microservices
+    topicIds: ["topic-dotnet-clean-arch-modular-monolith"],
+    questionTitle: "When should an enterprise architect choose a Modular Monolith over Microservices, and what are the trade-offs?",
+    questionTitle_fa: "چه زمانی یک معمار نرم‌افزار باید به جای میکروسرویس از الگوی Modular Monolith استفاده کند و تریدآف‌های آن چیست؟",
+    answerContent: `### Modular Monolith vs. Microservices Architecture Decision Guide
 
-Prefer a **Modular Monolith** when:
-- Domain boundaries are still evolving (early-stage products).
-- Team size is small ($\le 10$ engineers).
-- You want the architectural purity and encapsulation of DDD without the operational overhead, network latency, and distributed transaction complexity of microservices.`,
-    answerContent_fa: `### چه زمانی Modular Monolith بهتر از میکروسرویس است؟
+A **Modular Monolith** provides the architectural purity and domain encapsulation of Microservices without the staggering distributed systems overhead.
 
-زمانی که مرزهای بیزینس هنوز تثبیت نشده‌اند یا تیم توسعه کوچک است، الگوی Modular Monolith تمیزی معماری DDD را بدون پیچیدگی‌های سنگین شبکه و دیپلوی میکروسرویس‌ها فراهم می‌کند.`,
+\`\`\`mermaid
+flowchart TD
+    Start[Starting a New Project or Enterprise Platform] --> Check1{Are domain boundaries fully mature & stable?}
+    Check1 -- No --> ChooseMM[Choose Modular Monolith]
+    Check1 -- Yes --> Check2{Do individual features have wildly differing scale/tech requirements?}
+    Check2 -- No --> ChooseMM
+    Check2 -- Yes --> Check3{Does team size exceed 30+ autonomous engineers?}
+    Check3 -- No --> ChooseMM
+    Check3 -- Yes --> ChooseMicroservices[Extract Microservices via Strangler Fig]
+\`\`\`
+
+#### 1. Why Microservices Often Fail (The Distributed Monolith Trap):
+Jumping prematurely into microservices introduces:
+- **Network Latency & Serializing Overhead:** Replacing fast in-process memory calls ($<1\\;\\mu s$) with HTTP/gRPC network hops ($10-50\\text{ ms}$).
+- **Distributed Transaction Nightmares:** Inability to run ACID transactions across services (requiring Sagas, Outbox, 2PC, and compensating actions).
+- **Deployment & Observability Toll:** Orchestrating 20+ CI/CD pipelines, Kubernetes deployments, service meshes (Istio), distributed tracing (OpenTelemetry), and centralized logging.
+
+#### 2. The Core Advantages of a Modular Monolith:
+- **Single Deployable Unit:** Zero network overhead between modules; one simple CI/CD pipeline and deployment artifact.
+- **Strict Domain Encapsulation:** Modules own their own C# \`internal\` boundaries and database schemas (\`orders.\`, \`users.\`, \`billing.\`).
+- **In-Process Performance:** Asynchronous events dispatch via memory queues (\`MediatR\` / in-process event bus) at nanosecond speeds.
+- **Future Microservices Ready:** Because data and code boundaries are already strictly isolated, extracting a high-load module (e.g. \`PaymentModule\`) into an independent microservice takes hours instead of a painful multi-month rewrite.`,
+    answerContent_fa: `### راهنمای تصمیم‌گیری معماری: Modular Monolith در برابر Microservices
+
+الگوی **Modular Monolith** تمیزی معماری دامنه‌محور (DDD) و تفکیک ماژول‌ها را بدون تحمیل پیچیدگی‌های سنگین سیستم‌های توزیع‌شده فراهم می‌کند.
+
+#### ۱. خطرات حرکت زودهنگام به سمت میکروسرویس (Distributed Monolith):
+- **تأخیر شبکه و سریالایز داده‌ها:** تبدیل فراخوانی‌های سریع در حافظه رم (کمتر از ۱ میکروثانیه) به درخواست‌های شبکه HTTP/gRPC با تاخیر ۱۰ تا ۵۰ میلی‌ثانیه.
+- **پیچیدگی تراکنش‌های توزیع‌شده:** از دست رفتن تراکنش‌های ACID دیتابیس و اجبار به پیاده‌سازی الگوهای پیچیده Saga، Outbox و تراکنش‌های جبران‌کننده.
+- **سربار عملیاتی سنگین:** مدیریت ده‌ها پایپ‌لاین CI/CD، کلاسترهای کوبرنتیز، سرویس مش و پایشگری توزیع‌شده.
+
+#### ۲. مزایای محوری Modular Monolith:
+- **استقرار تک‌واحدی (Single Unit):** یک پایپ‌لاین ساده بیلد و دیپلوی بدون چالش‌های شبکه بین ماژول‌ها.
+- **ایزولاسیون سخت‌گیرانه داده‌ها:** هر ماژول اسکیمای دیتابیس و مدل‌های دامین اختصاصی خود را دارد.
+- **آمادگی کامل برای تبدیل به میکروسرویس:** به دلیل عدم وجود وابستگی مستقیم یا Foreign Key بین ماژول‌ها، در صورت نیاز به اسکیل مستقل در آینده، استخراج هر ماژول به یک میکروسرویس جداگانه در کمترین زمان ممکن انجام می‌شود.`,
   },
   {
     id: "dotnet-senior-q268",
@@ -1738,6 +1871,7 @@ Example: Over-engineering microservices prematurely before understanding domain 
     stackId: "dotnet",
     categoryId: "ef-core",
     levelId: "senior",
+    topicIds: ["topic-dotnet-expression-trees"],
     questionTitle: "How do LINQ Providers (IQueryable / IQueryProvider) parse Expression Trees into SQL queries, and why do translation failures occur?",
     questionTitle_fa: "موتورهای LINQ Provider (IQueryable و IQueryProvider) چگونه درخت عبارات را تجزیه و به کوئری‌های بومی SQL تبدیل می‌کنند و علت خطاهای ارزیابی سمت کلاینت چیست؟",
     answerContent: `### The LINQ Provider & Expression Translation Architecture
@@ -1779,6 +1913,7 @@ In EF Core 3.0+, if an Expression contains custom C# methods or unmapped .NET AP
     stackId: "dotnet",
     categoryId: "csharp-advanced",
     levelId: "senior",
+    topicIds: ["topic-dotnet-expression-trees"],
     questionTitle: "How do you dynamically construct and compile Expression Trees at runtime for advanced multi-tenant filtering and dynamic sorting?",
     questionTitle_fa: "چگونه می‌توان با استفاده از کلاس‌های Expression در زمان اجرا کوئری‌ها و فیلترهای کامپایل‌شده پویا برای گریدها و سیستم‌های چندمستاجری (Multi-Tenancy) ساخت؟",
     answerContent: `### Dynamic Expression Tree Generation
@@ -1826,6 +1961,7 @@ If dynamically generated expressions are executed frequently in memory via \`.Co
     stackId: "dotnet",
     categoryId: "architecture-ddd",
     levelId: "senior",
+    topicIds: ["topic-dotnet-specification-pattern", "topic-dotnet-expression-trees", "topic-dotnet-gof-patterns"],
     questionTitle: "How do you design a reusable Specification Pattern in C# using Expression Trees and parameter replacement visitors?",
     questionTitle_fa: "چگونه الگوی طراحی Specification را با استفاده از Expression Trees در معماری تمیز پیاده‌سازی کرده و عبارات منطقی (AND, OR, NOT) را با جایگزینی پارامتر ترکیب کنیم؟",
     answerContent: `### Specification Pattern with Parameter-Replacer Visitor
@@ -1875,6 +2011,7 @@ public abstract class Specification<T> {
     stackId: "dotnet",
     categoryId: "csharp-advanced",
     levelId: "senior",
+    topicIds: ["topic-dotnet-async-state-machine"],
     questionTitle: "How does the C# compiler transform async/await into an IAsyncStateMachine struct/class, and what is the role of AsyncMethodBuilder and SynchronizationContext?",
     questionTitle_fa: "کامپایلر C# چگونه async/await را به یک استراکت/کلاس IAsyncStateMachine تبدیل می‌کند و نقش AsyncMethodBuilder و SynchronizationContext چیست؟",
     answerContent: `### Deep Dive: Async/Await State Machine Mechanics
@@ -1926,6 +2063,7 @@ public void MoveNext() {
     stackId: "dotnet",
     categoryId: "csharp-advanced",
     levelId: "senior",
+    topicIds: ["topic-dotnet-span-memory"],
     questionTitle: "High-Performance I/O: How do Span<T>, ReadOnlySequence<T>, and System.IO.Pipelines (PipeReader) achieve zero-allocation network parsing?",
     questionTitle_fa: "پردازش فوق سریع ورودی/خروجی: چگونه Span<T>، ReadOnlySequence<T> و کتابخانه System.IO.Pipelines عملیات پارس بسته‌های شبکه بدون هیچ تخصیص حافظه (Zero-Allocation) را انجام می‌دهند؟",
     answerContent: `### High-Throughput I/O with System.IO.Pipelines
@@ -1967,6 +2105,7 @@ public async Task ProcessSocketMessagesAsync(PipeReader reader) {
     stackId: "dotnet",
     categoryId: "microservices",
     levelId: "senior",
+    topicIds: ["topic-dotnet-rabbitmq-advanced"],
     questionTitle: "What are RabbitMQ Quorum Queues, how do they differ from Classic Mirrored Queues, and how do they utilize the Raft consensus algorithm?",
     questionTitle_fa: "صف‌های Quorum Queues در RabbitMQ چه تفاوتی با Classic Mirrored Queues دارند و چگونه از الگوریتم اجماع Raft برای تاب‌آوری و دسترسی‌پذیری بالا استفاده می‌کنند؟",
     answerContent: `### RabbitMQ Quorum Queues vs. Classic Mirrored Queues
@@ -1996,6 +2135,7 @@ A Quorum Queue is distributed across an odd number of nodes (typically 3 or 5). 
     stackId: "dotnet",
     categoryId: "microservices",
     levelId: "senior",
+    topicIds: ["topic-dotnet-rabbitmq-advanced"],
     questionTitle: "How do you guarantee strict FIFO message ordering per entity while horizontally scaling consumers in RabbitMQ?",
     questionTitle_fa: "چگونه می‌توان ضمن اسکیل افقی مصرف‌کننده‌ها (Consumers)، ترتیب دقیق زمانی و ترتیبی (FIFO) پیام‌ها را برای هر کاربر یا حساب در RabbitMQ تضمین کرد؟",
     answerContent: `### Strict FIFO Ordering with Horizontal Consumer Scaling
@@ -2031,6 +2171,7 @@ Producer -> Consistent Hash Exchange (Routing Key = AccountId)
     stackId: "dotnet",
     categoryId: "microservices",
     levelId: "senior",
+    topicIds: ["topic-dotnet-redis-internals"],
     questionTitle: "Deep dive into Redis persistence: Compare RDB (Snapshots) and AOF (Append-Only File). What are the durability trade-offs in FinTech systems?",
     questionTitle_fa: "تحلیل عمیق ماندگاری داده در Redis: مقایسه RDB و AOF، تفاوت حالت‌های fsync و نحوه تنظیم ماندگاری در سیستم‌های حساس مالی چیست؟",
     answerContent: `### Redis Persistence: RDB vs. AOF
@@ -2070,6 +2211,7 @@ Combines an initial RDB snapshot preamble with an AOF delta log during AOF rewri
     stackId: "dotnet",
     categoryId: "microservices",
     levelId: "senior",
+    topicIds: ["topic-dotnet-redis-internals"],
     questionTitle: "Why does Redis MULTI/EXEC NOT support ACID rollbacks on runtime errors, and how does Lua Scripting provide true atomic check-and-set operations?",
     questionTitle_fa: "چرا دستورات MULTI/EXEC در Redis از Rollback در خطاهای منطقی پشتیبانی نمی‌کنند و چگونه اسکریپت‌های Lua اجرای کاملاً اتمیک و بدون Race Condition را فراهم می‌کنند؟",
     answerContent: `### Redis Transactions (MULTI/EXEC) vs. Lua Scripting Atomicity
@@ -2115,6 +2257,7 @@ var result = await db.ScriptEvaluateAsync(prepared, new { key = (RedisKey)"ratel
     stackId: "dotnet",
     categoryId: "microservices",
     levelId: "senior",
+    topicIds: ["topic-dotnet-redis-internals"],
     questionTitle: "What is Redis Streams (XADD, XREADGROUP, XACK) and how does it compare to Redis Pub/Sub, RabbitMQ, and Apache Kafka?",
     questionTitle_fa: "ساختار داده Redis Streams چیست و چه تفاوت‌هایی با Redis Pub/Sub، RabbitMQ و Apache Kafka از نظر پایداری داده، گروه مصرف‌کنندگان و کارایی دارد؟",
     answerContent: `### Redis Streams Deep Dive
@@ -2149,6 +2292,7 @@ Introduced in Redis 5.0, **Redis Streams** is an append-only, Radix-tree backed 
     stackId: "dotnet",
     categoryId: "ef-core",
     levelId: "senior",
+    topicIds: ["topic-dotnet-acid-isolation"],
     questionTitle: "Explain all Transaction Isolation Levels in relational databases and the exact concurrency anomalies they prevent (Dirty Reads, Non-Repeatable Reads, Phantom Reads, Write Skew).",
     questionTitle_fa: "سطوح مختلف ایزولاسیون تراکنش‌ها (Isolation Levels) در پایگاه‌های داده رابطه‌ای و ناهنجاری‌های همزمانی (Dirty Read، Non-Repeatable Read، Phantom Read و Write Skew) را با جزئیات تحلیل کن.",
     answerContent: `### Transaction Isolation Levels & Concurrency Anomalies
@@ -2179,6 +2323,7 @@ Introduced in Redis 5.0, **Redis Streams** is an append-only, Radix-tree backed 
     stackId: "dotnet",
     categoryId: "ef-core",
     levelId: "senior",
+    topicIds: ["topic-dotnet-db-indexes"],
     questionTitle: "Explain the internal architecture of Database Indexes (B+ Tree structure, Clustered vs Non-Clustered, Covering Indexes with INCLUDE, and Index Fragmentation).",
     questionTitle_fa: "معماری داخلی ایندکس‌های دیتابیس (ساختار درخت B+ Tree، تفاوت ایندکس خوشه‌ای و غیرخوشه‌ای، ایندکس پوششی با INCLUDE و پدیده چندپارگی Fragmentation) چیست؟",
     answerContent: `### Database Index Internals: The B+ Tree
@@ -2217,6 +2362,7 @@ Relational databases (SQL Server, PostgreSQL, MySQL InnoDB) organize table index
     stackId: "dotnet",
     categoryId: "ef-core",
     levelId: "senior",
+    topicIds: ["topic-dotnet-db-concurrency-locks"],
     questionTitle: "What causes Database Deadlocks in SQL Server / PostgreSQL, how do you analyze Deadlock Graphs, and what architectural strategies eliminate them?",
     questionTitle_fa: "عوامل اصلی ایجاد بن‌بست (Deadlock) در دیتابیس چیست، چگونه Deadlock Graph را تحلیل کنیم و چه راهکارهای معماری برای پیشگیری قطعی از آن وجود دارد؟",
     answerContent: `### Database Deadlocks: Root Causes & Resolution
@@ -2258,6 +2404,7 @@ Enable \`system_health\` session or capture the XML Deadlock Graph (\`xml_deadlo
     stackId: "dotnet",
     categoryId: "system-design-fintech",
     levelId: "senior",
+    topicIds: ["topic-dotnet-db-sharding-replicas"],
     questionTitle: "How do you scale the relational database tier using Table Partitioning, Horizontal Sharding, and Clustered Read Replicas?",
     questionTitle_fa: "چگونه لایه دیتابیس رابطه‌ای را با استفاده از پارتیشن‌بندی جداول (Table Partitioning)، شاردینگ افقی (Horizontal Sharding) و کلاسترهای Read Replica تا مقیاس ترابایتی توسعه می‌دهید؟",
     answerContent: `### Scaling the Database Tier to Terabytes
@@ -2303,6 +2450,7 @@ Enable \`system_health\` session or capture the XML Deadlock Graph (\`xml_deadlo
     stackId: "dotnet",
     categoryId: "architecture-ddd",
     levelId: "senior",
+    topicIds: ["topic-dotnet-event-sourcing-cqrs"],
     questionTitle: "Explain the Event Sourcing Pattern and Event Store architecture vs traditional CRUD with Snapshots and Projections.",
     questionTitle_fa: "الگوی Event Sourcing و معماری پایگاه داده رویدادمحور (Event Store) چیست و تفاوت آن با دیتابیس‌های سنتی CRUD در مدیریت وضعیت، اسنپ‌شات‌ها و Read Modelها چیست؟",
     answerContent: `### Event Sourcing Pattern & Architecture
@@ -2340,6 +2488,7 @@ Current State calculated by replaying stream: $1000 - $200 - $15 = $785
     stackId: "dotnet",
     categoryId: "architecture-ddd",
     levelId: "senior",
+    topicIds: ["topic-dotnet-gof-patterns"],
     questionTitle: "Compare the Structural Design Patterns: Adapter, Facade, Proxy, and Decorator with concrete .NET enterprise architectural scenarios.",
     questionTitle_fa: "مقایسه جامع الگوهای ساختاری: Adapter، Facade، Proxy و Decorator با مثال‌های عملی در معماری سازمانی دات‌نت.",
     answerContent: `### Structural Design Patterns Comparison
@@ -2371,6 +2520,7 @@ Current State calculated by replaying stream: $1000 - $200 - $15 = $785
     stackId: "dotnet",
     categoryId: "csharp-advanced",
     levelId: "senior",
+    topicIds: ["topic-dotnet-span-memory", "topic-dotnet-gof-patterns"],
     questionTitle: "How are the Flyweight Pattern and Object Pooling implemented in high-performance .NET applications (ArrayPool<T>, ObjectPool<T>) to eliminate GC Gen 0/Gen 2 pressure?",
     questionTitle_fa: "الگوی طراحی Flyweight و مکانیزم‌های Object Pooling در دات‌نت پرسرعت (کلاس‌های ArrayPool و ObjectPool) چگونه پیاده‌سازی شده و فشار روی Garbage Collector را به صفر می‌رسانند؟",
     answerContent: `### Flyweight Pattern & Memory Pooling in High-Throughput C#
@@ -2416,6 +2566,7 @@ try {
     stackId: "dotnet",
     categoryId: "system-design",
     levelId: "senior",
+    topicIds: ["topic-dotnet-cap-pacelc"],
     questionTitle: "Explain the CAP Theorem and the PACELC Theorem in modern distributed data stores (SQL vs NoSQL vs Distributed SQL).",
     questionTitle_fa: "قضیه CAP و قضیه جامع‌تر PACELC را در پایگاه‌های داده توزیع‌شده مدرن (SQL، NoSQL و Distributed SQL مانند CockroachDB/Spanner) تحلیل کن.",
     answerContent: `### CAP Theorem vs. PACELC Theorem
@@ -2449,5 +2600,669 @@ $$\\textbf{(E)lse (Normal State):} \\; \\text{Trade-off between } \\textbf{(L)at
 - **در حالت عادی (Else):** انتخاب بین **L**atency پایین یا **C**onsistency بالا
 - سیستم‌هایی مانند DynamoDB از نوع **PA/EL** (اولویت سرعت و آپ‌تایم) و سیستم‌های مالی مانند Spanner و CockroachDB از نوع **PC/EC** (اولویت قطعی سازگاری داده‌ها) هستند.`,
   },
+  {
+    id: "dotnet-senior-channels-q1",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "senior",
+    topicIds: ["topic-dotnet-concurrency-channels-memory"],
+    questionTitle: "How does System.Threading.Channels achieve high-throughput producer-consumer pipelines, and what are the trade-offs between Bounded and Unbounded channels?",
+    questionTitle_fa: "ساختار System.Threading.Channels چگونه در سناریوهای Producer-Consumer توان پردازشی بالا ایجاد می‌کند و تفاوت‌های کانال‌های Bounded و Unbounded چیست؟",
+    answerContent: `### High-Throughput Producer-Consumer Architecture with System.Threading.Channels
+
+\`System.Threading.Channels\` is an asynchronous, lock-free, zero-allocation producer-consumer queue designed for high-scale pipeline architectures.
+
+\`\`\`mermaid
+flowchart LR
+    P1[Producers: Web Controllers / Sockets] -->|WriteAsync non-blocking| CW[ChannelWriter]
+    subgraph ChannelBuffer["Bounded Channel Buffer (e.g. 10,000 slots)"]
+        CW --> RingBuffer["[Ring Buffer / Lock-Free Concurrent Nodes]"]
+        RingBuffer --> CR[ChannelReader]
+    end
+    CR -->|ReadAllAsync stream| Consumers[Consumers: BackgroundService Worker]
+\`\`\`
+
+#### 1. Why Channels Outperform Traditional Primitives:
+- **Vs. \`BlockingCollection<T>\`:** \`BlockingCollection\` blocks the calling OS thread synchronously on \`Take()\`. Under heavy loads, this rapidly starves the .NET ThreadPool. Channels are **async-first**: \`await reader.ReadAsync()\` registers an asynchronous continuation without holding any OS thread.
+- **Vs. \`ConcurrentQueue<T>\`:** \`ConcurrentQueue\` is thread-safe but lacks asynchronous signaling (requiring inefficient busy-spinning or polling timers) and has zero backpressure support.
+- **Separation of Concerns:** It cleanly exposes \`ChannelWriter<T>\` (injected into producers) and \`ChannelReader<T>\` (injected into consumers).
+
+#### 2. Bounded vs. Unbounded Channels:
+
+| Dimension | Unbounded Channel | Bounded Channel |
+| :--- | :--- | :--- |
+| **Creation** | \`Channel.CreateUnbounded<T>()\` | \`Channel.CreateBounded<T>(capacity)\` |
+| **Memory Risk** | ⚠️ High (\`OutOfMemoryException\` under traffic spikes) | 🛡️ Fixed memory footprint |
+| **Backpressure** | ❌ None | ✅ Full control via \`BoundedChannelFullMode\` |
+| **Use Case** | Low-traffic internal events with guaranteed fast consumers | Production-grade high-throughput ingestion pipelines |
+
+#### 3. Backpressure Handling in Bounded Channels:
+When producers write faster than consumers can drain, \`BoundedChannelFullMode\` determines behavior:
+- **\`Wait\`:** The producer's \`await writer.WriteAsync(item)\` asynchronously pauses without consuming CPU or thread resources until the consumer frees buffer space.
+- **\`DropOldest\`:** Discards the oldest queued item to accept the latest (ideal for real-time market tickers or GPS tracking).
+- **\`DropNewest\` / \`DropWrite\`:** Rejects new incoming payloads under load.`,
+    answerContent_fa: `### معماری پردازش با توان بالا با استفاده از System.Threading.Channels
+
+کتابخانه \`System.Threading.Channels\` یک ساختار صفی کاملاً ناهمگام، بدون قفل (Lock-Free) و با حداقل مصرف حافظه برای سناریوهای تولیدکننده-مصرف‌کننده (Producer-Consumer) در دات‌نت مدرن است.
+
+#### ۱. دلایل برتری Channels بر ساختارهای سنتی:
+- **در مقایسه با \`BlockingCollection<T>\`:** متد \`Take()\` در کلاس BlockingCollection نخ سیستم‌عامل را به صورت سنکرون قفل می‌کند که در ترافیک‌های بالا به سرعت باعث بحران ThreadPool Starvation می‌شود. در مقابل، Channels کاملاً Async-First بوده و با متد \`await ReadAsync()\` نخ را فوراً به ThreadPool بازمی‌گرداند.
+- **در مقایسه با \`ConcurrentQueue<T>\`:** صف‌های همروند قابلیت ارسال سیگنال ناهمگام به مصرف‌کننده را ندارند و هیچ امکانی برای کنترل فشار ترافیک (Backpressure) فراهم نمی‌کنند.
+- **تفکیک مسئولیت:** جداسازی کامل \`ChannelWriter<T>\` (جهت تزریق به کنترلرها) از \`ChannelReader<T>\` (جهت تزریق به ورکر سرویس‌ها).
+
+#### ۲. مقایسه کانال‌های Bounded و Unbounded:
+- **کانال‌های نامحدود (Unbounded):** تا زمان اتمام حافظه رم به رشد خود ادامه می‌دهند و در ترافیک‌های جهشی خطر پرتاب خطای \`OutOfMemoryException\` را به همراه دارند.
+- **کانال‌های محدود (Bounded):** ظرفیت ثابتی دارند و با اعمال فشار معکوس (Backpressure) از اشباع رم جلوگیری می‌کنند.
+
+#### ۳. استراتژی‌های Backpressure:
+- **حالت \`Wait\`:** توقف ناهمگام تولیدکننده تا زمان خالی شدن ظرفیت توسط مصرف‌کننده (بدون مصرف CPU یا اشغال نخ).
+- **حالت \`DropOldest\`:** حذف قدیمی‌ترین داده برای ثبت جدیدترین رکورد (مناسب برای داده‌های IoT و قیمت‌های لحظه‌ای بازار).`,
+  },
+  {
+    id: "dotnet-senior-channels-q2",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "senior",
+    topicIds: ["topic-dotnet-concurrency-channels-memory"],
+    questionTitle: "What is ThreadPool Starvation in .NET, what causes it, how does the Hill-Climbing algorithm behave under starvation, and how do you diagnose and resolve it?",
+    questionTitle_fa: "پدیده ThreadPool Starvation در دات‌نت چیست، چه عواملی باعث آن می‌شوند، الگوریتم Hill-Climbing چگونه با آن برخورد می‌کند و راهکار شناسایی و رفع آن چیست؟",
+    answerContent: `### ThreadPool Starvation & The Hill-Climbing Algorithm in .NET
+
+**ThreadPool Starvation** is a critical state where all available worker threads in the .NET ThreadPool are synchronously blocked, leaving zero threads to process incoming requests, timer callbacks, or asynchronous I/O completion continuations.
+
+\`\`\`
+[Sync-Over-Async Trap]
+Thread 1: var data = GetReportAsync().Result; // Thread 1 BLOCKED waiting on DB I/O
+Thread 2: var user = FetchUserAsync().Wait();  // Thread 2 BLOCKED waiting on HTTP
+...
+Thread N: All N worker threads in the pool are synchronously stalled!
+
+[Kernel Socket / DB Driver returns result]
+-> Runtime needs a ThreadPool thread to execute continuation!
+-> NO THREADS AVAILABLE IN POOL!
+-> System freezes while CPU drops to ~5%!
+\`\`\`
+
+#### 1. Why Starvation Kills Latency (The 500ms Injection Penalty):
+The .NET ThreadPool uses the **Hill-Climbing Algorithm** to dynamically adjust thread counts based on measured throughput and CPU core saturation.
+- When threads are actively progressing, the pool adds threads smoothly.
+- **When Starvation Occurs:** Because the blocked threads make zero progress, the Hill-Climbing algorithm detects no throughput gain from additional threads. To prevent context-switch thrashing, it throttles new thread injection to **~1 new thread every 500 milliseconds**.
+- If 50 threads are blocked, resolving the starvation takes $50 \\times 500\\text{ms} = 25\\text{ seconds}$, causing massive HTTP 504 timeouts!
+
+#### 2. Root Causes of ThreadPool Starvation:
+1. **Sync-Over-Async:** Calling \`.Result\`, \`.Wait()\`, \`.GetAwaiter().GetResult()\`, or \`Task.WaitAll()\` on incomplete Tasks.
+2. **Blocking Synchronous I/O in Async Pipelines:** Calling \`Thread.Sleep()\`, synchronous \`File.ReadAllText()\`, or synchronous ADO.NET calls on ThreadPool threads.
+3. **Improper Task.Run for Long-Running Loops:** Running indefinite \`while(true)\` background loops via \`Task.Run()\` without \`TaskCreationOptions.LongRunning\`.
+
+#### 3. Production Diagnostics:
+\`\`\`bash
+# Real-time CLR ThreadPool metrics
+dotnet-counters monitor --process-id <PID> --counters System.Runtime
+\`\`\`
+- **Symptoms:** \`ThreadPool Worker Thread Count\` climbs continuously (e.g. 30 -> 100 -> 250), \`ThreadPool Queue Length\` spikes into thousands, while \`CPU Usage\` remains paradoxically low ($5-15\\%$).
+
+#### 4. Resolution & Best Practices:
+- **100% Async All the Way Down:** Ensure every method from ASP.NET Core Action to EF Core / HTTP Client uses \`async/await\`.
+- **Use Dedicated Threads for Heavy Loops:** Use \`Task.Factory.StartNew(..., TaskCreationOptions.LongRunning)\` or \`BackgroundService\` with \`Channel<T>\`.
+- **Tune MinThreads proactively if third-party synchronous dependencies exist:** \`ThreadPool.SetMinThreads(workerThreads, completionPortThreads)\`.`,
+    answerContent_fa: `### پدیده قفل‌شدگی و گرسنگی نخ‌ها (ThreadPool Starvation) در دات‌نت
+
+**ThreadPool Starvation** شرایط بحرانی است که در آن تمام نخ‌های فعال موجود در ThreadPool به صورت همگام (Synchronous) قفل شده و معطل مانده‌اند، به طوری که هیچ نخی برای پردازش ریکوئست‌های جدید یا پاسخ به فراخوانی‌های I/O ناهمگام در صف باقی نمی‌ماند.
+
+#### ۱. نحوه رفتار الگوریتم Hill-Climbing و جریمه ۵۰۰ میلی‌ثانیه‌ای:
+الگوریتم **Hill-Climbing** در دات‌نت وظیفه تنظیم پویا و هوشمند تعداد نخ‌های ThreadPool را بر اساس توان عملیاتی (Throughput) برنامه و میزان درگیری CPU بر عهده دارد.
+- وقتی نخ‌ها مسدود می‌شوند و هیچ کاری پیش نمی‌رود، الگوریتم فرض می‌کند اضافه کردن سریع نخ‌ها تنها باعث هدررفت CPU به دلیل جابجایی کانتکست (Context Switch) می‌شود.
+- در نتیجه، سرعت تزریق نخ‌های جدید به شدت کاهش یافته و **تنها هر ۵۰۰ میلی‌ثانیه ۱ نخ جدید به استخر اضافه می‌شود**.
+- اگر ۵۰ نخ مسدود شده باشند، بازگشت سیستم به حالت عادی بیش از ۲۵ ثانیه طول کشیده و سرور عملاً از دسترس خارج می‌شود (تایم‌اوت ۵۰۴).
+
+#### ۲. دلایل اصلی بروز Starvation:
+۱. **مسدودسازی ناهمگام با الگوهای غلط (Sync-over-Async):** فراخوانی مستقیم \`.Result\`، \`.Wait()\` یا \`.GetAwaiter().GetResult()\` روی Taskها.
+۲. **عملیات I/O سنکرون درون کدهای سرور:** استفاده از \`Thread.Sleep()\`، توابع همگام خواندن دیسک یا کوئری‌های بلاکینگ دیتابیس.
+۳. **اجرای حلقه‌های طولانی با Task.Run:** مصرف دائمی نخ‌های ThreadPool برای جاب‌های پس‌زمینه بدون استفاده از فلگ \`LongRunning\`.
+
+#### ۳. ابزار مانیتورینگ در پروداکشن:
+با دستور \`dotnet-counters monitor --process-id <PID> --counters System.Runtime\` شاخص‌های \`ThreadPool Worker Thread Count\` و \`ThreadPool Queue Length\` را بررسی کنید. در زمان Starvation، طول صف تسک‌ها به چند هزار می‌رسد در حالی که مصرف CPU به دلیل قفل بودن نخ‌ها بسیار پایین است.`,
+  },
+  {
+    id: "dotnet-senior-channels-q3",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "senior",
+    topicIds: ["topic-dotnet-concurrency-channels-memory"],
+    questionTitle: "What is the exact internal memory and runtime difference between Task<T> and ValueTask<T>, and what critical anti-patterns must be avoided when consuming ValueTask?",
+    questionTitle_fa: "تفاوت دقیق ساختاری و مدیریت حافظه بین Task<T> و ValueTask<T> در دات‌نت چیست و چه ضدالگوهای مرگباری در استفاده از ValueTask وجود دارد؟",
+    answerContent: `### Task<T> vs. ValueTask<T>: Internal Mechanics & Consumption Rules
+
+\`Task<T>\` and \`ValueTask<T>\` serve fundamentally different allocation profiles in modern .NET high-performance architectures.
+
+\`\`\`mermaid
+flowchart TD
+    subgraph TaskType["Task&lt;T&gt; (Reference Type)"]
+        T1["Allocated on Managed Heap (~64-128 bytes)"]
+        T2["Requires GC Tracking &amp; Gen 0 Collections"]
+        T3["Safe for multiple awaits, Task.WhenAll, caching"]
+    end
+
+    subgraph ValueTaskType["ValueTask&lt;T&gt; (Value Type / Struct)"]
+        V1["Allocated on Thread Stack (Zero Heap Allocations on Fast Path)"]
+        V2["Wraps either 'TResult' OR 'Task&lt;T&gt;' OR 'IValueTaskSource&lt;T&gt;'"]
+        V3["Reusable pooled backing sources (Zero-alloc state machines)"]
+    end
+\`\`\`
+
+#### 1. Internal Memory Representation:
+- **\`Task<T>\`:** A managed class instance on the Heap. Allocates memory even when the operation finishes synchronously (unless using pre-cached tasks like \`Task.FromResult\`).
+- **\`ValueTask<T>\`:** A 2-field discriminated union \`struct\`:
+  \`\`\`csharp
+  public readonly struct ValueTask<TResult>
+  {
+      private readonly object? _obj;      // Null if completed synchronously, or Task<T> / IValueTaskSource<T>
+      private readonly TResult _result;   // Direct result value if completed synchronously
+  }
+  \`\`\`
+  When a method completes synchronously, \`_obj\` is \`null\` and \`_result\` holds the data directly on the stack—**generating zero GC heap allocations**.
+
+#### 2. When to Use ValueTask<T>:
+Use \`ValueTask<T>\` **only when $>90\\%$ of invocations complete synchronously**.
+- **Ideal Example:** In-memory caching layer (\`IMemoryCache.TryGetValue\`).
+- **Counter-Example:** Long-running database or external HTTP API calls that are always asynchronous. In purely asynchronous paths, \`ValueTask<T>\` is slightly larger (struct copy overhead) and provides zero allocation advantage over \`Task<T>\`.
+
+#### 3. Fatal Anti-Patterns with ValueTask (The 3 Deadly Sins):
+1. **Double Awaiting a \`ValueTask\`:**
+   \`\`\`csharp
+   // ❌ FATAL BUG: If backed by IValueTaskSource, the underlying object 
+   // is returned to an internal pool upon the first await!
+   var vt = service.GetCachedItemAsync();
+   var res1 = await vt; 
+   var res2 = await vt; // Memory corruption or InvalidOperationException!
+   \`\`\`
+2. **Concurrent Awaits with \`Task.WhenAll\`:**
+   \`\`\`csharp
+   // ❌ BAD: ValueTask does not support concurrent multi-consumer awaits
+   await Task.WhenAll(vt1.AsTask(), vt2.AsTask()); // Must convert via .AsTask()!
+   \`\`\`
+3. **Storing a \`ValueTask\` in a class field or long-lived collection:**
+   \`ValueTask\` is a transient stack struct and must be consumed immediately.`,
+    answerContent_fa: `### کالبدشکافی تفاوت ساختاری Task<T> و ValueTask<T> در دات‌نت
+
+کلاس \`Task<T>\` و استراکت \`ValueTask<T>\` دو رویکرد کاملاً متفاوت برای مدیریت تخصیص حافظه در برنامه‌نویسی ناهمگام هستند:
+
+#### ۱. تفاوت ساختار داخلی در حافظه:
+- **نوع \`Task<T>\`:** یک Reference Type روی Heap است. ساخت هر تسک جدید حدود ۶۴ تا ۱۲۸ بایت حافظه اشغال می‌کند که در حلقه‌های سنگین باعث فشار شدید به Garbage Collector در نسل Gen 0 می‌شود.
+- **نوع \`ValueTask<T>\`:** یک استراکت (Value Type) است که شامل دو فیلد \`_obj\` (اشاره‌گر به تسک یا اینترفیس \`IValueTaskSource\`) و فیلد مستقیم \`_result\` است. اگر عملیات به صورت همگام کامل شود، مقدار نتیجه مستقیماً روی استک قرار گرفته و **صفر بایت حافظه Heap اشغال می‌شود**.
+
+#### ۲. موارد کاربرد بهینه:
+تنها در صورتی از \`ValueTask<T>\` استفاده کنید که متد در بیش از **۹۰٪ مواقع به صورت همگام** (مانند خواندن از کش محلی در رم) خروجی را برمی‌گرداند. در متدهایی که همیشه نیاز به I/O شبکه یا دیتابیس دارند، استفاده از Task معمولی ترجیح دارد چون کپی کردن استراکت بزرگتر هزینه اضافی دارد.
+
+#### ۳. ضدالگوهای خطرناک در مصرف ValueTask:
+۱. **چندین بار Await کردن یک ValueTask:** اگر این استراکت بر پایه \`IValueTaskSource\` استخری پیاده شده باشد، پس از اولین Await شیء مربوطه بازیافت شده و Await دوم منجر به خطای فساد حافظه می‌شود.
+۲. **استفاده مستقیم در Task.WhenAll:** برای اجرای موازی باید ابتدا با متد \`.AsTask()\` آن را به تسک معمولی تبدیل کرد.
+۳. **نگهداری در فیلدهای کلاس:** ساختار \`ValueTask\` باید بلافاصله مصرف شود و نباید به عنوان وضعیت در اشیای ماندگار ذخیره گردد.`,
+  },
+  {
+    id: "dotnet-senior-channels-q4",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "senior",
+    topicIds: ["topic-dotnet-concurrency-channels-memory"],
+    questionTitle: "How do SingleWriter and SingleReader channel options optimize concurrency under the hood, and how does Backpressure work with BoundedChannelFullMode?",
+    questionTitle_fa: "تنظیمات SingleWriter و SingleReader در کانال‌های سی‌شارپ چگونه در سطح سخت‌افزار بهینه‌سازی انجام می‌دهند و مکانیزم Backpressure با BoundedChannelFullMode چگونه کار می‌کند؟",
+    answerContent: `### Hardware-Level Concurrency Optimizations in System.Threading.Channels
+
+When constructing a channel using \`BoundedChannelOptions\`, configuring \`SingleWriter\` and \`SingleReader\` drastically affects the internal lock-free algorithms and CPU cache line behavior.
+
+\`\`\`csharp
+var options = new BoundedChannelOptions(capacity: 5_000)
+{
+    SingleWriter = false,                  // Multi-producer (Concurrent HTTP controllers)
+    SingleReader = true,                   // Single-consumer (Dedicated BackgroundService)
+    FullMode = BoundedChannelFullMode.Wait // Non-blocking backpressure
+};
+var channel = Channel.CreateBounded<EventMessage>(options);
+\`\`\`
+
+#### 1. Under the Hood: \`SingleReader = true\` Optimization
+- **Without SingleReader (Multi-Reader):** Multiple consuming threads must compete for the head pointer of the queue. The runtime must use **Interlocked CAS (Compare-And-Swap) loops** and volatile memory barriers. Under heavy multi-core contention, CPU cache lines bounce between processor cores (False Sharing / Cache Coherence traffic), degrading throughput.
+- **With \`SingleReader = true\`:** The runtime activates a specialized single-consumer queue. Because only one thread advances the read index, **all CAS synchronization on the reader pointer is completely eliminated**, achieving up to **$2.5\\times$ higher message throughput**.
+
+#### 2. Under the Hood: \`SingleWriter = true\` Optimization
+- Eliminates atomic CAS operations when advancing the queue's tail pointer, enabling linear instruction execution on the producer core.
+
+#### 3. How Backpressure Operates with \`BoundedChannelFullMode\`:
+Backpressure is the ability of a downstream system (consumer) to regulate the rate of data pushed by an upstream system (producer) to prevent memory exhaustion.
+
+\`\`\`mermaid
+flowchart TD
+    Producer[Producer: HTTP Webhook Request] -->|1. WriteAsync| Queue{Channel Buffer Full?}
+    Queue -- Yes: BoundedChannelFullMode.Wait --> Suspend[2. Writer Async Suspended via ValueTask]
+    Queue -- No: Space Available --> Write[3. Enqueued Instantly]
+    Consumer[Consumer Worker] -->|4. Reads Batch & Frees Space| Queue
+    Queue -.->|5. Signals Suspended Writer to Resume| Suspend
+\`\`\`
+
+- **The Non-Blocking Wait Mechanism:** When capacity is reached, \`WriteAsync\` returns an incomplete \`ValueTask\` registered against an internal node awaiter. The producer's thread is released back to the ThreadPool. When the consumer calls \`ReadAsync\`, it atomically frees a slot and triggers the continuation of the waiting writer.`,
+    answerContent_fa: `### بهینه‌سازی‌های سخت‌افزاری و مکانیزم Backpressure در کانال‌های دات‌نت
+
+تنظیمات \`SingleWriter\` و \`SingleReader\` در زمان ایجاد کانال، الگوریتم‌های مدیریت همروندی در سطح ثبات‌ها و کش CPU را دگرگون می‌کنند:
+
+#### ۱. سازوکار بهینه‌سازی \`SingleReader = true\`:
+- **در حالت چند مصرف‌کننده (Multi-Reader):** چندین نخ به صورت همزمان برای خواندن اشاره‌گر ابتدای صف رقابت می‌کنند. ران‌تایم مجبور است از عملیات اتمیک CAS (Compare-And-Swap) و Memory Barrier استفاده کند که باعث ایجاد ترافیک سنگین همگام‌سازی بین هسته‌های پردازنده (Cache Line Bouncing) می‌شود.
+- **در حالت تک مصرف‌کننده (\`SingleReader = true\`):** چون تنها یک نخ اشاره‌گر خواندن را جلو می‌برد، تمام قفل‌ها و عملیات رقابتی اتمیک حذف شده و سرعت خواندن تا **۲.۵ برابر** افزایش می‌یابد.
+
+#### ۲. سازوکار \`SingleWriter = true\`:
+- حذف کامل عملیات همگام‌سازی اتمیک در زمان اضافه کردن آیتم‌ها به انتهای بافر صف.
+
+#### ۳. مدیریت فشار ترافیک (Backpressure) با \`BoundedChannelFullMode.Wait\`:
+وقتی ظرفیت بافر پر می‌شود:
+- متد \`await WriteAsync()\` بدون مسدودسازی فیزیکی نخ سیستم‌عامل، اجرای تسک تولیدکننده را معلق (Suspend) کرده و نخ را به ThreadPool بازمی‌گرداند.
+- به محض اینکه مصرف‌کننده داده‌ای را پردازش کند، فضای خالی ایجاد شده سیگنال ادامه‌ کار را به تولیدکننده ارسال می‌کند تا جریان داده با سرعت متناسب با توان پردازشی مصرف‌کننده هدایت شود.`,
+  },
+  {
+    id: "dotnet-senior-channels-q5",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "senior",
+    topicIds: ["topic-dotnet-concurrency-channels-memory"],
+    questionTitle: "What are ref struct, Span<T>, and Memory<T>, why is Span<T> forbidden across await points in async state machines, and how do you achieve zero-copy I/O?",
+    questionTitle_fa: "انواع ref struct، Span<T> و Memory<T> چه تفاوت‌هایی دارند، چرا استفاده از Span در طول دستورات await ممنوع است و چگونه I/O با صفر تخصیص حافظه پیاده‌سازی می‌شود؟",
+    answerContent: `### Memory Architecture: ref struct, Span<T>, and Memory<T> in C#
+
+In modern C#, \`Span<T>\` and \`Memory<T>\` represent contiguous regions of arbitrary memory (Managed Heap arrays, Stack-allocated buffers via \`stackalloc\`, or Native unmanaged pointers) with type safety and bounds checking.
+
+\`\`\`mermaid
+flowchart TD
+    subgraph SpanStruct["Span&lt;T&gt; (ref struct)"]
+        S1["Pointer: ref byte _pointer"]
+        S2["Length: int _length"]
+        S3["Location: STRICTLY on Thread Stack"]
+        S4["Usage: Synchronous zero-copy slicing"]
+    end
+
+    subgraph MemoryStruct["Memory&lt;T&gt; (Standard struct)"]
+        M1["Object: object? _object (Array/String/Owner)"]
+        M2["Index &amp; Length: int _index, int _length"]
+        M3["Location: Stack OR Heap (Allowed in Fields/Async)"]
+        M4["Usage: Asynchronous buffer across await boundaries"]
+    end
+\`\`\`
+
+#### 1. Why \`Span<T>\` is a \`ref struct\`:
+\`Span<T>\` is defined as \`readonly ref struct Span<T>\`. A \`ref struct\` has absolute memory safety guarantees enforced by the C# compiler:
+- It **must always live on the Thread Stack**.
+- It can **never be placed on the Managed Heap** (cannot be a field of a normal class, cannot be boxed, cannot be an element of an array \`Span<T>[]\`, cannot implement interfaces).
+
+#### 2. Why \`Span<T>\` is Forbidden Across \`await\` Points:
+When the Roslyn compiler compiles an \`async\` method, it transforms the method into an **asynchronous state machine** (\`IAsyncStateMachine\`).
+- When execution hits an \`await\` that does not complete synchronously, the state machine instance is boxed/stored on the **Managed Heap** to preserve local variables until the asynchronous I/O completes.
+- Because a \`Span<T>\` cannot legally reside on the Managed Heap, holding a \`Span<T>\` across an \`await\` generates a compile-time error (\`CS4007: An expression of type 'Span<T>' cannot be used in an async method across await boundaries\`).
+
+#### 3. The Architecture Pattern for Zero-Copy Async I/O:
+To achieve zero-copy streaming across asynchronous network/storage boundaries:
+1. Use **\`Memory<T>\` / \`ReadOnlyMemory<T>\`** across \`await\` points.
+2. Inside synchronous calculation blocks, convert \`memory.Span\` for maximum slicing speed.
+
+\`\`\`csharp
+public async Task ProcessSocketStreamAsync(Stream socketStream, int expectedBytes)
+{
+    // 1. Rent buffer to avoid LOH fragmentation
+    byte[] rawBuffer = ArrayPool<byte>.Shared.Rent(expectedBytes);
+
+    try
+    {
+        // 2. Read asynchronously using Memory<T> (safe across await)
+        int bytesRead = await socketStream.ReadAsync(rawBuffer.AsMemory(0, expectedBytes));
+
+        // 3. Process synchronously with Span<T> (zero heap allocations)
+        ReadOnlySpan<byte> dataSpan = rawBuffer.AsSpan(0, bytesRead);
+        ParseHeaderAndPayload(dataSpan);
+    }
+    finally
+    {
+        // 4. Return to pool
+        ArrayPool<byte>.Shared.Return(rawBuffer);
+    }
+}
+
+private void ParseHeaderAndPayload(ReadOnlySpan<byte> data)
+{
+    ReadOnlySpan<byte> header = data.Slice(0, 16);
+    ReadOnlySpan<byte> body = data.Slice(16);
+    // Direct zero-copy parsing
+}
+\`\`\``,
+    answerContent_fa: `### معماری مدیریت حافظه: انواع ref struct، Span و Memory در دات‌نت
+
+در زبان C#، ساختارهای \`Span<T>\` و \`Memory<T>\` برای دسترسی یکپارچه و امن به بخش‌های پیوسته حافظه (آرایه‌های Managed Heap، بافرهای سریع روی استک با \`stackalloc\` و بافرهای حافظه Unmanaged) بدون کپی داده‌ها استفاده می‌شوند.
+
+#### ۱. مفهوم \`ref struct\` در \`Span<T>\`:
+ساختار \`Span<T>\` به صورت \`ref struct\` تعریف شده است و قوانین سفت و سختی دارد:
+- این نوع فقط و فقط مجاز است روی حافظه **Thread Stack** قرار بگیرد.
+- هرگز اجازه ورود به **Managed Heap** را ندارد (نمی‌تواند فیلد یک کلاس معمولی باشد، نمی‌تواند Box شود و نمی‌تواند عضوی از یک آرایه شیء‌گرا باشد).
+
+#### ۲. چرا استفاده از \`Span<T>\` در طول دستورات \`await\` ممنوع است؟
+کامپایلر سی‌شارپ متدهای ناهمگام را به یک کلاس/استراکت State Machine تبدیل می‌کند. هنگامی که اجرای کد به یک دستور \`await\` معلق می‌رسد، وضعیت متد روی Managed Heap ذخیره می‌شود تا پس از اتمام I/O بازیابی گردد. چون \`Span<T>\` قانوناً حق قرارگیری روی Heap را ندارد، کامپایلر اجازه نگهداری آن در طول \`await\` را نداده و خطای کامپایل \`CS4007\` صادر می‌کند.
+
+#### ۳. الگوی استاندارد I/O بدون تخصیص حافظه (Zero-Copy):
+۱. برای انتقال بافرها از میان توابع ناهمگام و عبور از خطوط \`await\` از **\`Memory<T>\`** استفاده کنید.
+۲. در داخل بلاک‌های محاسباتی و پردازش داده‌ها، با دستور \`memory.Span\` آن را به Span تبدیل کرده و بدون ۱ بایت کپی کردن حافظه عملیات را انجام دهید.
+۳. از \`ArrayPool<byte>.Shared\` برای تامین بافرهای اشتراکی استفاده کرده و حتماً در بلوک \`finally\` آن را پس دهید.`,
+  },
+  {
+    id: "dotnet-senior-modular-q1",
+    stackId: "dotnet",
+    categoryId: "architecture-ddd",
+    levelId: "senior",
+    topicIds: ["topic-dotnet-clean-arch-modular-monolith"],
+    questionTitle: "How does Vertical Slice Architecture (VSA) differ from layered Clean Architecture in high-frequency feature development, and how do you organize requests, handlers, and validators with FastEndpoints or MediatR?",
+    questionTitle_fa: "معماری برش عمودی (Vertical Slice) چه تفاوت‌های بنیادینی با Clean Architecture دارد و چگونه ساختار Request، Handler و Validatorها را با FastEndpoints یا MediatR سازماندهی می‌کنید؟",
+    answerContent: `### Vertical Slice Architecture (VSA) vs. Clean Architecture
+
+Vertical Slice Architecture organizes a codebase around **Business Features and Use Cases (Vertical Slices)** rather than technical layers (Horizontal Slices: Controllers, Services, Repositories).
+
+\`\`\`
+[Clean Architecture: Layer Hopping]          [Vertical Slice: High Cohesion Feature Folder]
+src/                                         src/Features/Orders/
+├── Domain/Entities/Order.cs                 └── CreateOrder/
+├── Application/Orders/CreateOrder.cs            ├── CreateOrderEndpoint.cs (FastEndpoints / Controller)
+├── Infrastructure/Data/OrderRepository.cs       ├── CreateOrderCommand.cs (Request DTO)
+└── Presentation/Controllers/OrderCtrl.cs        ├── CreateOrderValidator.cs (FluentValidation)
+                                                 └── CreateOrderHandler.cs (EF Core / Domain logic)
+\`\`\`
+
+#### 1. Why Vertical Slices Accelerate Velocity:
+- **Zero Folder Hopping:** All code related to \`CreateOrder\` lives in one place. You can read, modify, and test the entire slice in a single mental context.
+- **Tailored Persistence per Slice:**
+  - Complex Write: \`CreateOrder\` uses rich Aggregate Roots and EF Core change tracking.
+  - High-Speed Read: \`GetOrderHistory\` uses raw Dapper queries with zero entity mapping overhead.
+- **Low Blast Radius:** Changing or deleting \`CreateOrder\` has zero risk of breaking \`GetOrderById\`.
+
+#### 2. Native VSA Implementation with FastEndpoints:
+\`\`\`csharp
+// Single file encapsulating the entire HTTP feature slice
+public record CreateUserRequest(string Email, string FullName);
+public record CreateUserResponse(Guid Id, string Email);
+
+public class CreateUserValidator : Validator<CreateUserRequest>
+{
+    public CreateUserValidator() => RuleFor(x => x.Email).NotEmpty().EmailAddress();
+}
+
+public class CreateUserEndpoint : Endpoint<CreateUserRequest, CreateUserResponse>
+{
+    private readonly AppDbContext _db;
+    public CreateUserEndpoint(AppDbContext db) => _db = db;
+
+    public override void Configure() => Post("/api/users");
+
+    public override async Task HandleAsync(CreateUserRequest req, CancellationToken ct)
+    {
+        var user = new User(req.Email, req.FullName);
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync(ct);
+
+        await SendOkAsync(new CreateUserResponse(user.Id, user.Email), ct);
+    }
+}
+\`\`\``,
+    answerContent_fa: `### مقایسه معماری برش عمودی (Vertical Slice) با Clean Architecture
+
+معماری Vertical Slice کدها را بر اساس **قابلیت‌های بیزینسی (Features)** به جای لایه‌های فنی افقی (مانند Controllers، Services و Repositories) گروه‌بندی می‌کند.
+
+#### ۱. مزایای معماری Vertical Slice:
+- **حذف پرش مداوم بین فولدرها (No Folder Hopping):** تمام اجزای مربوط به یک قابلیت (درخواست، اعتبارسنجی FluentValidation، هندلر و خروجی) درون یک پوشه واحد قرار دارند.
+- **آزادی در انتخاب شیوه دسترسی به داده:**
+  - دستورات نوشتن پیچیده از انتیتی‌های غنی DDD و EF Core استفاده می‌کنند.
+  - کوئری‌های خواندن پرترافیک مستقیماً با Dapper و بدون ساخت انتیتی یا مپینگ‌های سنگین اجرا می‌شوند.
+- **کاهش شدید ریسک تغییرات:** دستکاری در یک قابلیت هیچ اثری روی قابلیت‌های دیگر سیستم نخواهد داشت.
+
+#### ۲. پیاده‌سازی با فریم‌ورک مدرن FastEndpoints:
+کتابخانه FastEndpoints بر بستر Minimal APIs دات‌نت ساخته شده و کنترلرهای حجیم MVC را با کلاس‌های مستقل \`Endpoint<TRequest, TResponse>\` جایگزین می‌کند تا هر قابلیت به صورت خودکفا پیاده‌سازی شود.`,
+  },
+  {
+    id: "dotnet-senior-modular-q2",
+    stackId: "dotnet",
+    categoryId: "architecture-ddd",
+    levelId: "senior",
+    topicIds: ["topic-dotnet-clean-arch-modular-monolith"],
+    questionTitle: "How do you enforce architectural boundaries and dependency rules in .NET CI/CD pipelines using NetArchTest or ArchUnitNET?",
+    questionTitle_fa: "چگونه مرزهای معماری و قوانین وابستگی را با استفاده از NetArchTest یا ArchUnitNET در پایپ‌لاین‌های CI/CD دات‌نت اعتبارسنجی و محافظت می‌کنید؟",
+    answerContent: `### Automated Architecture Testing with NetArchTest.Rules in .NET
+
+Relying on code reviews to preserve architectural rules inevitably leads to architectural decay over time. **Architecture Testing as Code** executes automated unit tests in CI/CD pipelines to fail the build if dependency rules are violated.
+
+\`\`\`mermaid
+flowchart LR
+    Dev[Developer Commits Code] --> PR[Pull Request / CI Pipeline]
+    PR --> ArchTest{NetArchTest Suite}
+    ArchTest -- Domain references Infra --> Fail[❌ Build FAILED: Boundary Violated]
+    ArchTest -- All layers strictly clean --> Pass[✅ Build PASSED]
+\`\`\`
+
+#### 1. Core NetArchTest Scenarios:
+\`\`\`csharp
+using NetArchTest.Rules;
+using Xunit;
+
+public class ArchitectureRuleTests
+{
+    [Fact]
+    public void Domain_Layer_Must_Not_Reference_Outer_Layers()
+    {
+        var domainAssembly = typeof(MyApp.Domain.AssemblyReference).Assembly;
+
+        TestResult result = Types.InAssembly(domainAssembly)
+            .ShouldNot()
+            .HaveDependencyOnAny("MyApp.Application", "MyApp.Infrastructure", "MyApp.Presentation")
+            .GetResult();
+
+        Assert.True(result.IsSuccessful, "Domain layer must have zero dependencies on outer layers!");
+    }
+
+    [Fact]
+    public void Modular_Monolith_Modules_Must_Not_Access_Internal_Namespaces_Of_Other_Modules()
+    {
+        var ordersAssembly = typeof(MyApp.Modules.Orders.AssemblyReference).Assembly;
+
+        // Orders module may ONLY reference MyApp.Modules.Users.Contracts
+        TestResult result = Types.InAssembly(ordersAssembly)
+            .ShouldNot()
+            .HaveDependencyOn("MyApp.Modules.Users.Infrastructure")
+            .And()
+            .HaveDependencyOn("MyApp.Modules.Users.Domain")
+            .GetResult();
+
+        Assert.True(result.IsSuccessful, "Orders module illegally referenced Users module internal implementations!");
+    }
+
+    [Fact]
+    public void CQRS_Handlers_Must_Be_Internal_And_Have_Handler_Suffix()
+    {
+        var applicationAssembly = typeof(MyApp.Application.AssemblyReference).Assembly;
+
+        TestResult result = Types.InAssembly(applicationAssembly)
+            .That()
+            .ImplementInterface(typeof(MediatR.IRequestHandler<,>))
+            .Should()
+            .NotBePublic()
+            .And()
+            .HaveNameEndingWith("Handler")
+            .GetResult();
+
+        Assert.True(result.IsSuccessful, "All MediatR handlers must be internal and end with 'Handler'.");
+    }
+}
+\`\`\``,
+    answerContent_fa: `### اعتبارسنجی خودکار معماری با NetArchTest در پایپ‌لاین CI/CD دات‌نت
+
+اتکا به فرآیند بازبینی کد (Code Review) دستی برای حفظ مرزهای معماری معمولاً به مرور زمان شکست می‌خورد. با استفاده از پکیج **\`NetArchTest.Rules\`** یا **\`ArchUnitNET\`**، قوانین معماری به عنوان تست‌های واحد استاندارد نوشته شده و در صورت نقض مرزها بیلد CI/CD بلافاصله متوقف می‌شود.
+
+#### قوانین حیاتی که باید با تست محافظت شوند:
+۱. **استقلال هسته Domain:** لایه Domain نباید به هیچ وجه به لایه‌های Application، Infrastructure یا Presentation وابستگی داشته باشد.
+۲. **ایزولاسیون ماژول‌ها در Modular Monolith:** ماژول سفارشات حق دسترسی به کدهای داخلی (Domain یا Infrastructure) ماژول کاربران را ندارد و فقط می‌تواند پکیج \`Contracts\` آن را مصرف کند.
+۳. **قوانین طراحی کلاس‌ها:** تمام هندلرهای CQRS باید با کلمه کلیدی \`internal\` تعریف شوند و پسوند نام آن‌ها حتماً \`Handler\` باشد.`,
+  },
+  {
+    id: "dotnet-senior-modular-q3",
+    stackId: "dotnet",
+    categoryId: "architecture-ddd",
+    levelId: "senior",
+    topicIds: ["topic-dotnet-clean-arch-modular-monolith"],
+    questionTitle: "How do you achieve database and transactional isolation between modules in a .NET Modular Monolith (DbContext per module, schema isolation, and cross-module queries)?",
+    questionTitle_fa: "ایزولاسیون پایگاه داده و مرزهای تراکنشی بین ماژول‌ها در الگوی Modular Monolith (تفکیک اسکیماها، DbContext مجزا و کوئری‌های بین ماژولی) چگونه پیاده‌سازی می‌شود؟",
+    answerContent: `### Database & Transactional Isolation in a .NET Modular Monolith
+
+A true Modular Monolith requires strict data isolation at the storage layer to prevent modules from tightly coupling through database tables.
+
+\`\`\`
+[Shared Physical Database]
+├── Schema: "users"   ──► UsersDbContext (Owned by Users Module)
+│   ├── users.Users
+│   └── users.Permissions
+├── Schema: "orders"  ──► OrdersDbContext (Owned by Orders Module)
+│   ├── orders.Orders
+│   └── orders.OrderItems (NO Foreign Key to users.Users!)
+└── Schema: "billing" ──► BillingDbContext (Owned by Billing Module)
+    └── billing.Invoices
+\`\`\`
+
+#### 1. Schema-Based Isolation Rules:
+- **Dedicated Database Schema per Module:** In PostgreSQL/SQL Server, each module maps to a separate schema (\`modelBuilder.HasDefaultSchema("orders")\`).
+- **Dedicated \`DbContext\` per Module:** Each module registers its own isolated \`DbContext\`. This prevents DbContext bloat and ensures migrations are isolated.
+- **Prohibition of Cross-Schema Foreign Keys:** Tables in \`orders\` must **NEVER** have Foreign Key constraints referencing tables in \`users\`. Only primitive IDs (\`Guid CustomerId\`) are stored.
+- **Prohibition of Cross-Schema SQL Joins:** A query must never join \`orders.Orders\` with \`users.Users\`.
+
+#### 2. Cross-Module Data Queries:
+When the Orders module needs customer metadata for display:
+1. **Synchronous Facade Call:** Call the public \`IUsersModuleApi\` contract which returns an immutable \`UserSummaryDto\`.
+2. **Local Read Cache / Read Replica:** If high throughput is needed, the Orders module subscribes to \`UserUpdatedIntegrationEvent\` and maintains a lightweight local read projection (\`orders.CustomerCache\`).
+
+#### 3. Transaction Boundaries & Eventual Consistency:
+Do not share physical database transactions across modules. A business transaction spans module boundaries via **Integration Events** and eventual consistency (using the Transactional Outbox pattern).`,
+    answerContent_fa: `### ایزولاسیون پایگاه داده و مرزهای تراکنشی در Modular Monolith
+
+در یک مونوپروژه ماژولار اصولی، ایزولاسیون داده‌ها در لایه ذخیره‌سازی باید به طور کامل رعایت شود تا ماژول‌ها از طریق جداول دیتابیس به یکدیگر گره نخورند:
+
+#### ۱. اصول ایزوله‌سازی بر اساس اسکیما (Schema Isolation):
+- **اسکیمای مجزا برای هر ماژول:** در دیتابیس (SQL Server یا PostgreSQL)، هر ماژول اسکیمای اختصاصی خود را دارد (\`orders\`، \`users\` و \`billing\`).
+- **کلاس \`DbContext\` مستقل برای هر ماژول:** هر ماژول کلاس DbContext و فایل‌های مایگریشن مجزای خود را مدیریت می‌کند.
+- **ممنوعیت کلیدهای خارجی (Foreign Key) بین ماژول‌ها:** جداول ماژول سفارشات هرگز نباید ارتباط فیزیکی FK با جداول کاربران داشته باشند و تنها شناسه کاربر (\`Guid CustomerId\`) ذخیره می‌شود.
+- **ممنوعیت دستورات Join بین‌ماژولی:** هیچ کوئری SQL حق اتصال جداول دو ماژول مختلف را ندارد.
+
+#### ۲. نحوه خواندن داده‌های مشترک:
+- استفاده از متدهای فاساد عمومی ماژول مقصد (\`IUsersModuleApi\`) که یک DTO تغییرناپذیر برمی‌گرداند.
+- نگهداری کپی سبک از اطلاعات در جدول کش همان ماژول با گوش دادن به رویدادهای یکپارچگی (\`UserUpdatedIntegrationEvent\`).
+
+#### ۳. مدیریت تراکنش‌ها:
+ماژول‌ها نباید تراکنش دیتابیس یکدیگر را به اشتراک بگذارند. ارتباطات چندماژولی باید با استفاده از الگوی Transactional Outbox و رویدادهای ناهمگام (Eventual Consistency) مدیریت شوند.`,
+  },
+  {
+    id: "dotnet-senior-modular-q4",
+    stackId: "dotnet",
+    categoryId: "architecture-ddd",
+    levelId: "senior",
+    topicIds: ["topic-dotnet-clean-arch-modular-monolith"],
+    questionTitle: "How do modules communicate in a Modular Monolith without tight coupling (Synchronous Public Module Facades vs In-Process Event Bus vs Outbox Integration Events)?",
+    questionTitle_fa: "روش‌های بهینه ارتباط بین ماژول‌ها در مونوپروژه‌های ماژولار (فاسادهای عمومی همگام، Event Bus درون‌پروسسی و رویدادهای یکپارچگی Outbox) چیست؟",
+    answerContent: `### Inter-Module Communication Strategies in a Modular Monolith
+
+Decoupling modules requires combining synchronous queries for instant data retrieval with asynchronous events for side effects.
+
+\`\`\`mermaid
+flowchart TD
+    subgraph Synchronous["1. Synchronous Queries (Direct Contract Call)"]
+        Orders1[Orders Module] -->|Calls Contract Interface| UserFacade["IUsersModuleApi.GetUser(id)"]
+        UserFacade -->|Returns Immutable DTO| Orders1
+    end
+
+    subgraph Asynchronous["2. Asynchronous Side Effects (In-Process Event Bus)"]
+        Orders2[Orders Module] -->|Emits OrderCreatedEvent| EventBus[In-Process Event Bus / MediatR]
+        EventBus -->|Async Handler| Billing[Billing Module: Create Invoice]
+        EventBus -->|Async Handler| Inventory[Inventory Module: Reserve Stock]
+    end
+\`\`\`
+
+#### 1. Synchronous Public Module Facades (For Reads & Queries):
+- When a module needs data immediately to validate its business logic:
+- The target module exports a **Contracts project** (\`Modules.Users.Contracts\`) containing an interface (\`IUsersModuleApi\`) and lightweight DTOs.
+- The consumer references **ONLY** the Contracts project, completely unaware of the target module's internal Domain, DbContext, or Repositories.
+
+#### 2. Asynchronous In-Process Event Bus (For Decoupled Side Effects):
+- When a domain state change in Module A triggers actions in Module B:
+- Module A publishes an \`IntegrationEvent\` implementing \`MediatR.INotification\`.
+- Module B implements \`INotificationHandler<T>\` to execute its side effects asynchronously.
+- **Advantage:** Zero network serialization, nanosecond delivery, and complete decoupling.
+
+#### 3. Transactional Outbox for Resilient In-Process Integration Events:
+If Module B's operation must be guaranteed even if the server crashes right after Module A saves its state:
+- Save the \`IntegrationEvent\` into Module A's Outbox table in the same local database transaction.
+- An in-process background worker polls the Outbox table and dispatches events via the in-process event bus.`,
+    answerContent_fa: `### الگوهای ارتباطات بین ماژول‌ها در Modular Monolith
+
+برای برقراری ارتباط بدون ایجاد وابستگی شدید (Tight Coupling) بین ماژول‌ها از دو رویکرد مکمل استفاده می‌شود:
+
+#### ۱. فاسادهای عمومی همگام (Public Module Facades) برای کوئری‌ها:
+- ماژول مقصد یک پروژه سبک \`Contracts\` شامل اینترفیس پابلیک (\`IUsersModuleApi\`) و DTOهای خروجی منتشر می‌کند.
+- ماژول‌های دیگر فقط این پروژه Contracts را رفرنس می‌دهند و از جزئیات داخلی (انتیتی‌ها، DbContext یا کدهای بیزینس) ماژول مقصد کاملاً بی‌خبر می‌مانند.
+
+#### ۲. انتشار رویدادهای ناهمگام با Event Bus درون‌پروسسی:
+- برای عوارض جانبی (مانند صدور فاکتور پس از ثبت سفارش)، ماژول مبدأ یک رویداد عمومی (\`OrderCreatedIntegrationEvent\`) را در صف درون‌حافظه‌ای MediatR منتشر می‌کند.
+- ماژول‌های مقصد با پیاده‌سازی \`INotificationHandler\` به صورت کاملاً مستقل و ناهمگام به این رویداد واکنش نشان می‌دهند.
+
+#### ۳. الگوی Transactional Outbox برای تضمین پایداری:
+برای اطمینان از اینکه قطعی سرور بلافاصله بعد از ثبت سفارش باعث از دست رفتن رویداد فاکتور نشود، رویدادها در همان تراکنش دیتابیس درون جدول Outbox ماژول مبدأ ثبت شده و توسط ورکر پس‌زمینه پردازش می‌شوند.`,
+  },
+  {
+    id: "dotnet-senior-modular-q5",
+    stackId: "dotnet",
+    categoryId: "architecture-ddd",
+    levelId: "senior",
+    topicIds: ["topic-dotnet-clean-arch-modular-monolith"],
+    questionTitle: "What are the common architectural pitfalls and anti-patterns of Clean Architecture in .NET (e.g. Generic Repository bloat, over-abstraction of simple CRUD, anemic domain models with MediatR), and when should you refactor to Vertical Slices?",
+    questionTitle_fa: "ضدالگوها و تله‌های رایج در پیاده‌سازی Clean Architecture در دات‌نت (مانند Generic Repository، پیچیده‌سازی CRUD ساده و دامین مدل‌های کم‌خون) چیست و چه زمانی باید به سمت Vertical Slice مهاجرت کرد؟",
+    answerContent: `### Clean Architecture Anti-Patterns & When to Transition to Vertical Slices
+
+While Clean Architecture is conceptually elegant, rigid adherence to layer boundaries often introduces heavy friction in modern .NET applications.
+
+\`\`\`mermaid
+flowchart LR
+    subgraph AntiPatterns["Clean Architecture Anti-Patterns"]
+        A1["Generic Repository over EF Core"]
+        A2["Anemic Entities + Smart MediatR Handlers"]
+        A3["Mapping Fatigue (Entity -> Domain -> DTO -> VM)"]
+        A4["Folder Hopping for Simple CRUD"]
+    end
+    AntiPatterns --> Solution["Solution: Pragmatic Vertical Slices (VSA)"]
+\`\`\`
+
+#### 1. The 4 Big Anti-Patterns in Clean Architecture:
+1. **Generic Repository & Unit of Work Layer:**
+   - Wrapping EF Core's \`DbSet<T>\` inside \`IRepository<T>\` disables advanced features like \`AsNoTracking()\`, projection via \`Select()\`, \`AsSplitQuery()\`, and bulk SQL operations (\`ExecuteUpdateAsync\`).
+2. **Anemic Domain Models with Fat MediatR Handlers:**
+   - Placing all business validation inside MediatR Command Handlers turns domain entities into dumb property bags (Anemic Domain Model), destroying DDD encapsulation.
+3. **Mapping Fatigue & Excessive DTO Layers:**
+   - Passing data through 4 layers of identical DTO mappings (\`DbEntity\` $\\rightarrow$ \`DomainModel\` $\\rightarrow$ \`ApplicationDto\` $\\rightarrow$ \`ApiResponse\`) adds zero security or architectural value for simple queries.
+4. **Folder Hopping & Friction:**
+   - Adding a simple column requires editing 5-6 projects across different solution folders.
+
+#### 2. When to Refactor to Vertical Slice Architecture (VSA):
+- **High Ratio of CRUD / Read Operations:** If $>70\\%$ of your application consists of straightforward data viewing and basic updates, VSA with FastEndpoints/Minimal APIs cuts codebase size in half.
+- **Frequent Independent Feature Deployment:** When product teams need to ship features rapidly without touching shared layer abstractions.
+- **Heterogeneous Workloads:** When some endpoints require raw SQL performance (Dapper) while others need rich DDD business rules.`,
+    answerContent_fa: `### ضدالگوهای رایج Clean Architecture و زمان مهاجرت به Vertical Slice
+
+گرچه Clean Architecture از نظر تئوری ساختار منظمی ارائه می‌دهد، اما تعصب روی لایه‌بندی‌های افقی در پروژه‌های روزمره دات‌نت مشکلات جدی ایجاد می‌کند:
+
+#### ۱. ضدالگوهای اصلی Clean Architecture:
+۱. **ضدالگوی Generic Repository روی EF Core:** ساخت اینترفیس‌های ژنریک \`IRepository<T>\` دست توسعه‌دهنده را در استفاده از قابلیت‌های پیشرفته EF Core (مانند کوئری‌های تفکیک‌شده \`AsSplitQuery\`، عدم ردیابی \`AsNoTracking\` و آپدیت مستقیم دیتابیس با \`ExecuteUpdate\`) می‌بندد.
+۲. **موجودیت‌های کم‌خون (Anemic Domain Model) به همراه هندلرهای چاق:** انتقال تمام منطق بیزینس به هندلرهای MediatR و تبدیل موجودیت‌های دامین به کلاس‌های صرفاً حاوی Getter/Setter.
+۳. **خستگی ناشی از مپینگ‌های مکرر (Mapping Fatigue):** تبدیل مداوم داده بین ۴ نوع شیء کاملاً یکسان در لایه‌های مختلف بدون هیچ دلیل فنی موجه.
+۴. **پرش مداوم بین فولدرها (Folder Hopping):** نیاز به تغییر همزمان ۶ پروژه مجزا برای افزودن یک فیلد ساده به فرم.
+
+#### ۲. چه زمانی باید به سمت Vertical Slice مهاجرت کرد؟
+- هنگامی که بیش از ۷۰٪ سیستم شامل عملیات استاندارد CRUD و کوئری‌های گزارش‌گیری است.
+- هنگامی که تیم نیاز دارد قابلیت‌ها را با سرعت بالا و بدون تداخل با سایر بخش‌ها توسعه داده و دیپلوی کند.
+- هنگامی که سیستم دارای بارهای کاری ناهمگون است (برخی اندپوینت‌ها نیازمند Dapper با سرعت حداکثری و برخی نیازمند دامین مدل‌های غنی DDD هستند).`,
+  },
 ];
+
 

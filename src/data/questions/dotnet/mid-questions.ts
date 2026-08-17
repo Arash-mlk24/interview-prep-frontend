@@ -391,6 +391,7 @@ SignalR is an open-source library that adds real-time web functionality to appli
     stackId: "dotnet",
     categoryId: "architecture-ddd",
     levelId: "mid",
+    topicIds: ["topic-dotnet-clean-arch-modular-monolith"],
     questionTitle: "Name the layers in Clean Architecture and describe their responsibilities.",
     questionTitle_fa: "لایه‌های Clean Architecture را نام ببر و وظیفه هر کدام را بگو.",
     answerContent: `### Clean Architecture Layers
@@ -417,6 +418,7 @@ Clean Architecture enforces the **Dependency Rule** (dependencies point inward t
     stackId: "dotnet",
     categoryId: "architecture-ddd",
     levelId: "mid",
+    topicIds: ["topic-dotnet-clean-arch-modular-monolith"],
     questionTitle: "Why must the Domain Layer have zero dependencies on outer layers in Clean Architecture?",
     questionTitle_fa: "چرا لایه Domain در معماری تمیز نباید هیچ وابستگی‌ای به لایه‌های دیگر داشته باشد؟",
     answerContent: `### Domain Layer Independence
@@ -433,6 +435,7 @@ Clean Architecture enforces the **Dependency Rule** (dependencies point inward t
     stackId: "dotnet",
     categoryId: "architecture-ddd",
     levelId: "mid",
+    topicIds: ["topic-dotnet-clean-arch-modular-monolith"],
     questionTitle: "What is CQRS (Command Query Responsibility Segregation)?",
     questionTitle_fa: "مفهوم CQRS چیست؟",
     answerContent: `### CQRS (Command Query Responsibility Segregation)
@@ -2057,6 +2060,7 @@ Automates static code analysis in CI pipelines:
     stackId: "dotnet",
     categoryId: "csharp-advanced",
     levelId: "mid",
+    topicIds: ["topic-dotnet-expression-trees"],
     questionTitle: "What is an Expression Tree in C# and what is the fundamental difference between Expression<Func<T, bool>> and Func<T, bool>?",
     questionTitle_fa: "مفهوم درخت عبارات (Expression Tree) در سی‌شارپ چیست و تفاوت بنیادین Expression<Func<T, bool>> با Func<T, bool> در چیست؟",
     answerContent: `### Expression Trees vs. Delegates
@@ -2087,6 +2091,7 @@ Automates static code analysis in CI pipelines:
     stackId: "dotnet",
     categoryId: "csharp-advanced",
     levelId: "mid",
+    topicIds: ["topic-dotnet-span-memory"],
     questionTitle: "What is a 'ref struct' in C#, how does it differ from a standard struct, and what stack-only constraints does the CLR enforce?",
     questionTitle_fa: "مفهوم 'ref struct' در سی‌شارپ چیست، چه تفاوتی با struct معمولی دارد و چه محدودیت‌هایی توسط CLR برای آن اعمال می‌شود؟",
     answerContent: `### 'ref struct' and Stack-Only Invariants
@@ -2127,6 +2132,7 @@ Enables zero-allocation high-performance types like **\`Span<T>\`** and **\`Read
     stackId: "dotnet",
     categoryId: "csharp-advanced",
     levelId: "mid",
+    topicIds: ["topic-dotnet-span-memory"],
     questionTitle: "Compare Span<T> and Memory<T>. Why can Span<T> NOT be used across await points in async methods?",
     questionTitle_fa: "مقایسه Span<T> و Memory<T>: چرا Span<T> نمی‌تواند از مرز await در متدهای async عبور کند؟",
     answerContent: `### Span<T> vs. Memory<T> in Asynchronous Code
@@ -2159,6 +2165,7 @@ Pass \`Memory<T>\` or \`ReadOnlyMemory<T>\` into async methods, and obtain a sta
     stackId: "dotnet",
     categoryId: "microservices",
     levelId: "mid",
+    topicIds: ["topic-dotnet-rabbitmq-advanced"],
     questionTitle: "How do Publisher Confirms and Consumer Acknowledgements (Ack, Nack, Reject) guarantee message safety in RabbitMQ?",
     questionTitle_fa: "مکانیزم‌های Publisher Confirms و Consumer Acknowledgements (مانند Ack، Nack و Reject) در RabbitMQ چگونه از مفقود شدن پیام جلوگیری می‌کنند؟",
     answerContent: `### End-to-End Reliability in RabbitMQ
@@ -2190,6 +2197,7 @@ Pass \`Memory<T>\` or \`ReadOnlyMemory<T>\` into async methods, and obtain a sta
     stackId: "dotnet",
     categoryId: "microservices",
     levelId: "mid",
+    topicIds: ["topic-dotnet-outbox-dlq", "topic-dotnet-rabbitmq-advanced"],
     questionTitle: "How do you implement Retry Policies with Exponential Backoff and Dead Letter Exchanges (DLX) in RabbitMQ and MassTransit?",
     questionTitle_fa: "چگونه می‌توان با استفاده از صف Dead Letter (DLX)، افزونه Delayed Exchange و کتابخانه MassTransit، استراتژی Retry با تاخیر تصاعدی (Exponential Backoff) پیاده‌سازی کرد؟",
     answerContent: `### Resilient Messaging: Retries & Dead Lettering
@@ -2233,6 +2241,7 @@ services.AddMassTransit(x => {
     stackId: "dotnet",
     categoryId: "microservices",
     levelId: "mid",
+    topicIds: ["topic-dotnet-redis-internals"],
     questionTitle: "What are Redis Eviction Policies (LRU, LFU, TTL, noeviction) and how do you handle memory pressure (OOM)?",
     questionTitle_fa: "سیاست‌های آزادسازی حافظه (Eviction Policies مانند LRU، LFU، TTL و noeviction) در Redis چگونه کار می‌کنند و فشار حافظه (OOM) چگونه مدیریت می‌شود؟",
     answerContent: `### Redis Memory Eviction Policies
@@ -2261,6 +2270,7 @@ Set \`maxmemory\` to $70-80\\%$ of total server RAM to allow memory overhead for
     stackId: "dotnet",
     categoryId: "ef-core",
     levelId: "mid",
+    topicIds: ["topic-dotnet-db-concurrency-locks"],
     questionTitle: "Compare Optimistic and Pessimistic Concurrency Control in SQL Server and EF Core (RowVersion vs UPDLOCK).",
     questionTitle_fa: "مقایسه کنترل همزمانی خوش‌بینانه (Optimistic) و بدبینانه (Pessimistic) در SQL Server و EF Core: در چه شرایطی از هر کدام استفاده می‌شود؟",
     answerContent: `### Optimistic vs. Pessimistic Concurrency Control
@@ -2296,6 +2306,7 @@ Set \`maxmemory\` to $70-80\\%$ of total server RAM to allow memory overhead for
     stackId: "dotnet",
     categoryId: "ef-core",
     levelId: "mid",
+    topicIds: ["topic-dotnet-polyglot-persistence"],
     questionTitle: "What is Polyglot Persistence and how do you choose between Relational, Document (MongoDB), Key-Value (Redis), Columnar (ClickHouse), and Graph databases?",
     questionTitle_fa: "معماری Polyglot Persistence چیست و چگونه بین دیتابیس‌های رابطه‌ای، سندمحور (MongoDB)، کلید-مقدار (Redis)، ستونی (ClickHouse) و گراف تصمیم‌گیری می‌کنیم؟",
     answerContent: `### Polyglot Persistence Strategy
@@ -2325,6 +2336,7 @@ Set \`maxmemory\` to $70-80\\%$ of total server RAM to allow memory overhead for
     stackId: "dotnet",
     categoryId: "architecture-ddd",
     levelId: "mid",
+    topicIds: ["topic-dotnet-chain-of-responsibility", "topic-dotnet-gof-patterns"],
     questionTitle: "How is the Chain of Responsibility Pattern applied in ASP.NET Core Middleware and MediatR Pipeline Behaviors?",
     questionTitle_fa: "الگوی طراحی زنجیره مسئولیت (Chain of Responsibility) در Middleware دات‌نت و Pipeline Behaviors کتابخانه MediatR چگونه پیاده‌سازی می‌شود؟",
     answerContent: `### Chain of Responsibility in .NET
@@ -2373,6 +2385,7 @@ public class ValidationBehavior<TRequest, TResponse> : IPipelineBehavior<TReques
     stackId: "dotnet",
     categoryId: "csharp-advanced",
     levelId: "mid",
+    topicIds: ["topic-dotnet-gof-patterns"],
     questionTitle: "What are the architectural differences between Observer Pattern, Mediator Pattern, and Pub/Sub in .NET, and how do you prevent Memory Leaks?",
     questionTitle_fa: "تفاوت‌های معماری میان الگوهای Observer، Mediator و Pub/Sub در دات‌نت چیست و چگونه از نشت حافظه (Memory Leak) در رویدادها جلوگیری کنیم؟",
     answerContent: `### Observer vs. Mediator vs. Pub/Sub
@@ -2405,6 +2418,7 @@ When a long-lived publisher holds an event subscription to a short-lived subscri
     stackId: "dotnet",
     categoryId: "architecture-ddd",
     levelId: "mid",
+    topicIds: ["topic-dotnet-gof-patterns"],
     questionTitle: "Compare Template Method Pattern and Strategy Pattern in C#. When should you choose Inheritance over Composition?",
     questionTitle_fa: "مقایسه الگوی Template Method با Strategy Pattern در سی‌شارپ: چه زمانی از ارث‌بری و چه زمانی از ترکیب (Composition) استفاده می‌شود؟",
     answerContent: `### Template Method vs. Strategy Pattern
@@ -2449,6 +2463,7 @@ Use **Template Method** when the invariant workflow sequence is fixed across all
     stackId: "dotnet",
     categoryId: "csharp-basics",
     levelId: "mid",
+    topicIds: ["topic-dotnet-gof-patterns"],
     questionTitle: "How do you implement the Builder Pattern with a Fluent API in C# for constructing complex domain entities?",
     questionTitle_fa: "الگوی Builder و طراحی Fluent API در سی‌شارپ چگونه برای ساخت اشیای پیچیده دامین و تضمین ثبات داده‌ها پیاده‌سازی می‌شود؟",
     answerContent: `### Builder Pattern & Fluent API in C#
@@ -2496,4 +2511,5 @@ public class InsurancePolicyBuilder {
 - در متد نهایی \`.Build()\` تمام قوانین اعتبارسنجی بیزینس بررسی می‌شوند تا از ساخته شدن اشیای ناقص یا نامعتبر در حافظه جلوگیری گردد.`,
   },
 ];
+
 

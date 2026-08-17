@@ -6,6 +6,7 @@ import {
   categoryRepository,
   questionRepository,
   conceptRepository,
+  roadmapRepository,
 } from "../../../../repositories";
 import { StackDashboardView } from "../../../../components/stacks/StackDashboardView";
 
@@ -73,6 +74,7 @@ export default async function StackPage({ params }: PageProps) {
   const byLevelData = questionRepository.getQuestionsGroupedByLevelAndCategory(stack.id);
   const byCategoryData = questionRepository.getQuestionsGroupedByCategoryAndLevel(stack.id);
   const concepts = conceptRepository.getConceptsByStackId(stack.id);
+  const roadmaps = roadmapRepository.getRoadmapsByStackId(stack.id);
 
   return (
     <StackDashboardView
@@ -82,6 +84,7 @@ export default async function StackPage({ params }: PageProps) {
       byLevelData={byLevelData}
       byCategoryData={byCategoryData}
       concepts={concepts}
+      roadmaps={roadmaps}
     />
   );
 }

@@ -13,6 +13,7 @@ interface StackItemData {
     questionCount: number;
     conceptCount: number;
     categoryCount: number;
+    roadmapCount?: number;
   };
   categories: Category[];
 }

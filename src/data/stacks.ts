@@ -34,4 +34,15 @@ export const stacks: Stack[] = [
       "تایپ‌های شرطی و نگاشت‌شده، تمپلیت لیترال‌ها، سیستم استنتاج، ساختارهای ژنریک پیچیده و الگوهای ایمنی کد در مقیاس سازمانی.",
     icon: "typescript",
   },
+  {
+    id: "system-design",
+    name: "System Design & Distributed Systems",
+    name_fa: "طراحی سیستم و معماری سیستم‌های توزیع‌شده",
+    slug: "system-design",
+    description:
+      "High-scale architecture, distributed consensus (Raft/Paxos), database sharding, CAP theorem, event-driven pipelines, and real-world platform case studies.",
+    description_fa:
+      "معماری سیستم‌های مقیاس‌بزرگ، الگوریتم‌های اجماع توزیع‌شده (Raft/Paxos)، شاردینگ دیتابیس، تئوری CAP، صف‌ها و پایپ‌لاین‌های رویدادمحور، و کیس‌استادی‌های پروداکشن.",
+    icon: "system-design",
+  },
 ];

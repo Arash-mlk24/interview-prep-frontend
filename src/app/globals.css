@@ -53,3 +53,46 @@ a {
 html[dir="rtl"] body {
   font-family: var(--font-rubik), "Rubik", "Tahoma", "Arial", sans-serif;
 }
+
+/* ─────────────────────────────────────────────────────────────
+   GLOBAL CODE BLOCK & LTR ISOLATION
+   Ensures code blocks and inline code are NEVER flipped by RTL
+───────────────────────────────────────────────────────────── */
+pre,
+pre code,
+.code-block-ltr,
+pre[dir="ltr"],
+code[dir="ltr"] {
+  direction: ltr !important;
+  text-align: left !important;
+  unicode-bidi: isolate !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+}
+
+/* Inline code isolation in RTL sentences */
+html[dir="rtl"] :not(pre) > code {
+  direction: ltr !important;
+  unicode-bidi: isolate !important;
+  display: inline-block;
+  vertical-align: baseline;
+}
+
+/* Markdown typography & spacing */
+.markdown-body {
+  color: #cbd5e1;
+}
+
+html[dir="rtl"] .markdown-body p,
+html[dir="rtl"] .markdown-body h1,
+html[dir="rtl"] .markdown-body h2,
+html[dir="rtl"] .markdown-body h3,
+html[dir="rtl"] .markdown-body h4,
+html[dir="rtl"] .markdown-body h5,
+html[dir="rtl"] .markdown-body h6,
+html[dir="rtl"] .markdown-body ul,
+html[dir="rtl"] .markdown-body ol,
+html[dir="rtl"] .markdown-body li,
+html[dir="rtl"] .markdown-body blockquote {
+  direction: rtl !important;
+  text-align: right !important;
+}

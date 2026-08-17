@@ -74,6 +74,38 @@ export const categories: Category[] = [
     name_fa: "معماری CLR و مدیریت حافظه در دات‌نت",
     slug: "dotnet-internals",
   },
+
+  // System Design & Distributed Systems Categories
+  {
+    id: "sys-scalability",
+    name: "Scalability, Load Balancing & Rate Limiting",
+    name_fa: "مقیاس‌پذیری، توزیع بار و کنترل نرخ درخواست (Rate Limiting)",
+    slug: "sys-scalability",
+  },
+  {
+    id: "sys-databases",
+    name: "Distributed Storage, Replication & Sharding",
+    name_fa: "پایگاه‌های داده توزیع‌شده، رپلیکیشن و شاردینگ",
+    slug: "sys-databases",
+  },
+  {
+    id: "sys-distributed",
+    name: "Distributed Consensus & Transactions",
+    name_fa: "تراکنش‌های توزیع‌شده، هماهنگی و الگوریتم‌های اجماع",
+    slug: "sys-distributed",
+  },
+  {
+    id: "sys-messaging",
+    name: "Event-Driven Systems & Stream Processing",
+    name_fa: "سیستم‌های پیام‌رسانی، پردازش استریم و معماری رویدادمحور",
+    slug: "sys-messaging",
+  },
+  {
+    id: "sys-case-studies",
+    name: "Real-World Architecture Case Studies",
+    name_fa: "بررسی معماری سیستم‌های واقعی و کیس‌استادی‌های مقیاس‌بزرگ",
+    slug: "sys-case-studies",
+  },
   {
     id: "system-design",
     name: "System Design & Architecture",

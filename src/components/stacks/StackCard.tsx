@@ -14,6 +14,7 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import TerminalIcon from "@mui/icons-material/Terminal";
 import WebIcon from "@mui/icons-material/Web";
 import IntegrationInstructionsIcon from "@mui/icons-material/IntegrationInstructions";
+import HubIcon from "@mui/icons-material/Hub";
 import { Stack, Category } from "../../data/models";
 import { useLanguage } from "../../context/LanguageContext";
 
@@ -23,6 +24,7 @@ interface StackCardProps {
     questionCount: number;
     conceptCount: number;
     categoryCount: number;
+    roadmapCount?: number;
   };
   categories: Category[];
 }
@@ -35,6 +37,8 @@ function getStackIcon(iconName: string) {
       return <WebIcon sx={{ fontSize: 20, color: "#38BDF8" }} />;
     case "typescript":
       return <TerminalIcon sx={{ fontSize: 20, color: "#60A5FA" }} />;
+    case "system-design":
+      return <HubIcon sx={{ fontSize: 20, color: "#F59E0B" }} />;
     default:
       return <TerminalIcon sx={{ fontSize: 20, color: "#818CF8" }} />;
   }
@@ -182,6 +186,7 @@ export const StackCard: React.FC<StackCardProps> = ({ stack, stats, categories }
           >
             <Typography variant="caption" sx={{ color: "#64748B", fontSize: "0.75rem" }}>
               {stats.conceptCount} {t("concepts")} · {stats.categoryCount} {t("categories")}
+              {stats.roadmapCount && stats.roadmapCount > 0 ? ` · ${stats.roadmapCount} ${t("roadmaps")}` : ""}
             </Typography>
 
             <Box

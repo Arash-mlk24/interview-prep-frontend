@@ -45,6 +45,7 @@ type Coordinate = [number, number];
     stackId: "typescript",
     categoryId: "ts-advanced",
     levelId: "senior",
+    topicIds: ["topic-ts-conditional-types-infer"],
     questionTitle: "How do Conditional Types, `infer`, and Template Literal Types work?",
     questionTitle_fa: "تایپ‌های شرطی (Conditional Types)، کلیدواژه infer و تمپلیت لیترال‌ها در تایپ‌اسکریپت چگونه کار می‌کنند؟",
     answerContent: `### Advanced TypeScript Type Gymnastics
@@ -75,21 +76,21 @@ type Getter<T extends string> = \`get\${Capitalize<T>}\`;
     answerContent_fa: `### مباحث پیشرفته سیستم تایپ در تایپ‌اسکریپت
 
 #### ۱. تایپ‌های شرطی (Conditional Types)
-مشابه عملگر سه‌تایی در جاوااسکریپت: \`T extends U ? TrueType : FalseType\`
+Follow ternary syntax in JavaScript: \`T extends U ? TrueType : FalseType\`
 
 #### ۲. کلیدواژه \`infer\`
-برای استخراج پویا و الگوبرداری از درون یک تایپ تو در تو استفاده می‌شود:
+Used for dynamic extraction and pattern matching from nested types:
 
 \`\`\`typescript
-// استخراج تایپ خروجی یک تابع:
+// Extract the return type of a function:
 type MyReturnType<T> = T extends (...args: any[]) => infer R ? R : never;
 
-// استخراج خروجی یک Promise:
+// Extract Promise resolved value:
 type UnboxPromise<T> = T extends Promise<infer U> ? U : T;
 \`\`\`
 
 #### ۳. Template Literal Types
-تولید تایپ‌های رشته‌ای پویا بر پایه مقادیر لیترال:
+Generate dynamic string types based on literal values:
 
 \`\`\`typescript
 type EventName = "click" | "hover";
@@ -101,6 +102,7 @@ type EventHandler = \`on\${Capitalize<EventName>}\`; // "onClick" | "onHover"
     stackId: "typescript",
     categoryId: "ts-advanced",
     levelId: "mid",
+    topicIds: ["topic-ts-brand-types-variance"],
     questionTitle: "What are Discriminated Unions and how do they ensure exhaustive type safety?",
     questionTitle_fa: "مفهوم Discriminated Unions چیست و چگونه ایمنی کامل نوع داده (Exhaustiveness Check) را تضمین می‌کند؟",
     answerContent: `### Discriminated Unions (Tagged Unions)
@@ -149,7 +151,7 @@ function renderState(state: NetworkState): string {
     case "failed":
       return \`خطا \${state.code}: \${state.message}\`;
     default:
-      // بررسی جامعیت حالت‌ها (Exhaustiveness Check)
+      // Exhaustiveness check
       const _exhaustiveCheck: never = state;
       return _exhaustiveCheck;
   }

@@ -25,6 +25,28 @@ export type TranslationKeys =
   | "preparationHub"
   | "interviewQuestionsTab"
   | "conceptsTab"
+  | "roadmapsTab"
+  | "roadmaps"
+  | "steps"
+  | "topics"
+  | "estimatedHours"
+  | "startRoadmap"
+  | "viewTopic"
+  | "completeTutorial"
+  | "interviewQuestions"
+  | "readingTime"
+  | "previousTopic"
+  | "nextTopic"
+  | "backToRoadmap"
+  | "noQuestionsForTopic"
+  | "markCompleted"
+  | "markIncomplete"
+  | "completed"
+  | "progress"
+  | "roadmapProgress"
+  | "searchTopicsPlaceholder"
+  | "filterByDifficulty"
+  | "allDifficulties"
   | "groupBy"
   | "levelFirst"
   | "categoryFirst"
@@ -68,6 +90,28 @@ export const translations: Record<Language, Record<TranslationKeys, string>> = {
     preparationHub: "Preparation Hub",
     interviewQuestionsTab: "Interview Questions ({count})",
     conceptsTab: "Concepts & Review ({count})",
+    roadmapsTab: "Roadmaps ({count})",
+    roadmaps: "Roadmaps",
+    steps: "Steps",
+    topics: "Modules",
+    estimatedHours: "~{hours} Hours",
+    startRoadmap: "Explore Roadmap",
+    viewTopic: "Study Module",
+    completeTutorial: "Comprehensive Guide",
+    interviewQuestions: "Interview Questions",
+    readingTime: "{minutes} min read",
+    previousTopic: "Previous Module",
+    nextTopic: "Next Module",
+    backToRoadmap: "Back to Roadmap",
+    noQuestionsForTopic: "No specific interview questions linked to this module yet.",
+    markCompleted: "Mark Completed",
+    markIncomplete: "Completed ✓",
+    completed: "Completed",
+    progress: "Progress",
+    roadmapProgress: "{percentage}% Completed",
+    searchTopicsPlaceholder: "Filter modules by name or concept...",
+    filterByDifficulty: "All Difficulties",
+    allDifficulties: "All Difficulties",
     groupBy: "Group By:",
     levelFirst: "Level First",
     categoryFirst: "Category First",
@@ -110,6 +154,28 @@ export const translations: Record<Language, Record<TranslationKeys, string>> = {
     preparationHub: "مرکز یادگیری و آمادگی",
     interviewQuestionsTab: "سؤالات مصاحبه ({count})",
     conceptsTab: "مفاهیم و نکات کلیدی ({count})",
+    roadmapsTab: "نقشه‌های راه ({count})",
+    roadmaps: "نقشه‌های راه",
+    steps: "مرحله",
+    topics: "ماژول آموزشی",
+    estimatedHours: "تقریباً {hours} ساعت",
+    startRoadmap: "مشاهده نقشه راه",
+    viewTopic: "مطالعه آموزش",
+    completeTutorial: "آموزش جامع و تخصصی",
+    interviewQuestions: "سؤالات مصاحبه مرتبط",
+    readingTime: "زمان مطالعه: {minutes} دقیقه",
+    previousTopic: "مبحث قبلی",
+    nextTopic: "مبحث بعدی",
+    backToRoadmap: "بازگشت به نقشه راه",
+    noQuestionsForTopic: "هنوز سوال مصاحبه‌ای به این مبحث متصل نشده است.",
+    markCompleted: "علامت‌گذاری به عنوان مطالعه‌شده",
+    markIncomplete: "مطالعه شد ✓",
+    completed: "تکمیل شده",
+    progress: "میزان پیشرفت",
+    roadmapProgress: "{percentage}٪ تکمیل‌شده",
+    searchTopicsPlaceholder: "فیلتر مباحث با عنوان یا کلیدواژه...",
+    filterByDifficulty: "همه سطوح دشواری",
+    allDifficulties: "همه سطوح",
     groupBy: "دسته‌بندی بر اساس:",
     levelFirst: "ابتدا سطح تجربه",
     categoryFirst: "ابتدا موضوع فنی",

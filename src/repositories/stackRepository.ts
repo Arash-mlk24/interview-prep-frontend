@@ -2,6 +2,7 @@ import { Stack } from "../data/models";
 import { stacks } from "../data/stacks";
 import { allQuestions } from "../data/questions";
 import { allConcepts } from "../data/concepts";
+import { allRoadmaps } from "../data/roadmaps";
 
 export const stackRepository = {
   getAllStacks(): Stack[] {
@@ -20,15 +21,18 @@ export const stackRepository = {
     questionCount: number;
     conceptCount: number;
     categoryCount: number;
+    roadmapCount: number;
   } {
     const questions = allQuestions.filter((q) => q.stackId === stackId);
     const concepts = allConcepts.filter((c) => c.stackId === stackId);
+    const roadmaps = allRoadmaps.filter((r) => r.stackId === stackId);
     const categoryIds = new Set(questions.map((q) => q.categoryId));
 
     return {
       questionCount: questions.length,
       conceptCount: concepts.length,
       categoryCount: categoryIds.size,
+      roadmapCount: roadmaps.length,
     };
   },
 };

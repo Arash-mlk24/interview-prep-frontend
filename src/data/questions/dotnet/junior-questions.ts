@@ -69,7 +69,7 @@ OOP is a programming paradigm based on the concept of **objects**, which contain
    \`\`\`csharp
    public class BankAccount
    {
-       private decimal _balance; // وضعیت داخلی پنهان
+       private decimal _balance; // Hidden internal state
        public void Deposit(decimal amount)
        {
            if (amount > 0) _balance += amount;
@@ -105,12 +105,12 @@ OOP is a programming paradigm based on the concept of **objects**, which contain
 | **Inheritance** | Implicitly inherit from \`System.ValueType\` | Inherit from \`System.Object\` |
 
 \`\`\`csharp
-// Value Type
+// Value Type behavior
 int x = 10;
 int y = x;
 y = 20; // x remains 10
 
-// Reference Type
+// Reference Type behavior
 var u1 = new User { Name = "Ali" };
 var u2 = u1;
 u2.Name = "Reza"; // u1.Name is now "Reza"
@@ -125,15 +125,15 @@ u2.Name = "Reza"; // u1.Name is now "Reza"
 | **نمونه‌ها** | \`int\`, \`bool\`, \`struct\`, \`enum\` | \`class\`, \`string\`, \`record\`, \`delegate\` |
 
 \`\`\`csharp
-// رفتار Value Type
+// Value Type behavior
 int x = 10;
 int y = x;
-y = 20; // متغیر x همان ۱۰ باقی می‌ماند
+y = 20; // x remains 10
 
-// رفتار Reference Type
+// Reference Type behavior
 var u1 = new User { Name = "Ali" };
 var u2 = u1;
-u2.Name = "Reza"; // مقدار u1.Name نیز رضا می‌شود
+u2.Name = "Reza"; // u1.Name is now "Reza"
 \`\`\``,
   },
   {
@@ -213,7 +213,7 @@ public interface ILoggable { void Log(string message); }
 
 public abstract class BaseRepository
 {
-    protected readonly DbContext _context; // نگهداری وضعیت
+    protected readonly DbContext _context; // Internal state
     public BaseRepository(DbContext ctx) => _context = ctx;
     public abstract Task SaveAsync();
 }
@@ -294,12 +294,12 @@ if (int.TryParse("123", out int result))
    - متغیر **حتماً باید قبل از ارسال به متد مقداردهی اولیه** شده باشد.
    - متد می‌تواند مقدار آن را بخواند یا تغییر دهد.
 
-۲. **\`out\`:**
+2. **\`out\`:**
    - متغیر نیازی به مقداردهی اولیه قبل از ارسال ندارد.
    - متد دریافت‌کننده **حتماً باید قبل از اتمام، مقداری به آن اختصاص دهد**.
 
 \`\`\`csharp
-// مثال out در TryParse
+// Example using out with TryParse:
 if (int.TryParse("450", out int price))
 {
     Console.WriteLine(price * 2);
@@ -430,7 +430,7 @@ public static class NumericExtensions
     }
 }
 
-// نحوه فراخوانی:
+// Usage:
 decimal price = 150000;
 string formatted = price.ToTomanFormat(); // "150,000 تومان"
 \`\`\``,

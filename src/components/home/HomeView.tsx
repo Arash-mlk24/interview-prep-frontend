@@ -12,6 +12,7 @@ interface StackItemData {
     questionCount: number;
     conceptCount: number;
     categoryCount: number;
+    roadmapCount?: number;
   };
   categories: Category[];
 }
@@ -20,12 +21,14 @@ interface HomeViewProps {
   stacksData: StackItemData[];
   totalQuestions: number;
   totalConcepts: number;
+  totalRoadmaps: number;
 }
 
 export const HomeView: React.FC<HomeViewProps> = ({
   stacksData,
   totalQuestions,
   totalConcepts,
+  totalRoadmaps,
 }) => {
   const { t, isRtl } = useLanguage();
 
@@ -108,6 +111,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
             sx={{
               display: "inline-flex",
               alignItems: "center",
+              flexWrap: "wrap",
+              justifyContent: "center",
               gap: { xs: 1.5, sm: 2 },
               color: "#64748B",
               fontSize: "0.8rem",
@@ -115,7 +120,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             }}
           >
             <span>
-              <strong style={{ color: "#F8FAFC" }}>{stacksData.length}</strong> {t("questions").toLowerCase() === "questions" ? "Stacks" : "فناوری"}
+              <strong style={{ color: "#F8FAFC" }}>{stacksData.length}</strong> {isRtl ? "فناوری" : "Stacks"}
             </span>
             <Box sx={{ width: 3, height: 3, borderRadius: "50%", backgroundColor: "#475569" }} />
             <span>
@@ -125,6 +130,14 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <span>
               <strong style={{ color: "#38BDF8" }}>{totalConcepts}</strong> {t("concepts")}
             </span>
+            {totalRoadmaps > 0 && (
+              <>
+                <Box sx={{ width: 3, height: 3, borderRadius: "50%", backgroundColor: "#475569" }} />
+                <span>
+                  <strong style={{ color: "#F43F5E" }}>{totalRoadmaps}</strong> {t("roadmaps")}
+                </span>
+              </>
+            )}
           </Box>
         </Box>
 
