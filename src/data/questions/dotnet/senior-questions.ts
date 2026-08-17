@@ -1733,4 +1733,721 @@ Example: Over-engineering microservices prematurely before understanding domain 
 - **روزهای ۱۱ تا ۲۰:** تحلیل لاگ‌ها و متریک‌های مانیتورینگ جهت شناسایی گلوگاه‌های پرفورمنس و کوئری‌های کند.
 - **روزهای ۲۱ تا ۳۰:** پذیرش مالکیت تسک‌های کلیدی، ارائه پیشنهادات بهینه‌سازی با بنچمارک دقیق و کمک به ارتقای هم‌تیمی‌ها.`,
   },
+  {
+    id: "dotnet-senior-q301",
+    stackId: "dotnet",
+    categoryId: "ef-core",
+    levelId: "senior",
+    questionTitle: "How do LINQ Providers (IQueryable / IQueryProvider) parse Expression Trees into SQL queries, and why do translation failures occur?",
+    questionTitle_fa: "موتورهای LINQ Provider (IQueryable و IQueryProvider) چگونه درخت عبارات را تجزیه و به کوئری‌های بومی SQL تبدیل می‌کنند و علت خطاهای ارزیابی سمت کلاینت چیست؟",
+    answerContent: `### The LINQ Provider & Expression Translation Architecture
+
+\`\`\`
+IQueryable<T> -> Expression Tree (AST) -> IQueryProvider.Execute()
+                      |
+        RelationalQueryTranslationProcessor
+                      |
+    ExpressionVisitor (Method & Member Mapping)
+                      |
+         SQL Query AST -> SqlServerQuerySqlGenerator -> Native SQL
+\`\`\`
+
+#### Step-by-Step Translation Pipeline:
+1. **Packaging:** \`IQueryable<T>\` captures the LINQ method calls as an in-memory Expression Tree without executing them.
+2. **Provider Dispatch:** When materialization is requested (\`.ToList()\`, \`.FirstOrDefaultAsync()\`), the Expression Tree is passed to \`IQueryProvider.Execute<T>()\` (\`EntityQueryProvider\`).
+3. **AST Walking via \`ExpressionVisitor\`:** EF Core's \`RelationalQueryableMethodTranslatingExpressionVisitor\` recursively traverses the AST nodes, translating:
+   - \`BinaryExpression (AndAlso / OrElse)\` $\to$ \`AND / OR\`
+   - \`MemberExpression (user.IsActive)\` $\to$ \`[u].[IsActive]\`
+   - \`MethodCallExpression (string.Contains)\` $\to$ \`LIKE '%pattern%'\` (or \`CHARINDEX\` in SQL Server).
+4. **Parameterization:** Constant values are extracted into ADO.NET \`DbParameter\` instances (\`@__p_0\`) to prevent SQL injection and enable SQL Server plan caching.
+
+#### Why Translation Failures Occur (Client vs. Server Evaluation):
+In EF Core 3.0+, if an Expression contains custom C# methods or unmapped .NET APIs (e.g. \`u => MyCustomHash(u.SSN) == "xyz"\`), EF Core **refuses silent client evaluation** and throws **\`InvalidOperationException\`** (The LINQ expression could not be translated). To map custom logic, use **\`EF.Functions\`**, user-defined DB functions (\`HasDbFunction\`), or execute in memory after \`.AsEnumerable()\`.`,
+    answerContent_fa: `### ساختار موتور LINQ Provider و ترجمه Expression به SQL
+
+#### فرآیند گام‌به‌گام ترجمه:
+۱. عبارت‌های LINQ بدون اجرا در یک درخت عبارات انتزاعی (\`Expression Tree\`) درون شیء \`IQueryable\` کپسوله می‌شوند.
+۲. با فراخوانی متدهای متریالایز (مانند \`ToListAsync\`)، درخت به \`IQueryProvider\` تحویل داده می‌شود.
+۳. کلاس‌های \`ExpressionVisitor\` درون EF Core گره‌های درخت را پیمایش کرده و معادل‌های SQL برای نام ستون‌ها، مقادیر ثابت پارامتری (\`@__p_0\`) و عملگرهای شرطی تولید می‌کنند.
+۴. دستور نهایی SQL توسط ژنراتور SQL ساخته و از طریق ADO.NET به دیتابیس ارسال می‌گردد.
+
+#### چرایی خطای Translation Failure:
+از نسخه EF Core 3.0 به بعد، اگر متدی در C# استفاده شود که معادل SQL نداشته باشد (مانند توابع کاستوم C# یا متدهای Regex بدون مپینگ)، EF Core ارزیابی خاموش سمت کلاینت را متوقف کرده و خطای **\`InvalidOperationException\`** می‌دهد تا از واکشی کل رکوردهای جدول به رم برنامه جلوگیری شود.`,
+  },
+  {
+    id: "dotnet-senior-q302",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "senior",
+    questionTitle: "How do you dynamically construct and compile Expression Trees at runtime for advanced multi-tenant filtering and dynamic sorting?",
+    questionTitle_fa: "چگونه می‌توان با استفاده از کلاس‌های Expression در زمان اجرا کوئری‌ها و فیلترهای کامپایل‌شده پویا برای گریدها و سیستم‌های چندمستاجری (Multi-Tenancy) ساخت؟",
+    answerContent: `### Dynamic Expression Tree Generation
+
+Dynamic Expression Trees allow building type-safe, parameterized queries at runtime based on dynamic search filters, sort criteria, or multi-tenant rules without string concatenation or SQL injection vulnerabilities.
+
+\`\`\`csharp
+public static class DynamicQueryBuilder {
+    // Builds: (T entity) => entity.PropertyName == propertyValue
+    public static Expression<Func<T, bool>> BuildEqualsPredicate<T>(string propertyName, object propertyValue) {
+        // 1. Parameter: 'entity'
+        var parameter = Expression.Parameter(typeof(T), "entity");
+
+        // 2. Member Access: 'entity.PropertyName'
+        var property = Expression.PropertyOrField(parameter, propertyName);
+
+        // 3. Constant: 'propertyValue' (type converted to match property)
+        var constant = Expression.Constant(Convert.ChangeType(propertyValue, property.Type), property.Type);
+
+        // 4. Binary Comparison: 'entity.PropertyName == propertyValue'
+        var equality = Expression.Equal(property, constant);
+
+        // 5. Lambda: (entity) => entity.PropertyName == propertyValue
+        return Expression.Lambda<Func<T, bool>>(equality, parameter);
+    }
+}
+\`\`\`
+
+#### Production Optimization:
+If dynamically generated expressions are executed frequently in memory via \`.Compile()\`, cache the compiled delegate in a \`ConcurrentDictionary\` using a composite cache key (Entity Type + Filter Signature) to avoid repeating the expensive IL compilation step.`,
+    answerContent_fa: `### ساخت داینامیک درخت عبارات در زمان اجرا
+
+برای ساخت فیلترهای پویا در زمان اجرا بر اساس ورودی‌های کاربر (مانند گریدهای پیشرفته یا فیلترهای Multi-Tenancy)، از متدهای کارخانه‌ای کلاس \`Expression\` استفاده می‌شود:
+
+- ساخت پارامتر ورودی با \`Expression.Parameter\`
+- دسترسی به فیلد/پراپرتی با \`Expression.PropertyOrField\`
+- ساخت مقدار ثابت با \`Expression.Constant\`
+- ایجاد عملگر تساوی یا مقایسه با \`Expression.Equal\` یا \`Expression.AndAlso\`
+- بسته‌بندی در قالب لامبدا با \`Expression.Lambda\`
+
+این رویکرد کاملاً Type-Safe و پارامتریزه بوده و هیچ ریسکی از نظر SQL Injection ندارد. در صورت نیاز به اجرای درون‌حافظه‌ای مکرر، دلیگیت‌های کامپایل‌شده کش می‌شوند.`,
+  },
+  {
+    id: "dotnet-senior-q303",
+    stackId: "dotnet",
+    categoryId: "architecture-ddd",
+    levelId: "senior",
+    questionTitle: "How do you design a reusable Specification Pattern in C# using Expression Trees and parameter replacement visitors?",
+    questionTitle_fa: "چگونه الگوی طراحی Specification را با استفاده از Expression Trees در معماری تمیز پیاده‌سازی کرده و عبارات منطقی (AND, OR, NOT) را با جایگزینی پارامتر ترکیب کنیم؟",
+    answerContent: `### Specification Pattern with Parameter-Replacer Visitor
+
+#### The Challenge:
+Combining two lambda expressions (\`u => u.Age > 18\` and \`x => x.IsActive\`) directly with \`Expression.AndAlso\` fails because they reference **two distinct parameter instances** (\`u\` vs \`x\`).
+
+#### Solution: Custom \`ExpressionVisitor\` for Parameter Unification
+\`\`\`csharp
+public class ParameterReplacer : ExpressionVisitor {
+    private readonly ParameterExpression _source;
+    private readonly ParameterExpression _target;
+    public ParameterReplacer(ParameterExpression source, ParameterExpression target) {
+        _source = source;
+        _target = target;
+    }
+    protected override Expression VisitParameter(ParameterExpression node) =>
+        node == _source ? _target : base.VisitParameter(node);
+}
+
+public abstract class Specification<T> {
+    public abstract Expression<Func<T, bool>> ToExpression();
+
+    public Specification<T> And(Specification<T> other) {
+        var left = ToExpression();
+        var right = other.ToExpression();
+
+        var parameter = Expression.Parameter(typeof(T), "entity");
+        var leftBody = new ParameterReplacer(left.Parameters[0], parameter).Visit(left.Body);
+        var rightBody = new ParameterReplacer(right.Parameters[0], parameter).Visit(right.Body);
+
+        var combined = Expression.AndAlso(leftBody!, rightBody!);
+        return new DirectSpecification<T>(Expression.Lambda<Func<T, bool>>(combined, parameter));
+    }
+}
+\`\`\``,
+    answerContent_fa: `### پیاده‌سازی الگوی Specification با Visitor جایگزینی پارامتر
+
+#### چالش ترکیب Expressionها:
+هنگام ترکیب دو عبارت شرطی مجزا (مانند \`u => u.Age > 18\` و \`x => x.IsActive\`)، نام و نمونه پارامترهای لامبدا با یکدیگر متفاوت است و ترکیب مستقیم آن‌ها خطای زمان اجرا می‌دهد.
+
+#### راهکار: کلاس ExpressionVisitor برای یکسان‌سازی پارامترها
+با پیاده‌سازی یک \`ParameterReplacer\`، پارامترهای هر دو عبارت با یک پارامتر واحد مشترک جایگزین شده و سپس عملگرهای \`AndAlso\` یا \`OrElse\` اعمال می‌شوند. این ساختار اجازه می‌دهد مشخصات بیزینسی به صورت کامپوننت‌های مستقل تعریف و در لایه Repository مستقیماً به کوئری‌های بهینه SQL ترجمه شوند.`,
+  },
+  {
+    id: "dotnet-senior-q304",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "senior",
+    questionTitle: "How does the C# compiler transform async/await into an IAsyncStateMachine struct/class, and what is the role of AsyncMethodBuilder and SynchronizationContext?",
+    questionTitle_fa: "کامپایلر C# چگونه async/await را به یک استراکت/کلاس IAsyncStateMachine تبدیل می‌کند و نقش AsyncMethodBuilder و SynchronizationContext چیست؟",
+    answerContent: `### Deep Dive: Async/Await State Machine Mechanics
+
+#### 1. Compiler Lowering Process:
+Every \`async Task<T>\` method is decomposed into:
+1. An internal struct implementing **\`IAsyncStateMachine\`**.
+2. An **\`AsyncTaskMethodBuilder<T>\`** that orchestrates task completion, exceptions, and execution context flow.
+3. Local variables and arguments become **fields** of the state machine struct.
+
+#### 2. Execution Flow inside \`MoveNext()\`:
+\`\`\`csharp
+// Conceptual generated code:
+public void MoveNext() {
+    try {
+        if (_state == -1) {
+            _awaiter = _service.GetDataAsync().GetAwaiter();
+            if (!_awaiter.IsCompleted) {
+                _state = 0;
+                // Hooks callback on completion without blocking thread
+                _builder.AwaitUnsafeOnCompleted(ref _awaiter, ref this);
+                return; // Thread released back to ThreadPool!
+            }
+        }
+        var result = _awaiter.GetResult();
+        _builder.SetResult(result);
+    } catch (Exception ex) {
+        _builder.SetException(ex);
+    }
+}
+\`\`\`
+
+#### 3. Role of SynchronizationContext & \`ConfigureAwait(false)\`:
+- In UI/legacy ASP.NET contexts, the awaiter captures the current \`SynchronizationContext\` to marshal resumption back to the original UI thread.
+- In modern ASP.NET Core, there is **no SynchronizationContext**. Continuations run on any available ThreadPool worker. Using \`ConfigureAwait(false)\` is still recommended in class libraries to avoid deadlocks when consumed by legacy applications.`,
+    answerContent_fa: `### کالبدشکافی ماشین وضعیت Async/Await در کامپایلر دات‌نت
+
+#### ۱. تبدیل کد توسط کامپایلر:
+متدهای ناهمگام به یک ساختار داخلی با اینترفیس \`IAsyncStateMachine\` تبدیل می‌شوند. تمام متغیرهای محلی به فیلدهای این ساختار تبدیل شده و مدیریت تسک به \`AsyncTaskMethodBuilder\` سپرده می‌شود.
+
+#### ۲. نحوه اجرای متد MoveNext():
+کد تا رسیدن به اولین عبارت \`await\` به صورت سنکرون اجرا می‌شود. اگر عملیات I/O کامل نشده باشد، وضعیت ذخیره شده، متد \`AwaitUnsafeOnCompleted\` ثبت کال‌بک را انجام داده و نخ جاری بلافاصله به ThreadPool بازگردانده می‌شود. پس از اتمام I/O دیتابیس یا سوکت، متد \`MoveNext\` مجدداً فراخوانی و ادامه کد اجرا می‌شود.
+
+#### ۳. نقش SynchronizationContext:
+در ASP.NET Core کانتکست همگام‌سازی حذف شده و تمام ادامه‌ها روی نخی از ThreadPool اجرا می‌شوند.`,
+  },
+  {
+    id: "dotnet-senior-q305",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "senior",
+    questionTitle: "High-Performance I/O: How do Span<T>, ReadOnlySequence<T>, and System.IO.Pipelines (PipeReader) achieve zero-allocation network parsing?",
+    questionTitle_fa: "پردازش فوق سریع ورودی/خروجی: چگونه Span<T>، ReadOnlySequence<T> و کتابخانه System.IO.Pipelines عملیات پارس بسته‌های شبکه بدون هیچ تخصیص حافظه (Zero-Allocation) را انجام می‌دهند؟",
+    answerContent: `### High-Throughput I/O with System.IO.Pipelines
+
+Traditional \`Stream\` reading requires allocating byte buffers, managing dynamic array resizing, and copying memory repeatedly. **\`System.IO.Pipelines\`** eliminates this overhead through memory-pooled buffer management.
+
+\`\`\`csharp
+public async Task ProcessSocketMessagesAsync(PipeReader reader) {
+    while (true) {
+        ReadResult result = await reader.ReadAsync();
+        ReadOnlySequence<byte> buffer = result.Buffer;
+
+        while (TryReadFrame(ref buffer, out MessageFrame frame)) {
+            ProcessFrame(frame); // Uses Span<byte> slices without allocations
+        }
+
+        // Tell the pipe how much data was consumed vs examined
+        reader.AdvanceTo(buffer.Start, buffer.End);
+
+        if (result.IsCompleted) break;
+    }
+}
+\`\`\`
+
+#### Key Architectural Elements:
+1. **Memory Pooling:** The Pipe manages internal memory pages pooled from \`MemoryPool<byte>\`.
+2. **\`ReadOnlySequence<T>\`:** Represents a multi-segment linked buffer, allowing parsing across discontinuous memory blocks.
+3. **Backpressure:** \`PipeOptions\` allows configuring pause/resume thresholds to prevent fast socket producers from exhausting memory when consumers are slow.`,
+    answerContent_fa: `### معماری System.IO.Pipelines و پردازش بسته‌های داده با صفر آلیکیشن
+
+روش سنتی خواندن با \`Stream\` نیازمند تخصیص مداوم آرایه‌های بایت و کپی مکرر حافظه است. معماری \`System.IO.Pipelines\` (پایپ‌لاین زیربنایی Kestrel در دات‌نت) این مشکل را کاملاً حل کرده است:
+
+- **مدیریت استخر حافظه:** بافرها از \`MemoryPool\` تأمین می‌شوند.
+- **ساختار \`ReadOnlySequence<byte>\`:** بسته‌های داده در چند تکه حافظه غیرپیوسته را بدون کپی کردن و الحاق به یکدیگر، در قالب اسلایس‌های \`Span\` پردازش می‌کند.
+- **مدیریت پس‌فشار (Backpressure):** کنترل خودکار سرعت دریافت از سوکت در زمان کندی مصرف‌کننده.`,
+  },
+  {
+    id: "dotnet-senior-q306",
+    stackId: "dotnet",
+    categoryId: "microservices",
+    levelId: "senior",
+    questionTitle: "What are RabbitMQ Quorum Queues, how do they differ from Classic Mirrored Queues, and how do they utilize the Raft consensus algorithm?",
+    questionTitle_fa: "صف‌های Quorum Queues در RabbitMQ چه تفاوتی با Classic Mirrored Queues دارند و چگونه از الگوریتم اجماع Raft برای تاب‌آوری و دسترسی‌پذیری بالا استفاده می‌کنند؟",
+    answerContent: `### RabbitMQ Quorum Queues vs. Classic Mirrored Queues
+
+Classic Mirrored Queues (deprecated in RabbitMQ 3.8+ / removed in 4.0) suffered from severe performance degradation during node synchronization and could lose messages during network partition split-brain events.
+
+| Feature | Classic Mirrored Queues | Quorum Queues (Raft Consensus) |
+| :--- | :--- | :--- |
+| **Replication Protocol** | Custom proprietary sync protocol | **Raft Consensus Algorithm** (Majority Voting) |
+| **Network Partition Safety**| Vulnerable to split-brain data loss | Strictly safe (CP model; prevents split-brain) |
+| **Disk Storage** | In-memory with optional paging | **Always written to disk first (Append-Only Log)** |
+| **Node Addition Overhead**| Re-synchronization blocks queue operations | Non-blocking Raft catch-up replication |
+| **Target Scale** | Small queues | High-throughput, critical financial transactions |
+
+#### The Raft Consensus Mechanism:
+A Quorum Queue is distributed across an odd number of nodes (typically 3 or 5). A message is only acknowledged to the publisher once a **quorum (majority, $\\lfloor N/2 \\rfloor + 1$)** of replicas has safely committed the log entry to non-volatile disk storage.`,
+    answerContent_fa: `### تفاوت Quorum Queues و Classic Mirrored Queues در RabbitMQ
+
+صف‌های سنتی Mirrored Queues در زمان قطعی شبکه و همگام‌سازی نودها دچار افت شدید کارایی و پدیده Split-Brain می‌شدند. در مقابل، **Quorum Queues** بر پایه الگوریتم اجماع **Raft** عمل می‌کنند:
+
+- **مدل اجماع Raft:** پیام تنها زمانی تایید (Ack) می‌شود که توسط اکثریت نودها ($\lfloor N/2 \rfloor + 1$) روی دیسک ثبت شده باشد.
+- **امنیت در قطعی شبکه:** تضمین کامل سازگاری داده‌ها (مدل CP در قضیه CAP).
+- **همگام‌سازی بدون وقفه:** اضافه شدن نود جدید هیچ توقفی در پذیرش پیام‌ها ایجاد نمی‌کند.`,
+  },
+  {
+    id: "dotnet-senior-q307",
+    stackId: "dotnet",
+    categoryId: "microservices",
+    levelId: "senior",
+    questionTitle: "How do you guarantee strict FIFO message ordering per entity while horizontally scaling consumers in RabbitMQ?",
+    questionTitle_fa: "چگونه می‌توان ضمن اسکیل افقی مصرف‌کننده‌ها (Consumers)، ترتیب دقیق زمانی و ترتیبی (FIFO) پیام‌ها را برای هر کاربر یا حساب در RabbitMQ تضمین کرد؟",
+    answerContent: `### Strict FIFO Ordering with Horizontal Consumer Scaling
+
+#### The Competing Consumers Concurrency Problem:
+If 10 consumer threads consume from a single shared queue, Message 2 may complete before Message 1 due to thread scheduling or transient retry delays, destroying chronological order for a given user account.
+
+#### Architectural Solution: Partitioned Queues via Consistent Hash Exchange
+\`\`\`
+Producer -> Consistent Hash Exchange (Routing Key = AccountId)
+                    /       |       \\
+            Queue-0      Queue-1     Queue-2
+               |            |           |
+          Consumer-0   Consumer-1  Consumer-2
+       (Single Active Consumer enabled on each queue)
+\`\`\`
+
+1. **Consistent Hash Exchange (\`x-consistent-hash\`):** Hashes the entity identifier (\`AccountId\` / \`UserId\`) and consistently routes all events for that specific entity to the exact same dedicated partition queue.
+2. **Single Active Consumer (SAC):** Enable SAC (\`x-single-active-consumer: true\`) on each queue so only one consumer thread processes messages from that queue at any time. If that consumer dies, RabbitMQ seamlessly promotes the standby consumer without breaking message ordering.
+3. **Idempotency & Monotonic Sequence IDs:** Consumers reject or ignore out-of-order events using domain sequence version checks.`,
+    answerContent_fa: `### تضمین ترتیب دقیق پیام‌ها (FIFO) همراه با اسکیل افقی در RabbitMQ
+
+#### مشکل رقابت مصرف‌کننده‌ها (Competing Consumers):
+در صورت اتصال چند Consumer همزمان به یک صف، به دلیل تفاوت در سرعت پردازش یا Retryها، ممکن است پیام ۲ قبل از پیام ۱ ثبت شده و توالی تراکنش‌های یک حساب بانکی به هم بریزد.
+
+#### راهکار معماری:
+۱. **استفاده از Consistent Hash Exchange:** پیام‌ها بر اساس هش کلید دامین (مانند \`AccountId\`) به صف‌های پارتیشن‌بندی شده مشخص هدایت می‌شوند (تمام تراکنش‌های کاربر A همیشه به صف شماره ۱ می‌روند).
+۲. **فعال‌سازی Single Active Consumer (SAC):** در هر صف پارتیشن فقط یک Consumer فعال اجازه پردازش دارد. در صورت قطعی نود، بروکر نود استندبای را بدون به هم ریختن ترتیب فعال می‌کند.
+۳. **شماره سریال افزایشی در دامین:** اعتبارسنجی توالی رویدادها در لایه اپلیکیشن با مقایسه نسخه (Sequence Number).`,
+  },
+  {
+    id: "dotnet-senior-q308",
+    stackId: "dotnet",
+    categoryId: "microservices",
+    levelId: "senior",
+    questionTitle: "Deep dive into Redis persistence: Compare RDB (Snapshots) and AOF (Append-Only File). What are the durability trade-offs in FinTech systems?",
+    questionTitle_fa: "تحلیل عمیق ماندگاری داده در Redis: مقایسه RDB و AOF، تفاوت حالت‌های fsync و نحوه تنظیم ماندگاری در سیستم‌های حساس مالی چیست؟",
+    answerContent: `### Redis Persistence: RDB vs. AOF
+
+Redis provides two primary persistence engines that can be combined for maximum durability:
+
+| Dimension | RDB (Redis Database Backup) | AOF (Append-Only File) |
+| :--- | :--- | :--- |
+| **Mechanism** | Point-in-time binary snapshot of entire memory space | Append-only text log of every write command |
+| **Trigger** | Periodic interval (e.g. save after 60s if 1,000 keys changed) or \`BGSAVE\` | Continuous recording on each write command |
+| **Data Loss Window** | Up to the last snapshot interval ($5-15\\text{ minutes}$) | Max 1 second (with \`appendfsync everysec\`) or $0\\text{s}$ (\`always\`) |
+| **Restart Speed** | Extremely fast (binary memory dump restored directly) | Slower (re-executes all write commands) |
+| **Disk I/O Overhead** | Low (only during snapshot fork) | Higher (continuous disk disk writes) |
+
+#### Understanding \`fsync\` Modes in AOF:
+- **\`appendfsync always\`:** Commits every write command to disk using \`fsync()\`. Maximum ACID safety (zero data loss), but throttles write throughput down to disk IOPS limits ($O(\\text{hundreds of writes/sec})$).
+- **\`appendfsync everysec\` (Recommended Production Default):** Flushes the buffer to disk in a background thread every second. Excellent balance: provides $<1$ second data loss window with $>100,000\\text{ ops/sec}$.
+- **\`appendfsync no\`:** Relies entirely on OS buffer flushing (higher risk of data loss on server crash).
+
+#### Hybrid Persistence (Redis 4.0+ / 7.0+):
+Combines an initial RDB snapshot preamble with an AOF delta log during AOF rewrite (\`BGREWRITEAOF\`), giving the best of both worlds: ultra-fast server boot times with near-zero data loss.`,
+    answerContent_fa: `### مقایسه عمیق مکانیزم‌های ماندگاری داده در Redis (RDB در برابر AOF)
+
+- **مکانیزم RDB (اسنپ‌شات باینری):**
+  - از کل حافظه رم یک کپی لحظه‌ای باینری تهیه می‌کند.
+  - فرآیند بازیابی پس از ریستارت سرور بسیار سریع است، اما در صورت کرش ناگهانی، داده‌های بین دو اسنپ‌شات از دست می‌روند.
+
+- **مکانیزم AOF (لاگ افزایشی دستورات):**
+  - تک‌تک دستورات تغییر داده (Write) را در یک فایل متنی لاگ می‌کند.
+  - **حالت \`appendfsync always\`:** ایمن‌ترین حالت برای داده‌های حساس مالی (صفر داده از دست می‌رود) اما سرعت را کاهش می‌دهد.
+  - **حالت \`appendfsync everysec\`:** بهترین تعادل؛ داده‌ها هر یک ثانیه یکبار روی دیسک فلاش می‌شوند (حداکثر یک ثانیه ریسک داده در ازای کارایی فوق‌العاده بالا).
+
+- **ماندگاری ترکیبی (Hybrid Persistence):** ترکیب پایه RDB به همراه لاگ‌های تفاضلی AOF برای بوت فوق‌العاده سریع سرور.`,
+  },
+  {
+    id: "dotnet-senior-q309",
+    stackId: "dotnet",
+    categoryId: "microservices",
+    levelId: "senior",
+    questionTitle: "Why does Redis MULTI/EXEC NOT support ACID rollbacks on runtime errors, and how does Lua Scripting provide true atomic check-and-set operations?",
+    questionTitle_fa: "چرا دستورات MULTI/EXEC در Redis از Rollback در خطاهای منطقی پشتیبانی نمی‌کنند و چگونه اسکریپت‌های Lua اجرای کاملاً اتمیک و بدون Race Condition را فراهم می‌کنند؟",
+    answerContent: `### Redis Transactions (MULTI/EXEC) vs. Lua Scripting Atomicity
+
+#### 1. Why Redis Transactions Do Not Support Rollbacks:
+In Redis, \`MULTI\` queues commands and \`EXEC\` executes them sequentially.
+- If a command fails during queuing (syntax error), the transaction is aborted.
+- **However, if a command fails during execution** (e.g. executing \`LPUSH\` on a string key), Redis continues executing all subsequent commands in the block **without rollback**.
+- **Architectural Rationale:** Redis avoids rollback mechanics to keep its single-threaded execution engine simple and maximally performant.
+
+#### 2. True Atomicity via Lua Scripting (\`EVALSHA\`):
+Redis executes Lua scripts **atomically in its single-threaded core**. No other command or script can run until the current Lua script finishes, preventing race conditions completely without distributed locks!
+
+\`\`\`lua
+-- Atomic Rate Limiter / Sliding Window Script
+local current = redis.call('INCR', KEYS[1])
+if tonumber(current) == 1 then
+    redis.call('EXPIRE', KEYS[1], ARGV[1]) -- Set TTL 60 seconds
+end
+if tonumber(current) > tonumber(ARGV[2]) then
+    return 0 -- Rejected (Exceeded Limit)
+else
+    return 1 -- Allowed
+end
+\`\`\`
+
+\`\`\`csharp
+// Executing via StackExchange.Redis
+var prepared = LuaScript.Prepare(luaCode);
+var result = await db.ScriptEvaluateAsync(prepared, new { key = (RedisKey)"ratelimit:user:101", ttl = 60, max = 10 });
+\`\`\``,
+    answerContent_fa: `### بررسی عدم وجود Rollback در MULTI/EXEC و حل اتمیک با Lua
+
+#### ۱. چرا دستورات MULTI/EXEC رول‌بک ندارند؟
+ردیس برای حفظ سادگی و کارایی حداکثری موتور تک‌نخی خود، سیستم ثبت لاگ Undo/Rollback ندارد. اگر یک دستور درون بلاک ترنزکشن به دلیل عدم تطابق تایپ با خطا مواجه شود، سایر دستورات اجرا شده و بازگشت داده‌ها انجام نمی‌شود.
+
+#### ۲. اجرای کاملاً اتمیک با اسکریپت‌های Lua:
+اسکریپت‌های Lua درون هسته تک‌نخی Redis اجرا می‌شوند؛ در طول زمان اجرای اسکریپت Lua، هیچ دستور یا کلاینت دیگری نمی‌تواند دیتابیس را تغییر دهد.
+این قابلیت امکان بررسی و اعمال تغییرات شرطی (Check-and-Set) مانند **Rate Limiter، کسر موجودی انبار و احراز توکن** را به صورت ۱۰۰٪ اتمیک و بدون نیاز به قفل‌های توزیع‌شده فراهم می‌کند.`,
+  },
+  {
+    id: "dotnet-senior-q310",
+    stackId: "dotnet",
+    categoryId: "microservices",
+    levelId: "senior",
+    questionTitle: "What is Redis Streams (XADD, XREADGROUP, XACK) and how does it compare to Redis Pub/Sub, RabbitMQ, and Apache Kafka?",
+    questionTitle_fa: "ساختار داده Redis Streams چیست و چه تفاوت‌هایی با Redis Pub/Sub، RabbitMQ و Apache Kafka از نظر پایداری داده، گروه مصرف‌کنندگان و کارایی دارد؟",
+    answerContent: `### Redis Streams Deep Dive
+
+Introduced in Redis 5.0, **Redis Streams** is an append-only, Radix-tree backed log data structure designed for real-time messaging, event streaming, and consumer group coordination.
+
+| Feature | Redis Pub/Sub | Redis Streams | RabbitMQ | Apache Kafka |
+| :--- | :--- | :--- | :--- | :--- |
+| **Persistence** | ❌ Fire-and-forget (zero history) | ✅ Persistent on disk/memory | ✅ Persistent in Queues | ✅ Persistent Distributed Log |
+| **Consumer Groups** | ❌ No | ✅ Yes (\`XREADGROUP\`) | ✅ Yes (Competing Consumers)| ✅ Yes (Consumer Groups) |
+| **Message Replay** | ❌ Impossible | ✅ Supported via IDs/Offsets | ❌ Hard (DLQ only) | ✅ Native Offset Seeking |
+| **Backpressure/PEL** | ❌ Buffers overflow | ✅ Pending Entries List (\`XPENDING\`)| ✅ Prefetch Count / QoS | ✅ Pull-based Polling |
+| **Throughput Scale** | Millions/sec | Hundreds of thousands/sec | Tens of thousands/sec | Millions of events/sec |
+
+#### Key Redis Streams Commands:
+- \`XADD mystream * sensor_id 101 temp 36.5\`: Appends a new event with auto-generated timestamp ID.
+- \`XGROUP CREATE mystream mygroup 0\`: Creates a consumer group starting from the beginning.
+- \`XREADGROUP GROUP mygroup consumer1 COUNT 10 BLOCK 2000 STREAMS mystream >\`: Fetches unread messages for this specific consumer.
+- \`XACK mystream mygroup <message-id>\`: Acknowledges message processing, removing it from the Pending Entries List (PEL).
+- \`XAUTOCLAIM mystream mygroup consumer1 60000 0-0 COUNT 10\`: Automatically reclaims stalled/abandoned messages from dead consumers!`,
+    answerContent_fa: `### ساختار داده Redis Streams و مقایسه با RabbitMQ و Kafka
+
+ساختار **Redis Streams** یک گزارش افزایشی (Append-Only Log) پایدار در حافظه است که برای رقابت با کافکا و رفع محدودیت‌های Redis Pub/Sub طراحی شده است:
+
+- **پایداری پیام:** پیام‌ها بر خلاف Pub/Sub در حافظه و دیسک باقی می‌مانند و امکان خواندن مجدد (Replay) تاریخچه رویدادها وجود دارد.
+- **گروه مصرف‌کنندگان (Consumer Groups):** تقسیم بار هوشمندانه بین چند Worker مستقل با دستور \`XREADGROUP\`.
+- **لیست پیام‌های معلق (PEL):** نگهداری پیام‌های تاییدنشده تا در صورت کرش کردن یک Worker، دستور \`XAUTOCLAIM\` پیام را به نود سالم دیگری منتقل کند.
+- **تفاوت با RabbitMQ و Kafka:** سبک‌تر از RabbitMQ و کم‌هزینه‌تر از راه‌اندازی کلاستر کافکا برای سیستم‌های با حجم متوسط و مقیاس‌پذیر.`,
+  },
+  {
+    id: "dotnet-senior-q311",
+    stackId: "dotnet",
+    categoryId: "ef-core",
+    levelId: "senior",
+    questionTitle: "Explain all Transaction Isolation Levels in relational databases and the exact concurrency anomalies they prevent (Dirty Reads, Non-Repeatable Reads, Phantom Reads, Write Skew).",
+    questionTitle_fa: "سطوح مختلف ایزولاسیون تراکنش‌ها (Isolation Levels) در پایگاه‌های داده رابطه‌ای و ناهنجاری‌های همزمانی (Dirty Read، Non-Repeatable Read، Phantom Read و Write Skew) را با جزئیات تحلیل کن.",
+    answerContent: `### Transaction Isolation Levels & Concurrency Anomalies
+
+| Isolation Level | Dirty Read | Non-Repeatable Read | Phantom Read | Write Skew |
+| :--- | :---: | :---: | :---: | :---: |
+| **Read Uncommitted** | ❌ Allowed | ❌ Allowed | ❌ Allowed | ❌ Allowed |
+| **Read Committed** (Default) | ✅ Prevented | ❌ Allowed | ❌ Allowed | ❌ Allowed |
+| **Repeatable Read** | ✅ Prevented | ✅ Prevented | ❌ Allowed | ❌ Allowed |
+| **Snapshot Isolation (MVCC)**| ✅ Prevented | ✅ Prevented | ✅ Prevented | ❌ Allowed |
+| **Serializable** | ✅ Prevented | ✅ Prevented | ✅ Prevented | ✅ Prevented |
+
+#### Definitions of Concurrency Anomalies:
+1. **Dirty Read:** Transaction A reads data modified by Transaction B that has NOT yet committed. If B rolls back, A holds corrupted garbage data.
+2. **Non-Repeatable Read:** Transaction A reads row $X$. Transaction B updates row $X$ and commits. Transaction A re-reads row $X$ and discovers the values have changed.
+3. **Phantom Read:** Transaction A queries all rows with \`Status = 'Active'\` (receives 5 rows). Transaction B inserts a new active row and commits. Transaction A re-runs the range query and gets 6 rows.
+4. **Write Skew (Snapshot Isolation Anomaly):** Occurs when two concurrent transactions read disjoint records that together satisfy a business invariant, but make concurrent updates that violate the global constraint (e.g. two doctors concurrently resign on-call duty because each sees 2 doctors available in their snapshot). Prevented by **Serializable** or explicit row locking (\`UPDLOCK\`).`,
+    answerContent_fa: `### سطوح ایزولاسیون تراکنش‌ها و ناهنجاری‌های همزمانی
+
+#### تحلیل پدیده‌های تداخل همزمانی:
+۱. **Dirty Read:** خواندن داده‌های تراکنش دیگری که هنوز Commit نشده و ممکن است Rollback شود.
+۲. **Non-Repeatable Read:** خواندن مجدد یک سطر خاص و مشاهده تغییر مقادیر آن توسط تراکنش دیگر در حین اجرای تراکنش جاری.
+۳. **Phantom Read:** اجرای مجدد کوئری فیلتر بازه‌ای و اضافه/کم شدن تعداد رکوردهای نتیجه به دلیل درج رکوردهای جدید توسط تراکنش دیگر.
+۴. **Write Skew:** ناهنجاری در سطح Snapshot Isolation؛ زمانی که دو تراکنش همزمان داده‌های متفاوتی را بر اساس اسنپ‌شات معتبر تغییر می‌دهند اما در مجموع قانون یکپارچگی سیستم را نقض می‌کنند (تنها با سطح **Serializable** یا قفل صریح \`UPDLOCK\` مهار می‌شود).`,
+  },
+  {
+    id: "dotnet-senior-q312",
+    stackId: "dotnet",
+    categoryId: "ef-core",
+    levelId: "senior",
+    questionTitle: "Explain the internal architecture of Database Indexes (B+ Tree structure, Clustered vs Non-Clustered, Covering Indexes with INCLUDE, and Index Fragmentation).",
+    questionTitle_fa: "معماری داخلی ایندکس‌های دیتابیس (ساختار درخت B+ Tree، تفاوت ایندکس خوشه‌ای و غیرخوشه‌ای، ایندکس پوششی با INCLUDE و پدیده چندپارگی Fragmentation) چیست؟",
+    answerContent: `### Database Index Internals: The B+ Tree
+
+Relational databases (SQL Server, PostgreSQL, MySQL InnoDB) organize table indexes as balanced search trees (**B+ Trees**).
+
+\`\`\`
+                     [ Root Node Page ]
+                     /                \\
+          [ Intermediate Page ]    [ Intermediate Page ]
+             /            \\             /            \\
+      [ Leaf Page 1 ] <-> [ Leaf Page 2 ] <-> [ Leaf Page 3 ] (Doubly-Linked)
+\`\`\`
+
+#### Key Architectural Components:
+1. **Root & Intermediate Nodes:** Store navigation index keys and 8KB page pointers.
+2. **Leaf Level (Clustered Index):** The leaf level IS the actual physical table data rows. Only **1** clustered index can exist per table.
+3. **Leaf Level (Non-Clustered Index):** Stores index key columns + a **Row Locator** (the clustered index key or Heap RID).
+4. **Key Lookup / Bookmark Lookup:** When a non-clustered index satisfies the \`WHERE\` filter but the \`SELECT\` requires additional columns, the engine must jump to the clustered index page for each row ($O(N)$ random I/O).
+5. **Covering Index Optimization:** Adding non-search columns into the index via **\`INCLUDE (Email, FullName)\`** places them directly in the leaf pages without bloating intermediate nodes, **completely eliminating Key Lookups**!
+
+#### Index Fragmentation & Fill Factor:
+- **Internal Fragmentation:** Sparse pages caused by row deletions or updates.
+- **External Fragmentation (Page Splits):** Inserting records into the middle of full pages forces the engine to allocate a new page out of physical sequence.
+- **Maintenance:** Set \`FILLFACTOR = 80-85%\` for high-insert tables. Run \`REORGANIZE\` ($>10\\%$ fragmentation) or \`REBUILD\` ($>30\\%$ fragmentation).`,
+    answerContent_fa: `### معماری داخلی ایندکس‌های B+ Tree و ایندکس پوششی
+
+- **ساختار درخت B+ Tree:** شامل صفحات ۸ کیلوبایتی ریشه، میانی و برگ است. صفحات برگ به صورت لیست پیوندی دوطرفه متصل هستند تا جستجوهای بازه‌ای (\`BETWEEN\`) با کارایی فوق‌العاده انجام شوند.
+- **ایندکس خوشه‌ای (Clustered):** سطح برگ ایندکس، خود رکوردهای واقعی جدول است (مرتب بر اساس کلید اصلی).
+- **ایندکس غیرخوشه‌ای (Non-Clustered):** سطح برگ فقط شامل فیلد ایندکس شده و یک اشاره‌گر به کلید اصلی است.
+- **رفع هزینه Key Lookup با Covering Index:** با افزودن فیلدهای نمایشی در بخش \`INCLUDE\` ایندکس، دیتابیس بدون نیاز به پرش اضافه به جدول اصلی (Key Lookup)، تمام داده‌ها را از همان ایندکس واکشی می‌کند.
+- **چندپارگی (Fragmentation):** به دلیل شکست صفحات (Page Split) هنگام درج‌های میانی رخ می‌دهد که با تنظیم \`FILLFACTOR\` و عملیات \`REORGANIZE\` یا \`REBUILD\` برطرف می‌شود.`,
+  },
+  {
+    id: "dotnet-senior-q313",
+    stackId: "dotnet",
+    categoryId: "ef-core",
+    levelId: "senior",
+    questionTitle: "What causes Database Deadlocks in SQL Server / PostgreSQL, how do you analyze Deadlock Graphs, and what architectural strategies eliminate them?",
+    questionTitle_fa: "عوامل اصلی ایجاد بن‌بست (Deadlock) در دیتابیس چیست، چگونه Deadlock Graph را تحلیل کنیم و چه راهکارهای معماری برای پیشگیری قطعی از آن وجود دارد؟",
+    answerContent: `### Database Deadlocks: Root Causes & Resolution
+
+A Deadlock is a concurrency condition where two or more database sessions hold locks on resources the other sessions require, forming a cyclic dependency where none can proceed.
+
+\`\`\`
+Transaction A: Locks Row 1 in Orders -> Waits for Lock on Row 2 in Payments
+Transaction B: Locks Row 2 in Payments -> Waits for Lock on Row 1 in Orders
+Result: Deadlock Cycle! DB Deadlock Monitor terminates Transaction with lowest rollback cost.
+\`\`\`
+
+#### Root Causes:
+1. **Inconsistent Object Access Ordering:** Transaction 1 updates \`TableA\` then \`TableB\`; Transaction 2 updates \`TableB\` then \`TableA\`.
+2. **Lock Escalation:** Fine-grained row/page locks escalating to table exclusive locks during bulk updates.
+3. **Missing Indexes on Foreign Keys:** Forces table scans that acquire extensive shared/update locks.
+4. **Long-Running Transactions:** Keeping transactions open while making external HTTP calls or file I/O.
+
+#### Analysis via Extended Events & Deadlock Graphs:
+Enable \`system_health\` session or capture the XML Deadlock Graph (\`xml_deadlock_report\`). Identify the **victim session**, the lock modes (\`Exclusive (X)\`, \`Update (U)\`, \`Shared (S)\`), and the exact SQL queries involved.
+
+#### Prevention Architectural Strategies:
+1. **Deterministic Lock Ordering:** Enforce that all application code updates related tables in the exact same deterministic sequence (e.g. always alphabetical or Parent $\to$ Child).
+2. **Enable Read Committed Snapshot Isolation (RCSI):** In SQL Server (\`SET READ_COMMITTED_SNAPSHOT ON\`), readers do not block writers and writers do not block readers.
+3. **Use Updatelocks Early:** \`SELECT ... WITH (UPDLOCK, ROWLOCK)\` prevents conversion deadlocks where two readers simultaneously attempt to upgrade shared locks to exclusive locks.`,
+    answerContent_fa: `### علل وقوع Deadlock، تحلیل Deadlock Graph و راهکارهای پیشگیری
+
+#### دلایل اصلی ایجاد بن‌بست:
+۱. **عدم رعایت ترتیب یکنواخت دسترسی:** یک تراکنش ابتدا جدول الف و سپس ب را آپدیت می‌کند، در حالی که تراکنش دوم ابتدا جدول ب و سپس الف را تغییر می‌دهد.
+۲. **طولانی بودن زمان تراکنش‌ها:** انجام درخواست‌های کند شبکه یا وب‌سرویس درون تراکنش دیتابیس.
+۳. **فقدان ایندکس روی کلیدهای خارجی:** باعث اسکن کل جدول (Table Scan) و قفل شدن کل رکوردهای دیگر می‌شود.
+
+#### روش‌های مانیتورینگ و رفع:
+- استخراج فایل **XML Deadlock Graph** از رویدادهای پیش‌فرض \`system_health\` برای مشاهده کوئری‌ها و رکوردهای درگیر در بن‌بست.
+- **راهکارها:** ترتیب قطعی و یکنواخت در آپدیت جداول در تمام کدهای برنامه، فعال‌سازی **RCSI** جهت حذف بلاک‌های خواندن و نوشتن، و استفاده به موقع از قفل \`UPDLOCK\`.`,
+  },
+  {
+    id: "dotnet-senior-q314",
+    stackId: "dotnet",
+    categoryId: "system-design-fintech",
+    levelId: "senior",
+    questionTitle: "How do you scale the relational database tier using Table Partitioning, Horizontal Sharding, and Clustered Read Replicas?",
+    questionTitle_fa: "چگونه لایه دیتابیس رابطه‌ای را با استفاده از پارتیشن‌بندی جداول (Table Partitioning)، شاردینگ افقی (Horizontal Sharding) و کلاسترهای Read Replica تا مقیاس ترابایتی توسعه می‌دهید؟",
+    answerContent: `### Scaling the Database Tier to Terabytes
+
+\`\`\`
+                    [ API Gateway / Application ]
+                       /                     \\
+           (Writes: Master DB)        (Reads: Load Balancer)
+                   |                          /           \\
+           (Log Replication)           [ Read-Replica 1 ]  [ Read-Replica 2 ]
+                   |
+     [ Shard 0 ] [ Shard 1 ] [ Shard 2 ] (Horizontal Sharding by TenantId)
+\`\`\`
+
+#### 1. Table Partitioning (Single Instance Optimization):
+- Divides giant tables (e.g. 500M order records) into separate physical filegroups on disk based on a **Partition Function** (e.g. \`YEAR(OrderDate)\`).
+- **Partition Elimination:** Query engine scans only the relevant partition (e.g. 2026 data), skipping 90% of disk pages.
+- Fast zero-downtime data archival via **Partition Switching** (\`ALTER TABLE ... SWITCH PARTITION\`).
+
+#### 2. Clustered Read Replicas (Read/Write CQRS Splitting):
+- All write operations (INSERT, UPDATE, DELETE) route to the **Primary Master DB**.
+- Read queries route to clustered read replicas synced via asynchronous streaming replication.
+- **Handling Replication Lag:** For immediate post-write reads (e.g. user viewing newly placed order), read from the Primary instance or use sticky replication tokens.
+
+#### 3. Horizontal Sharding (Multi-Instance Scaling):
+- Splits dataset across $N$ independent database servers based on a **Shard Key** (\`TenantId\` or \`UserId % N\`).
+- Eliminates single-server RAM/CPU/Disk IOPS bottlenecks completely.`,
+    answerContent_fa: `### استراتژی‌های مقیاس‌پذیری پایگاه‌های داده رابطه‌ای
+
+۱. **پارتیشن‌بندی جداول (Table Partitioning):**
+   - تقسیم فیزیکی داده‌های یک جدول عظیم به فایل‌گروه‌های مجزا روی دیسک بر اساس یک کلید (مانند تاریخ).
+   - افزایش چشمگیر سرعت با **Partition Elimination** (موتور دیتابیس صرفاً پارتیشن بازه زمانی درخواست شده را اسکن می‌کند).
+
+۲. **تفکیک با Read Replicaها (CQRS دیتابیس):**
+   - ارسال تمام تراکنش‌های نوشتن به نود Primary و هدایت ترافیک سنگین گزارش‌ها و جستجوها به نودهای کپی (Read Replicas).
+   - مدیریت تاخیر همگام‌سازی (Replication Lag) برای صفحات حساس بعد از ثبت تراکنش.
+
+۳. **شاردینگ افقی (Horizontal Sharding):**
+   - توزیع فیزیکی رکوردها روی چندین سرور مستقل بر اساس **Shard Key** (مانند شناسه کاربر یا سازمان).`,
+  },
+  {
+    id: "dotnet-senior-q315",
+    stackId: "dotnet",
+    categoryId: "architecture-ddd",
+    levelId: "senior",
+    questionTitle: "Explain the Event Sourcing Pattern and Event Store architecture vs traditional CRUD with Snapshots and Projections.",
+    questionTitle_fa: "الگوی Event Sourcing و معماری پایگاه داده رویدادمحور (Event Store) چیست و تفاوت آن با دیتابیس‌های سنتی CRUD در مدیریت وضعیت، اسنپ‌شات‌ها و Read Modelها چیست؟",
+    answerContent: `### Event Sourcing Pattern & Architecture
+
+#### CRUD vs. Event Sourcing:
+- **Traditional CRUD:** Overwrites current state in the database (\`UPDATE Accounts SET Balance = 800 WHERE Id = 1\`). Historical state mutations are permanently lost.
+- **Event Sourcing:** Never updates or deletes data. Stores state changes as an immutable sequence of **Domain Events** in an append-only log (**Event Store**).
+
+\`\`\`
+Event Stream for Account #101:
+1. AccountOpenedEvent { InitialDeposit: $1000 }
+2. MoneyWithdrawnEvent { Amount: $200 }
+3. FeeChargedEvent { Amount: $15 }
+Current State calculated by replaying stream: $1000 - $200 - $15 = $785
+\`\`\`
+
+#### Key Architectural Components:
+1. **Aggregate Reconstitution:** Load all past events for the Aggregate ID and apply them sequentially to reconstruct in-memory state.
+2. **Snapshotting:** Replaying 10,000 events on every request is slow. Every $N$ events (e.g. 100 events), save a **Snapshot** of the aggregate state. Rehydration loads the latest snapshot and replays only the delta events.
+3. **Projections (Read Models):** Asynchronous projection workers consume domain events to populate optimized denormalized read databases (Elasticsearch, PostgreSQL Read Models) for lightning-fast queries (CQRS).
+4. **Audit Trail & Time Travel:** Guarantees 100% immutable financial compliance and temporal state reconstruction at any historical point in time.`,
+    answerContent_fa: `### معماری و الگوی طراحی رویدادمحور (Event Sourcing)
+
+در مدل‌های سنتی CRUD، وضعیت فعلی جایگزین وضعیت قبلی می‌شود و تاریخچه تغییرات از بین می‌رود. در الگوی **Event Sourcing**:
+- هیچ داده‌ای آپدیت یا حذف نمی‌شود؛ بلکه تمام تغییرات در قالب رویدادهای تغییرناپذیر دامین (\`Domain Events\`) در یک دیتابیس افزایشی (Append-Only Event Store) ثبت می‌شوند.
+
+#### اجزای کلیدی معماری:
+۱. **بازسازی وضعیت (Reconstitution):** وضعیت فعلی موجودیت با بازپخش (Replay) رویدادهای گذشته از ابتدا محاسبه می‌شود.
+۲. **اسنپ‌شات (Snapshotting):** جهت جلوگیری از کندی بازپخش در موجودیت‌های پررویداد، هر ۱۰۰ رویداد یک اسنپ‌شات ذخیره شده و فقط رویدادهای بعد از آن بازخوانی می‌شوند.
+۳. **پروجکشن‌ها (Projections):** ساخت پایگاه‌های داده مخصوص خواندن (Read Models) به صورت غیرهمگام از روی رویدادها (الگوی CQRS).
+۴. **حسابرسی کامل و سفر در زمان:** امکان بازسازی دقیق وضعیت سیستم در هر لحظه از تاریخ برای سناریوهای مالی و حقوقی.`,
+  },
+  {
+    id: "dotnet-senior-q316",
+    stackId: "dotnet",
+    categoryId: "architecture-ddd",
+    levelId: "senior",
+    questionTitle: "Compare the Structural Design Patterns: Adapter, Facade, Proxy, and Decorator with concrete .NET enterprise architectural scenarios.",
+    questionTitle_fa: "مقایسه جامع الگوهای ساختاری: Adapter، Facade، Proxy و Decorator با مثال‌های عملی در معماری سازمانی دات‌نت.",
+    answerContent: `### Structural Design Patterns Comparison
+
+| Pattern | Primary Intent | Interface Modification | Example in .NET Enterprise Architecture |
+| :--- | :--- | :--- | :--- |
+| **Adapter** | Converts incompatible interface to expected interface | **Changes Interface** | Wrapping a legacy SOAP bank API to match your internal \`IPaymentGateway\` interface. |
+| **Facade** | Simplifies a complex multi-service subsystem | **Creates New Simplified Interface** | \`OrderCheckoutFacade\` coordinating Inventory, Payment, Invoice, and Email services. |
+| **Proxy** | Controls access, lazy loading, or security permissions | **Keeps Same Interface** | \`VirtualProxy<T>\` for lazy-loading heavy remote resources, or Security Proxy verifying JWT claims. |
+| **Decorator** | Adds dynamic responsibilities (caching, logging) | **Keeps Same Interface** | Wrapping \`IUserRepository\` with \`CachedUserRepository\` or telemetry tracking via Scrutor. |
+
+#### Architectural Guideline:
+- Use **Adapter** when integrating third-party SDKs without polluting your domain core.
+- Use **Facade** when controllers or endpoints require orchestrating 5+ internal domain services.
+- Use **Decorator** to apply Open/Closed Principle when adding Cross-Cutting Concerns to repositories or handlers.`,
+    answerContent_fa: `### مقایسه الگوهای طراحی ساختاری (Adapter, Facade, Proxy, Decorator)
+
+- **الگوی Adapter (مبدل):**
+  - **هدف:** تغییر اینترفیس یک کلاس خارجی یا سنتی برای سازگاری با استانداردهای داخلی پروژه (مانند تبدیل وب‌سرویس بانک به \`IPaymentService\`).
+- **الگوی Facade (نما):**
+  - **هدف:** ایجاد یک اینترفیس ساده برای هماهنگی بین چندین زیرسیستم پیچیده (مانند فرآیند ثبت نهایی سفارش که انبار، مالی و پیامک را صدا می‌زند).
+- **الگوی Proxy (واسط کنترل دسترسی):**
+  - **هدف:** حفظ همان اینترفیس اما کنترل دسترسی، لود تنبل (Lazy Loading) یا بررسی سطوح دسترسی امنیتی.
+- **الگوی Decorator (تزئین‌کننده):**
+  - **هدف:** حفظ همان اینترفیس و افزودن قابلیت‌های جانبی به صورت پویا (مانند لایه کشینگ یا مانیتورینگ دور ریپازیتوری با پکیج Scrutor).`,
+  },
+  {
+    id: "dotnet-senior-q317",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "senior",
+    questionTitle: "How are the Flyweight Pattern and Object Pooling implemented in high-performance .NET applications (ArrayPool<T>, ObjectPool<T>) to eliminate GC Gen 0/Gen 2 pressure?",
+    questionTitle_fa: "الگوی طراحی Flyweight و مکانیزم‌های Object Pooling در دات‌نت پرسرعت (کلاس‌های ArrayPool و ObjectPool) چگونه پیاده‌سازی شده و فشار روی Garbage Collector را به صفر می‌رسانند؟",
+    answerContent: `### Flyweight Pattern & Memory Pooling in High-Throughput C#
+
+High-frequency memory allocations trigger frequent **Garbage Collection (Gen 0 / Gen 1)** pauses and **Large Object Heap (LOH)** fragmentation.
+
+#### 1. Flyweight Pattern (Intrinsic vs. Extrinsic State):
+- **Principle:** Shares immutable state across thousands of objects to minimize RAM footprint.
+- **Example:** In-memory string interning (\`string.Intern()\`) or shared flyweight formatting metadata objects across insurance pricing calculators.
+
+#### 2. High-Performance Object & Buffer Pooling:
+Instead of allocating and discarding heavy byte arrays or complex objects:
+\`\`\`csharp
+// 1. ArrayPool for zero-allocation byte buffers
+byte[] rented = ArrayPool<byte>.Shared.Rent(4096);
+try {
+    int bytesRead = await stream.ReadAsync(rented.AsMemory(0, 4096));
+    ProcessData(rented.AsSpan(0, bytesRead));
+} finally {
+    ArrayPool<byte>.Shared.Return(rented, clearArray: true); // Return to pool!
+}
+
+// 2. Microsoft.Extensions.ObjectPool for heavy reusable instances
+var pool = new DefaultObjectPool<StringBuilder>(new StringBuilderPooledObjectPolicy());
+var sb = pool.Get();
+try {
+    sb.Append("High throughput string formatting...");
+    return sb.ToString();
+} finally {
+    pool.Return(sb); // Clears and returns to pool
+}
+\`\`\``,
+    answerContent_fa: `### الگوی Flyweight و استخرهای حافظه (ArrayPool و ObjectPool)
+
+تخصیص مداوم حافظه در برنامه‌های پرترافیک باعث فشار شدید روی Garbage Collector و توقف موقت برنامه (GC Pauses) می‌شود:
+
+- **الگوی Flyweight:** تفکیک وضعیت‌های مشترک و تغییرناپذیر برای جلوگیری از تکرار اشیا در رم (مانند String Interning).
+- **کلاس \`ArrayPool<T>.Shared\`:** قرض گرفتن بافرهای بایت از استخر حافظه با متد \`Rent\` و بازگرداندن آن با \`Return\` در بلوک \`finally\` برای جلوگیری از ورود بافرها به Large Object Heap (LOH).
+- **کلاس \`ObjectPool<T>\`:** استفاده مجدد از اشیای سنگین مانند \`StringBuilder\` یا اتصالات شبکه به جای ساخت و تخریب مداوم آنها.`,
+  },
+  {
+    id: "dotnet-senior-q318",
+    stackId: "dotnet",
+    categoryId: "system-design",
+    levelId: "senior",
+    questionTitle: "Explain the CAP Theorem and the PACELC Theorem in modern distributed data stores (SQL vs NoSQL vs Distributed SQL).",
+    questionTitle_fa: "قضیه CAP و قضیه جامع‌تر PACELC را در پایگاه‌های داده توزیع‌شده مدرن (SQL، NoSQL و Distributed SQL مانند CockroachDB/Spanner) تحلیل کن.",
+    answerContent: `### CAP Theorem vs. PACELC Theorem
+
+#### 1. CAP Theorem Breakdown:
+In any asynchronous distributed network, network partitions (**P**) are physically inevitable. Therefore, a distributed system must choose between:
+- **CP (Consistency & Partition Tolerance):** Rejects writes or returns errors if nodes cannot agree, prioritizing strict data accuracy (e.g. MongoDB, Redis Sentinel, Google Spanner, HBase).
+- **AP (Availability & Partition Tolerance):** Accepts writes on any reachable node and achieves **Eventual Consistency**, prioritizing 100% uptime (e.g. Apache Cassandra, Amazon DynamoDB, CouchDB).
+
+#### 2. The PACELC Theorem (A More Complete Distributed Taxonomy):
+The CAP theorem only describes behavior **during network partitions**. PACELC extends this to describe trade-offs during **normal operation**:
+
+$$\\textbf{If (P)artition:} \\; \\text{Trade-off between } \\textbf{(A)vailability} \\text{ and } \\textbf{(C)onsistency}$$
+$$\\textbf{(E)lse (Normal State):} \\; \\text{Trade-off between } \\textbf{(L)atency} \\text{ and } \\textbf{(C)onsistency}$$
+
+| Database | PACELC Classification | Explanation |
+| :--- | :--- | :--- |
+| **MongoDB** | **PC/EC** | Under partition chooses Consistency; during normal state chooses strong Consistency over lower Latency. |
+| **Cassandra / DynamoDB** | **PA/EL** | Under partition chooses Availability; during normal state chooses ultra-low Latency (eventual consistency). |
+| **Google Spanner / CockroachDB** | **PC/EC** | Uses atomic hardware clocks (TrueTime) and Raft consensus for globally consistent distributed SQL transactions. |`,
+    answerContent_fa: `### قضیه CAP و قضیه جامع‌تر PACELC در سیستم‌های توزیع‌شده
+
+#### ۱. قضیه CAP:
+در شبکه‌های توزیع‌شده بروز قطعی شبکه (**Partition**) اجتناب‌ناپذیر است، بنابراین سیستم باید بین دو حالت انتخاب کند:
+- **مدل CP (سازگاری قطعی):** رد کردن درخواست‌ها در زمان قطعی تا تضمین شود هیچ داده متناقضی ثبت نمی‌شود (مانند Spanner و MongoDB).
+- **مدل AP (دسترسی‌پذیری همیشگی):** پاسخ به تمام درخواست‌ها و دستیابی به سازگاری تدریجی (Eventual Consistency مانند Cassandra).
+
+#### ۲. قضیه PACELC:
+قضیه PACELC وضعیت عادی سیستم بدون قطعی شبکه را نیز مدل‌سازی می‌کند:
+- **در زمان قطعی (Partition):** انتخاب بین **A**vailability یا **C**onsistency
+- **در حالت عادی (Else):** انتخاب بین **L**atency پایین یا **C**onsistency بالا
+- سیستم‌هایی مانند DynamoDB از نوع **PA/EL** (اولویت سرعت و آپ‌تایم) و سیستم‌های مالی مانند Spanner و CockroachDB از نوع **PC/EC** (اولویت قطعی سازگاری داده‌ها) هستند.`,
+  },
 ];
+

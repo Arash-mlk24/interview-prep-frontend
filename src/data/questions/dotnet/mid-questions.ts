@@ -2052,4 +2052,448 @@ Automates static code analysis in CI pipelines:
 
 قرار دادن درخواست‌ها در صف‌های ناهمگام (RabbitMQ یا Hangfire)، پردازش دسته‌ای با اعمال محدودیت نرخ ارسال و استفاده از الگوی Outbox برای اطمینان از ثبت قطعی پیام.`,
   },
+  {
+    id: "dotnet-mid-q201",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "mid",
+    questionTitle: "What is an Expression Tree in C# and what is the fundamental difference between Expression<Func<T, bool>> and Func<T, bool>?",
+    questionTitle_fa: "مفهوم درخت عبارات (Expression Tree) در سی‌شارپ چیست و تفاوت بنیادین Expression<Func<T, bool>> با Func<T, bool> در چیست؟",
+    answerContent: `### Expression Trees vs. Delegates
+
+- **\`Func<T, bool>\` (Delegate):**
+  - Compiled directly to executable **Intermediate Language (IL) bytecode**.
+  - Treated as a black-box executable pointer by the CLR.
+  - Used in LINQ-to-Objects (\`IEnumerable<T>\`) to filter items in **Application RAM**.
+
+- **\`Expression<Func<T, bool>>\` (Expression Tree):**
+  - Represents code as an in-memory **Abstract Syntax Tree (AST)** data structure.
+  - Transparent and inspectable at runtime (e.g. examining parameter names, property access, binary operators).
+  - Used in LINQ-to-Entities (\`IQueryable<T>\`) where EF Core translates the AST nodes into native **SQL WHERE clauses** executed on the database server.
+  - To execute locally in memory, it must be explicitly compiled via \`.Compile()\`, which has a small runtime compilation cost.`,
+    answerContent_fa: `### تفاوت درخت عبارات (Expression Tree) و Delegate
+
+- **\`Func<T, bool>\`:**
+  - مستقیماً به بایت‌کد اجرایی IL کامپایل شده و در حافظه رم به صورت یک تابع آماده اجرا فراخوانی می‌شود.
+  - در کوئری‌های \`IEnumerable\` (درون حافظه RAM) استفاده می‌شود.
+
+- **\`Expression<Func<T, bool>>\`:**
+  - کد را به صورت یک **ساختار داده درختی (AST)** در حافظه ذخیره می‌کند.
+  - موتورهای ORM مانند EF Core با پیمایش این درخت، متغیرها و عملگرها را به کدهای **SQL** تبدیل می‌کنند تا فیلتر روی سرور دیتابیس اجرا شود.
+  - برای اجرای درون حافظه، نیازمند کامپایل با متد \`.Compile()\` است.`,
+  },
+  {
+    id: "dotnet-mid-q202",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "mid",
+    questionTitle: "What is a 'ref struct' in C#, how does it differ from a standard struct, and what stack-only constraints does the CLR enforce?",
+    questionTitle_fa: "مفهوم 'ref struct' در سی‌شارپ چیست، چه تفاوتی با struct معمولی دارد و چه محدودیت‌هایی توسط CLR برای آن اعمال می‌شود؟",
+    answerContent: `### 'ref struct' and Stack-Only Invariants
+
+A **\`ref struct\`** is a value type that the CLR strictly enforces to live **exclusively on the execution stack**, never on the managed heap.
+
+\`\`\`csharp
+public readonly ref struct FastStringReader {
+    private readonly ReadOnlySpan<char> _buffer;
+    public FastStringReader(ReadOnlySpan<char> buffer) => _buffer = buffer;
+}
+\`\`\`
+
+#### Enforced CLR Rules:
+1. **No Boxing:** Cannot be cast to \`object\`, \`dynamic\`, or \`ValueType\`.
+2. **No Heap Fields:** Cannot be a field of a regular \`class\` or normal \`struct\`.
+3. **No Lambda Closures:** Cannot be captured in lambda expressions or local functions.
+4. **No Async Boundaries:** Cannot be used across \`await\` expressions in \`async\` methods.
+5. **No Thread Transitions:** Cannot be passed across threads (e.g. background tasks).
+
+#### Purpose:
+Enables zero-allocation high-performance types like **\`Span<T>\`** and **\`ReadOnlySpan<T>\`** that hold interior managed pointers safely.`,
+    answerContent_fa: `### ساختار 'ref struct' و تضمین‌های حافظه Stack
+
+یک **\`ref struct\`** ساختار داده مقداری است که CLR تضمین می‌کند **صرفاً روی Stack تخصیص یافته و هرگز به Heap منتقل نشود**.
+
+#### محدودیت‌های اعمال‌شده توسط CLR:
+۱. **عدم امکان Boxing:** هرگز نمی‌تواند به \`object\` یا اینترفیس تبدیل شود.
+۲. **عدم امکان تعریف در کلاس:** نمی‌تواند فیلدی از یک \`class\` یا \`struct\` عادی باشد.
+۳. **عدم کپچر در لامبدا:** درون توابع ناشناس یا Closureها قابل استفاده نیست.
+۴. **عدم عبور از مرز Async:** در متدهای حاوی \`async/await\` در محدوده عبارات ناهمگام قابل استفاده نیست.
+
+#### کاربرد اصلی:
+پیاده‌سازی ساختارهای فوق‌سریع و بدون Allocation مانند **\`Span<T>\`** و **\`ReadOnlySpan<T>\`**.`,
+  },
+  {
+    id: "dotnet-mid-q203",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "mid",
+    questionTitle: "Compare Span<T> and Memory<T>. Why can Span<T> NOT be used across await points in async methods?",
+    questionTitle_fa: "مقایسه Span<T> و Memory<T>: چرا Span<T> نمی‌تواند از مرز await در متدهای async عبور کند؟",
+    answerContent: `### Span<T> vs. Memory<T> in Asynchronous Code
+
+| Feature | \`Span<T>\` | \`Memory<T>\` |
+| :--- | :--- | :--- |
+| **Type** | \`ref struct\` (Stack-Only) | Standard \`struct\` (Heap-Safe) |
+| **Async Support** | ❌ Cannot cross \`await\` points | ✅ Can be used across \`await\` |
+| **Heap Storage** | ❌ Cannot live on heap | ✅ Can be a field of a class or task state |
+| **Usage** | Synchronous, high-speed slicing | Asynchronous I/O pipelines |
+
+#### Why Span<T> Fails in Async Methods:
+When compiling an \`async\` method, the C# compiler generates an **\`IAsyncStateMachine\`** struct/class that is hoisted onto the **Managed Heap** when an asynchronous operation yields. Because a \`ref struct\` cannot exist on the heap, holding a \`Span<T>\` across an \`await\` throws a compiler error (**CS4007**).
+
+#### Solution:
+Pass \`Memory<T>\` or \`ReadOnlyMemory<T>\` into async methods, and obtain a stack-allocated \`.Span\` synchronously only when slicing data.`,
+    answerContent_fa: `### تفاوت Span<T> و Memory<T> در کدهای ناهمگام
+
+| ویژگی | \`Span<T>\` | \`Memory<T>\` |
+| :--- | :--- | :--- |
+| **نوع ساختار** | \`ref struct\` (فقط روی Stack) | \`struct\` معمولی (قابل ذخیره روی Heap) |
+| **پشتیبانی از Async** | ❌ عدم امکان عبور از \`await\` | ✅ کاملاً سازگار با متدهای ناهمگام |
+| **محل نگهداری** | فقط فریم جاری استک | فیلدهای کلاس، استیت ماشین و پایپ‌لاین‌ها |
+
+#### علت عدم امکان استفاده از Span در متدهای Async:
+کامپایلر دات‌نت متد \`async\` را به یک State Machine تبدیل کرده و هنگام معلق شدن متد با \`await\`، متغیرهای محلی را روی **Heap** می‌برد. چون \`ref struct\` حق قرار گرفتن روی Heap را ندارد، کامپایلر ارور می‌دهد. برای حل این مشکل، از \`Memory<T>\` استفاده شده و در زمان پردازش همگام با \`.Span\` خوانده می‌شود.`,
+  },
+  {
+    id: "dotnet-mid-q204",
+    stackId: "dotnet",
+    categoryId: "microservices",
+    levelId: "mid",
+    questionTitle: "How do Publisher Confirms and Consumer Acknowledgements (Ack, Nack, Reject) guarantee message safety in RabbitMQ?",
+    questionTitle_fa: "مکانیزم‌های Publisher Confirms و Consumer Acknowledgements (مانند Ack، Nack و Reject) در RabbitMQ چگونه از مفقود شدن پیام جلوگیری می‌کنند؟",
+    answerContent: `### End-to-End Reliability in RabbitMQ
+
+#### 1. Publisher Confirms (Producer $\to$ Broker Safety):
+- Traditional channel publishing is fire-and-forget.
+- With **Publisher Confirms** enabled (\`channel.ConfirmSelect()\`), the RabbitMQ broker asynchronously returns an \`Ack\` to the producer once the message is written to disk or replicated to quorum queues.
+- If disk write fails, the broker sends a \`Nack\`, allowing the producer to retry.
+
+#### 2. Consumer Acknowledgements (Broker $\to$ Consumer Safety):
+- **Auto-Ack (\`autoAck: true\`):** The broker deletes the message the moment it sends it over the TCP socket. If consumer crashes during processing, the message is permanently lost.
+- **Manual Ack (\`autoAck: false\`):**
+  - \`BasicAck(deliveryTag, multiple: false)\`: Confirms successful processing; broker removes message from queue.
+  - \`BasicNack(deliveryTag, multiple: false, requeue: true/false)\`: Rejects single/multiple messages. If \`requeue: false\`, routes to Dead Letter Exchange (DLX).
+  - \`BasicReject(deliveryTag, requeue: false)\`: Rejects a single message.`,
+    answerContent_fa: `### تضمین عدم مفقودی پیام در RabbitMQ
+
+#### ۱. مکانیزم Publisher Confirms (از تولیدکننده به بروکر):
+- فعال‌سازی تاییدیه انتشار باعث می‌شود بروکر پس از اطمینان از ذخیره پیام روی دیسک یا کپی روی نودهای کلاستر، سیگنال \`Ack\` به تولیدکننده ارسال کند تا در صورت بروز خطا پیام مجدداً ارسال شود.
+
+#### ۲. مکانیزم Consumer Acknowledgements (از مصرف‌کننده به بروکر):
+- **حالت خودکار (Auto-Ack):** خطرناک؛ به محض تحویل بسته TCP پیام از صف پاک می‌شود.
+- **حالت دستی (Manual Ack):**
+  - **\`BasicAck\`:** اعلام پردازش موفق و حذف قطعی از صف.
+  - **\`BasicNack\` / \`BasicReject\`:** در صورت بروز خطا، با \`requeue: true\` پیام دوباره در صف قرار می‌گیرد و با \`requeue: false\` به صف Dead Letter هدایت می‌شود.`,
+  },
+  {
+    id: "dotnet-mid-q205",
+    stackId: "dotnet",
+    categoryId: "microservices",
+    levelId: "mid",
+    questionTitle: "How do you implement Retry Policies with Exponential Backoff and Dead Letter Exchanges (DLX) in RabbitMQ and MassTransit?",
+    questionTitle_fa: "چگونه می‌توان با استفاده از صف Dead Letter (DLX)، افزونه Delayed Exchange و کتابخانه MassTransit، استراتژی Retry با تاخیر تصاعدی (Exponential Backoff) پیاده‌سازی کرد؟",
+    answerContent: `### Resilient Messaging: Retries & Dead Lettering
+
+#### 1. Why Immediate Retries Are Dangerous:
+Immediate retries on database deadlocks or network hiccups cause **retry storms** and consume 100% CPU.
+
+#### 2. Exponential Backoff with Jitter:
+Wait intervals increase exponentially (e.g. $1s \to 2s \to 4s \to 8s$) with randomized jitter to prevent thundering herd problems.
+
+#### 3. Delayed Message Exchange & Dead Letter Exchange (DLX):
+- Messages failing transient retries are republished to a **Delayed Exchange** (\`x-delayed-message\`) with a \`x-delay\` header.
+- Poison pills (permanent validation or deserialization errors) are forwarded to a **Dead Letter Queue (DLQ)** for manual inspection without blocking the primary queue.
+
+\`\`\`csharp
+// MassTransit Configuration:
+services.AddMassTransit(x => {
+    x.UsingRabbitMq((ctx, cfg) => {
+        cfg.UseMessageRetry(r => r.Exponential(
+            retryCount: 5,
+            minInterval: TimeSpan.FromSeconds(1),
+            maxInterval: TimeSpan.FromSeconds(30),
+            intervalDelta: TimeSpan.FromSeconds(2)
+        ));
+    });
+});
+\`\`\``,
+    answerContent_fa: `### مدیریت خطای پیام‌ها با Retry تصاعدی و DLX
+
+#### ۱. خطر Retryهای آنی:
+تلاش مجدد پشت سر هم هنگام قطعی دیتابیس یا وب‌سرویس خارجی موجب اشباع CPU و ایجاد طوفان درخواست (Retry Storm) می‌شود.
+
+#### ۲. تاخیر تصاعدی (Exponential Backoff):
+افزایش تصاعدی فواصل تلاش مجدد (مثلاً ۱، ۲، ۴، ۸ و ۱۶ ثانیه) به همراه مقداری نویز تصادفی (Jitter).
+
+#### ۳. صف خطا (Dead Letter Queue):
+پیام‌هایی که پس از چند بار تلاش پردازش نمی‌شوند، با Nack و \`requeue: false\` به صف **Dead Letter** منتقل می‌شوند تا بدون بلاک کردن صف اصلی، توسط توسعه‌دهندگان بررسی و لاگ‌گیری شوند.`,
+  },
+  {
+    id: "dotnet-mid-q206",
+    stackId: "dotnet",
+    categoryId: "microservices",
+    levelId: "mid",
+    questionTitle: "What are Redis Eviction Policies (LRU, LFU, TTL, noeviction) and how do you handle memory pressure (OOM)?",
+    questionTitle_fa: "سیاست‌های آزادسازی حافظه (Eviction Policies مانند LRU، LFU، TTL و noeviction) در Redis چگونه کار می‌کنند و فشار حافظه (OOM) چگونه مدیریت می‌شود؟",
+    answerContent: `### Redis Memory Eviction Policies
+
+When Redis memory reaches \`maxmemory\`, it executes the configured eviction algorithm to free space:
+
+1. **\`noeviction\` (Default):** Returns an Out-of-Memory (OOM) error for any write command. Ideal when Redis is used as a strict datastore rather than a disposable cache.
+2. **\`allkeys-lru\`:** Evicts the **Least Recently Used** keys among ALL keys. Best general-purpose caching policy for standard Web APIs.
+3. **\`volatile-lru\`:** Evicts the Least Recently Used keys only among keys with an expiration (**TTL**) set.
+4. **\`allkeys-lfu\` / \`volatile-lfu\`:** Evicts the **Least Frequently Used** keys (tracks access frequency counters, ideal for hot-key protection).
+5. **\`volatile-ttl\`:** Evicts keys with an expiration set, prioritizing keys with the **shortest remaining time-to-live**.
+
+#### Production Best Practice:
+Set \`maxmemory\` to $70-80\\%$ of total server RAM to allow memory overhead for Redis background replication buffers and fork snapshot processes.`,
+    answerContent_fa: `### سیاست‌های پاک‌سازی حافظه در Redis
+
+هنگامی که حجم داده‌های Redis به سقف مجاز (\`maxmemory\`) می‌رسد، یکی از سیاست‌های زیر اعمال می‌شود:
+
+۱. **\`noeviction\` (پیش‌فرض):** رد کردن دستورات نوشتن جدید با خطای OOM (مناسب زمانی که ردیس دیتابیس اصلی است).
+۲. **\`allkeys-lru\`:** پاک‌سازی کلیدهایی که در دورترین زمان استفاده شده‌اند (بهترین گزینه برای کشینگ وب‌سرویس‌ها).
+۳. **\`allkeys-lfu\`:** پاک‌سازی کلیدهایی که کمترین تعداد دفعات استفاده را داشته‌اند (محافظت از کلیدهای پرکاربرد).
+۴. **\`volatile-ttl\`:** حذف کلیدهایی که کمترین زمان انقضا (TTL) برای آن‌ها باقی مانده است.`,
+  },
+  {
+    id: "dotnet-mid-q207",
+    stackId: "dotnet",
+    categoryId: "ef-core",
+    levelId: "mid",
+    questionTitle: "Compare Optimistic and Pessimistic Concurrency Control in SQL Server and EF Core (RowVersion vs UPDLOCK).",
+    questionTitle_fa: "مقایسه کنترل همزمانی خوش‌بینانه (Optimistic) و بدبینانه (Pessimistic) در SQL Server و EF Core: در چه شرایطی از هر کدام استفاده می‌شود؟",
+    answerContent: `### Optimistic vs. Pessimistic Concurrency Control
+
+#### 1. Optimistic Concurrency (EF Core Default Approach):
+- **Principle:** Assumes conflicts are rare; does not lock database rows during reads.
+- **Implementation:** Adds a \`byte[] RowVersion\` property configured with \`[Timestamp]\` or \`.IsRowVersion()\`.
+- **SQL Generated:** \`UPDATE Products SET Stock = 5 WHERE Id = @Id AND RowVersion = @OldVersion\`.
+- **Conflict Handling:** If another user modified the row, zero rows are affected and EF Core throws **\`DbUpdateConcurrencyException\`**, allowing the application to reload and retry.
+
+#### 2. Pessimistic Concurrency (Direct SQL Locking):
+- **Principle:** Assumes conflicts are frequent; locks the target rows immediately upon reading to prevent concurrent modifications.
+- **Implementation:** Uses raw SQL query hints:
+  \`\`\`csharp
+  var product = await dbContext.Products
+      .FromSqlInterpolated($"SELECT * FROM Products WITH (UPDLOCK, ROWLOCK) WHERE Id = {id}")
+      .FirstOrDefaultAsync();
+  \`\`\`
+- **Trade-off:** High contention and risk of deadlocks, but guarantees serialization for financial seat reservations or flash sales.`,
+    answerContent_fa: `### مقایسه همزمانی خوش‌بینانه و بدبینانه در EF Core
+
+#### ۱. کنترل خوش‌بینانه (Optimistic):
+- عدم ایجاد قفل هنگام خواندن؛ فرض بر این است که تداخل به ندرت رخ می‌دهد.
+- استفاده از فیلد \`[Timestamp] byte[] RowVersion\`.
+- در صورت تغییر همزمان داده توسط کاربر دیگر، EF Core خطای **\`DbUpdateConcurrencyException\`** صادر می‌کند تا برنامه تصمیم به Retry یا بازخوانی بگیرد.
+
+#### ۲. کنترل بدبینانه (Pessimistic):
+- قفل کردن فوری سطر به محض خواندن با دستورات \`UPDLOCK\` در SQL Server یا \`FOR UPDATE\` در PostgreSQL.
+- سایر درخواست‌ها تا پایان تراکنش منتظر می‌مانند (مناسب سناریوهای پرریسک مانند خرید بلیت یا کسر موجودی فین‌تک).`,
+  },
+  {
+    id: "dotnet-mid-q208",
+    stackId: "dotnet",
+    categoryId: "ef-core",
+    levelId: "mid",
+    questionTitle: "What is Polyglot Persistence and how do you choose between Relational, Document (MongoDB), Key-Value (Redis), Columnar (ClickHouse), and Graph databases?",
+    questionTitle_fa: "معماری Polyglot Persistence چیست و چگونه بین دیتابیس‌های رابطه‌ای، سندمحور (MongoDB)، کلید-مقدار (Redis)، ستونی (ClickHouse) و گراف تصمیم‌گیری می‌کنیم؟",
+    answerContent: `### Polyglot Persistence Strategy
+
+**Polyglot Persistence** means utilizing different database storage engines within the same system, matching each microservice or component to the database technology that best suits its data model and access patterns.
+
+| Database Type | Examples | Primary Strengths | Typical Use Case |
+| :--- | :--- | :--- | :--- |
+| **Relational (RDBMS)** | PostgreSQL, SQL Server | ACID guarantees, complex relational joins | Financial ledgers, core transactional accounts, orders |
+| **Document (NoSQL)** | MongoDB, Cosmos DB | Dynamic schema, fast nested JSON persistence | Product catalogs, user profile preferences, audit logs |
+| **Key-Value / Cache** | Redis, KeyDB | Sub-millisecond latency, in-memory structures | Session tokens, distributed locks, rate-limit counters |
+| **Columnar (OLAP)** | ClickHouse, DuckDB | Aggregations over billions of rows at lightning speed | Financial analytics, business intelligence dashboards |
+| **Search Engine** | Elasticsearch, OpenSearch | Inverted indexes, full-text fuzzy queries | E-commerce product search, centralized log monitoring |
+| **Graph** | Neo4j, AWS Neptune | Index-free adjacency, complex relationship traversal | Social networks, fraud detection in money transfers |`,
+    answerContent_fa: `### معماری چندگانگی پایگاه‌داده (Polyglot Persistence)
+
+در معماری‌های میکروسرویس مدرن، برای هر بخش از دیتابیسی استفاده می‌شود که بیشترین تطابق را با ساختار داده و نیاز پرفورمنسی آن دارد:
+
+- **رابطه‌ای (PostgreSQL / SQL Server):** تراکنش‌های مالی، سیستم سفارشات و مواردی که به سازگاری قطعی ACID و روابط کلید خارجی نیاز دارند.
+- **سندمحور (MongoDB):** کاتالوگ محصولات با ساختار نامتقارن و لاگ‌های انعطاف‌پذیر JSON.
+- **کلید-مقدار (Redis):** مدیریت نشست‌ها، قفل‌های توزیع‌شده، Rate Limiting و کشینگ سریع.
+- **ستونی (ClickHouse):** گزارش‌گیری و تحلیل روی میلیاردها سطر لاگ یا تراکنش‌های تحلیلی (OLAP).
+- **گرافی (Neo4j):** کشف تقلب‌های مالی و تحلیل شبکه‌های پیچیده ارتباطی.`,
+  },
+  {
+    id: "dotnet-mid-q209",
+    stackId: "dotnet",
+    categoryId: "architecture-ddd",
+    levelId: "mid",
+    questionTitle: "How is the Chain of Responsibility Pattern applied in ASP.NET Core Middleware and MediatR Pipeline Behaviors?",
+    questionTitle_fa: "الگوی طراحی زنجیره مسئولیت (Chain of Responsibility) در Middleware دات‌نت و Pipeline Behaviors کتابخانه MediatR چگونه پیاده‌سازی می‌شود؟",
+    answerContent: `### Chain of Responsibility in .NET
+
+The **Chain of Responsibility** pattern decouples the sender of a request from its receivers by giving multiple handlers a chance to process the request sequentially along a pipeline.
+
+#### 1. ASP.NET Core Middleware Pipeline:
+Each middleware receives an \`HttpContext\` and a \`RequestDelegate next\`:
+\`\`\`csharp
+public async Task InvokeAsync(HttpContext context, RequestDelegate next) {
+    // Pre-processing (e.g. start stopwatch, authenticate token)
+    await next(context); // Pass to next handler in chain
+    // Post-processing (e.g. log response time, add headers)
+}
+\`\`\`
+
+#### 2. MediatR Pipeline Behaviors:
+Implements cross-cutting concerns around command/query handlers:
+\`\`\`csharp
+public class ValidationBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
+    where TRequest : IRequest<TResponse> {
+    private readonly IEnumerable<IValidator<TRequest>> _validators;
+    public ValidationBehavior(IEnumerable<IValidator<TRequest>> validators) => _validators = validators;
+
+    public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken ct) {
+        var context = new ValidationContext<TRequest>(request);
+        var failures = _validators.Select(v => v.Validate(context)).SelectMany(r => r.Errors).Where(f => f != null).ToList();
+        if (failures.Count != 0) throw new ValidationException(failures);
+
+        return await next(); // Forward along pipeline
+    }
+}
+\`\`\``,
+    answerContent_fa: `### الگوی زنجیره مسئولیت (Chain of Responsibility) در دات‌نت
+
+این الگو درخواست را از میان زنجیره‌ای از پردازنده‌ها عبور می‌دهد؛ هر پردازنده می‌تواند قبل و بعد از پردازنده بعدی کدهای جانبی (Cross-Cutting Concerns) را اجرا کند:
+
+۱. **خط لوله Middleware در ASP.NET Core:**
+   - با دریافت نماینده \`RequestDelegate next\`، درخواست را پس از بررسی احراز هویت یا مدیریت خطا به مرحله بعد می‌فرستد.
+
+۲. **رفتارهای MediatR (Pipeline Behaviors):**
+   - برای اعتبارسنجی خودکار ورودی‌ها با FluentValidation، لاگ‌گیری زمان اجرای دستورات و مدیریت ترنزکشن‌های دیتابیس قبل از رسیدن به Handler اصلی.`,
+  },
+  {
+    id: "dotnet-mid-q210",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "mid",
+    questionTitle: "What are the architectural differences between Observer Pattern, Mediator Pattern, and Pub/Sub in .NET, and how do you prevent Memory Leaks?",
+    questionTitle_fa: "تفاوت‌های معماری میان الگوهای Observer، Mediator و Pub/Sub در دات‌نت چیست و چگونه از نشت حافظه (Memory Leak) در رویدادها جلوگیری کنیم؟",
+    answerContent: `### Observer vs. Mediator vs. Pub/Sub
+
+| Dimension | Observer Pattern | Mediator Pattern | Pub/Sub Pattern |
+| :--- | :--- | :--- | :--- |
+| **Coupling** | High (Subject keeps list of observers) | Loose (Sender and handlers known only to mediator) | None (Publisher and subscribers completely decoupled) |
+| **Scope** | Single object / class in-memory | In-process application boundary | Distributed cross-service network |
+| **.NET Tech** | C# \`event\`, \`IObservable<T>\` | MediatR | RabbitMQ, Kafka, Redis |
+
+#### Preventing Memory Leaks in Observer Pattern:
+When a long-lived publisher holds an event subscription to a short-lived subscriber, the publisher's invocation list maintains a strong reference to the subscriber, preventing the Garbage Collector from collecting it (**Lapsed Listener Problem**).
+
+#### Prevention Techniques:
+1. Explicitly **unsubscribe** in \`Dispose()\`: \`publisher.OnChanged -= HandleChange;\`
+2. Use **\`WeakEventManager\`** or weak delegates.
+3. Replace direct event subscriptions with **MediatR In-Process Notifications** (\`INotification\`).`,
+    answerContent_fa: `### مقایسه Observer، Mediator و Pub/Sub و جلوگیری از نشت حافظه
+
+- **الگوی Observer:** اتصال مستقیم و درون‌حافظه‌ای با رویدادهای C# (\`event\`).
+- **الگوی Mediator:** هاب ارتباطی درون‌برنامه‌ای (مانند MediatR) برای جداسازی فرستنده و گیرنده.
+- **الگوی Pub/Sub:** ارتباط کاملاً مستقل و توزیع‌شده بین سرورها از طریق بروکر (مانند RabbitMQ).
+
+#### علت و رفع Memory Leak در رویدادهای C#:
+اگر یک کلاس با طول عمر بالا (مانند Singleton) به رویداد یک کلاس با طول عمر کوتاه (مانند Scoped Controller) متصل شود، رفرنس قوی مانع جمع‌آوری زباله (GC) شده و نشت حافظه رخ می‌دهد.
+**راهکارها:** لغو اشتراک صریح (\`-=\`) در متد \`Dispose\`، استفاده از \`WeakEventManager\` یا جایگزینی با MediatR.`,
+  },
+  {
+    id: "dotnet-mid-q211",
+    stackId: "dotnet",
+    categoryId: "architecture-ddd",
+    levelId: "mid",
+    questionTitle: "Compare Template Method Pattern and Strategy Pattern in C#. When should you choose Inheritance over Composition?",
+    questionTitle_fa: "مقایسه الگوی Template Method با Strategy Pattern در سی‌شارپ: چه زمانی از ارث‌بری و چه زمانی از ترکیب (Composition) استفاده می‌شود؟",
+    answerContent: `### Template Method vs. Strategy Pattern
+
+#### 1. Template Method Pattern (Inheritance-Based):
+- Defines the skeleton of an algorithm in a base class, deferring some steps to subclasses via \`abstract\` or \`virtual\` methods.
+- **Pros:** Enforces invariant execution order; subclasses only override specific hooks.
+- **Cons:** Rigid compile-time inheritance hierarchy; violates "Favor composition over inheritance".
+
+\`\`\`csharp
+public abstract class DataImporter {
+    public void Import() { // Template Method
+        ReadRawData();
+        Validate();
+        SaveToDatabase();
+    }
+    protected abstract void ReadRawData();
+    protected virtual void Validate() { /* default validation */ }
+    protected abstract void SaveToDatabase();
+}
+\`\`\`
+
+#### 2. Strategy Pattern (Composition-Based):
+- Encapsulates algorithms into independent classes implementing a common interface (\`IDiscountStrategy\`).
+- Injected via Dependency Injection and swappable dynamically at runtime.
+- Strictly adheres to the **Open/Closed Principle**.
+
+#### Decision Rule:
+Use **Template Method** when the invariant workflow sequence is fixed across all subclasses. Use **Strategy** when you need pluggable, interchangeable algorithms that can be swapped dynamically or mocked easily in unit tests.`,
+    answerContent_fa: `### مقایسه الگوی Template Method و Strategy
+
+- **الگوی Template Method (بر پایه ارث‌بری):**
+  - ساختار کلی و مراحل اجرای یک الگوریتم را در یک متد از کلاس والد (Base Class) قفل کرده و پیاده‌سازی بخش‌های متغیر را با متدهای \`abstract\` به فرزندان واگذار می‌کند.
+  - مناسب زمانی که ترتیب اجرای مراحل باید در تمام کلاس‌ها ثابت و غیرقابل تغییر بماند.
+
+- **الگوی Strategy (بر پایه Composition):**
+  - هر الگوریتم را درون یک کلاس مستقل پشت یک اینترفیس پیاده کرده و از طریق DI تزریق می‌کند.
+  - کاملاً انعطاف‌پذیر، قابل تعویض در زمان اجرا و سازگار با اصل Open/Closed.`,
+  },
+  {
+    id: "dotnet-mid-q212",
+    stackId: "dotnet",
+    categoryId: "csharp-basics",
+    levelId: "mid",
+    questionTitle: "How do you implement the Builder Pattern with a Fluent API in C# for constructing complex domain entities?",
+    questionTitle_fa: "الگوی Builder و طراحی Fluent API در سی‌شارپ چگونه برای ساخت اشیای پیچیده دامین و تضمین ثبات داده‌ها پیاده‌سازی می‌شود؟",
+    answerContent: `### Builder Pattern & Fluent API in C#
+
+The **Builder Pattern** is essential when creating complex domain entities with multiple optional configurations, multi-step dependencies, or strict validation requirements.
+
+\`\`\`csharp
+public class InsurancePolicyBuilder {
+    private readonly InsurancePolicy _policy = new();
+
+    public InsurancePolicyBuilder ForVehicle(string licensePlate, string vin) {
+        _policy.VehicleLicense = licensePlate;
+        _policy.VinNumber = vin;
+        return this; // Method Chaining
+    }
+
+    public InsurancePolicyBuilder WithCoverage(decimal coverageAmount, decimal deductible) {
+        _policy.CoverageAmount = coverageAmount;
+        _policy.Deductible = deductible;
+        return this;
+    }
+
+    public InsurancePolicy Build() {
+        // Enforce domain invariants
+        if (string.IsNullOrWhiteSpace(_policy.VehicleLicense))
+            throw new DomainValidationException("License plate is mandatory.");
+        if (_policy.CoverageAmount <= 0)
+            throw new DomainValidationException("Coverage amount must be positive.");
+
+        _policy.IssueDate = DateTime.UtcNow;
+        return _policy;
+    }
+}
+\`\`\`
+
+#### Key Advantages:
+- Eliminates giant constructors with dozens of nullable parameters ("Telescoping Constructor Anti-Pattern").
+- Provides readable, self-documenting code via Fluent method chaining.
+- Guarantees the resulting entity is always in a valid domain state upon calling \`.Build()\`.`,
+    answerContent_fa: `### الگوی Builder و طراحی Fluent API در سی‌شارپ
+
+الگوی Builder برای ساخت اشیای پیچیده با پارامترهای متعدد استفاده می‌شود تا از ایجاد سازنده‌های طولانی با پارامترهای اختیاری (Telescoping Constructor) جلوگیری کند:
+
+- متدهای زنجیره‌ای (\`return this\`) خوانایی کد را به شدت افزایش می‌دهند.
+- در متد نهایی \`.Build()\` تمام قوانین اعتبارسنجی بیزینس بررسی می‌شوند تا از ساخته شدن اشیای ناقص یا نامعتبر در حافظه جلوگیری گردد.`,
+  },
 ];
+
