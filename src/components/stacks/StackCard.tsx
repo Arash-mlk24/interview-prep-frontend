@@ -65,19 +65,19 @@ export const StackCard: React.FC<StackCardProps> = ({ stack, stats, categories }
           height: "100%",
           display: "flex",
           flexDirection: "column",
-          backgroundColor: "#0F121C",
-          border: "1px solid rgba(255, 255, 255, 0.06)",
+          backgroundColor: "background.paper",
+          border: "1px solid",
+          borderColor: "divider",
           borderRadius: 3,
           p: 2.5,
           transition: "all 0.18s ease-in-out",
           position: "relative",
           "&:hover": {
-            borderColor: "rgba(99, 102, 241, 0.35)",
-            backgroundColor: "#131724",
+            borderColor: "primary.main",
             transform: "translateY(-2px)",
             "& .stack-arrow": {
               transform: isRtl ? "translateX(-3px)" : "translateX(3px)",
-              color: "#818CF8",
+              color: "primary.main",
             },
           },
         }}
@@ -91,8 +91,12 @@ export const StackCard: React.FC<StackCardProps> = ({ stack, stats, categories }
                   width: 36,
                   height: 36,
                   borderRadius: 2,
-                  backgroundColor: "rgba(255, 255, 255, 0.04)",
-                  border: "1px solid rgba(255, 255, 255, 0.06)",
+                  backgroundColor: (theme) =>
+                    theme.palette.mode === "dark"
+                      ? "rgba(255, 255, 255, 0.04)"
+                      : "rgba(0, 0, 0, 0.04)",
+                  border: "1px solid",
+                  borderColor: "divider",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -104,7 +108,7 @@ export const StackCard: React.FC<StackCardProps> = ({ stack, stats, categories }
               <Typography
                 variant="h6"
                 component="h2"
-                sx={{ fontWeight: 600, color: "#F8FAFC", fontSize: "1.05rem" }}
+                sx={{ fontWeight: 600, color: "text.primary", fontSize: "1.05rem" }}
               >
                 {localizedName}
               </Typography>
@@ -117,9 +121,17 @@ export const StackCard: React.FC<StackCardProps> = ({ stack, stats, categories }
                 height: 20,
                 fontSize: "0.68rem",
                 fontWeight: 500,
-                backgroundColor: "rgba(99, 102, 241, 0.08)",
-                color: "#A5B4FC",
-                border: "1px solid rgba(99, 102, 241, 0.18)",
+                backgroundColor: (theme) =>
+                  theme.palette.mode === "dark"
+                    ? "rgba(99, 102, 241, 0.1)"
+                    : "rgba(79, 70, 229, 0.08)",
+                color: (theme) =>
+                  theme.palette.mode === "dark" ? "#A5B4FC" : "#4338CA",
+                border: "1px solid",
+                borderColor: (theme) =>
+                  theme.palette.mode === "dark"
+                    ? "rgba(99, 102, 241, 0.2)"
+                    : "rgba(79, 70, 229, 0.2)",
               }}
             />
           </Box>
@@ -128,7 +140,7 @@ export const StackCard: React.FC<StackCardProps> = ({ stack, stats, categories }
           <Typography
             variant="body2"
             sx={{
-              color: "#94A3B8",
+              color: "text.secondary",
               fontSize: "0.825rem",
               lineHeight: 1.6,
               mb: 2,
@@ -149,9 +161,13 @@ export const StackCard: React.FC<StackCardProps> = ({ stack, stats, categories }
                     px: 0.9,
                     py: 0.25,
                     borderRadius: 1,
-                    backgroundColor: "rgba(255, 255, 255, 0.03)",
-                    color: "#64748B",
-                    border: "1px solid rgba(255, 255, 255, 0.05)",
+                    backgroundColor: (theme) =>
+                      theme.palette.mode === "dark"
+                        ? "rgba(255, 255, 255, 0.03)"
+                        : "rgba(0, 0, 0, 0.04)",
+                    color: "text.secondary",
+                    border: "1px solid",
+                    borderColor: "divider",
                   }}
                 >
                   {getLocalized(cat.name, cat.name_fa)}
@@ -159,13 +175,17 @@ export const StackCard: React.FC<StackCardProps> = ({ stack, stats, categories }
               ))}
               {categories.length > 3 && (
                 <Box
+                  key="more"
                   sx={{
                     fontSize: "0.7rem",
                     px: 0.7,
                     py: 0.25,
                     borderRadius: 1,
-                    backgroundColor: "rgba(255, 255, 255, 0.02)",
-                    color: "#475569",
+                    backgroundColor: (theme) =>
+                      theme.palette.mode === "dark"
+                        ? "rgba(255, 255, 255, 0.02)"
+                        : "rgba(0, 0, 0, 0.02)",
+                    color: "text.disabled",
                   }}
                 >
                   +{categories.length - 3}
@@ -178,13 +198,14 @@ export const StackCard: React.FC<StackCardProps> = ({ stack, stats, categories }
           <Box
             sx={{
               pt: 1.5,
-              borderTop: "1px solid rgba(255, 255, 255, 0.04)",
+              borderTop: "1px solid",
+              borderColor: "divider",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
             }}
           >
-            <Typography variant="caption" sx={{ color: "#64748B", fontSize: "0.75rem" }}>
+            <Typography variant="caption" sx={{ color: "text.secondary", fontSize: "0.75rem" }}>
               {stats.conceptCount} {t("concepts")} · {stats.categoryCount} {t("categories")}
               {stats.roadmapCount && stats.roadmapCount > 0 ? ` · ${stats.roadmapCount} ${t("roadmaps")}` : ""}
             </Typography>
@@ -195,7 +216,7 @@ export const StackCard: React.FC<StackCardProps> = ({ stack, stats, categories }
                 display: "flex",
                 alignItems: "center",
                 gap: 0.5,
-                color: "#64748B",
+                color: "text.secondary",
                 fontSize: "0.75rem",
                 fontWeight: 500,
                 transition: "all 0.15s ease",

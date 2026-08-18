@@ -103,30 +103,45 @@ export const SearchInput: React.FC<SearchInputProps> = ({
           alignItems: "center",
           width: "100%",
           height,
-          backgroundColor: isFocused
-            ? "rgba(18, 22, 36, 0.95)"
-            : isHero
-            ? "rgba(15, 18, 28, 0.85)"
-            : "rgba(12, 15, 24, 0.7)",
+          backgroundColor: (theme) =>
+            theme.palette.mode === "dark"
+              ? isFocused
+                ? "rgba(18, 22, 36, 0.95)"
+                : isHero
+                ? "rgba(15, 18, 28, 0.85)"
+                : "rgba(12, 15, 24, 0.7)"
+              : isFocused
+              ? "#FFFFFF"
+              : isHero
+              ? "#FFFFFF"
+              : "rgba(241, 245, 249, 0.8)",
           border: "1px solid",
-          borderColor: isFocused
-            ? "rgba(99, 102, 241, 0.45)"
-            : "rgba(255, 255, 255, 0.07)",
+          borderColor: (theme) =>
+            isFocused
+              ? "primary.main"
+              : theme.palette.mode === "dark"
+              ? "rgba(255, 255, 255, 0.08)"
+              : "rgba(0, 0, 0, 0.12)",
           borderRadius: `${borderRadius}px`,
           px: isHero ? 1.75 : 1.25,
           gap: 1,
-          boxShadow: isFocused
-            ? "0 0 0 3px rgba(99, 102, 241, 0.12), 0 4px 16px -4px rgba(0, 0, 0, 0.5)"
-            : "0 2px 8px -2px rgba(0, 0, 0, 0.3)",
+          boxShadow: (theme) =>
+            isFocused
+              ? theme.palette.mode === "dark"
+                ? "0 0 0 3px rgba(99, 102, 241, 0.15), 0 4px 16px -4px rgba(0, 0, 0, 0.5)"
+                : "0 0 0 3px rgba(79, 70, 229, 0.12), 0 4px 16px -4px rgba(0, 0, 0, 0.08)"
+              : theme.palette.mode === "dark"
+              ? "0 2px 8px -2px rgba(0, 0, 0, 0.3)"
+              : "0 2px 8px -2px rgba(0, 0, 0, 0.04)",
           backdropFilter: "blur(12px)",
           transition: "all 0.18s cubic-bezier(0.4, 0, 0.2, 1)",
           "&:hover": {
-            borderColor: isFocused
-              ? "rgba(99, 102, 241, 0.55)"
-              : "rgba(255, 255, 255, 0.14)",
-            backgroundColor: isFocused
-              ? "rgba(18, 22, 36, 0.95)"
-              : "rgba(15, 18, 28, 0.95)",
+            borderColor: (theme) =>
+              isFocused
+                ? "primary.main"
+                : theme.palette.mode === "dark"
+                ? "rgba(255, 255, 255, 0.16)"
+                : "rgba(0, 0, 0, 0.2)",
           },
         }}
       >
@@ -134,7 +149,7 @@ export const SearchInput: React.FC<SearchInputProps> = ({
         <SearchIcon
           sx={{
             fontSize: iconSize,
-            color: isFocused ? "#818CF8" : "#64748B",
+            color: isFocused ? "primary.main" : "text.secondary",
             flexShrink: 0,
             transition: "color 0.15s ease",
           }}
@@ -152,7 +167,7 @@ export const SearchInput: React.FC<SearchInputProps> = ({
           onBlur={() => setIsFocused(false)}
           sx={{
             flexGrow: 1,
-            color: "#F8FAFC",
+            color: "text.primary",
             fontSize,
             fontFamily: "inherit",
             "& .MuiInputBase-input": {
@@ -170,12 +185,18 @@ export const SearchInput: React.FC<SearchInputProps> = ({
               aria-label="Clear search"
               sx={{
                 p: 0.35,
-                color: "#64748B",
+                color: "text.secondary",
                 borderRadius: "50%",
-                backgroundColor: "rgba(255, 255, 255, 0.04)",
+                backgroundColor: (theme) =>
+                  theme.palette.mode === "dark"
+                    ? "rgba(255, 255, 255, 0.04)"
+                    : "rgba(0, 0, 0, 0.04)",
                 "&:hover": {
-                  color: "#F8FAFC",
-                  backgroundColor: "rgba(255, 255, 255, 0.1)",
+                  color: "text.primary",
+                  backgroundColor: (theme) =>
+                    theme.palette.mode === "dark"
+                      ? "rgba(255, 255, 255, 0.1)"
+                      : "rgba(0, 0, 0, 0.08)",
                 },
               }}
             >
@@ -191,9 +212,13 @@ export const SearchInput: React.FC<SearchInputProps> = ({
                 minWidth: 20,
                 px: 0.6,
                 borderRadius: "4px",
-                backgroundColor: "rgba(255, 255, 255, 0.04)",
-                border: "1px solid rgba(255, 255, 255, 0.08)",
-                color: "#64748B",
+                backgroundColor: (theme) =>
+                  theme.palette.mode === "dark"
+                    ? "rgba(255, 255, 255, 0.04)"
+                    : "rgba(0, 0, 0, 0.04)",
+                border: "1px solid",
+                borderColor: "divider",
+                color: "text.secondary",
                 fontSize: "0.68rem",
                 fontWeight: 600,
                 letterSpacing: "0.02em",

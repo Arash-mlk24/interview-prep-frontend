@@ -2385,7 +2385,7 @@ public class ValidationBehavior<TRequest, TResponse> : IPipelineBehavior<TReques
     stackId: "dotnet",
     categoryId: "csharp-advanced",
     levelId: "mid",
-    topicIds: ["topic-dotnet-gof-patterns"],
+    topicIds: ["topic-dotnet-gof-patterns", "topic-dotnet-csharp-delegates-lambdas-events"],
     questionTitle: "What are the architectural differences between Observer Pattern, Mediator Pattern, and Pub/Sub in .NET, and how do you prevent Memory Leaks?",
     questionTitle_fa: "تفاوت‌های معماری میان الگوهای Observer، Mediator و Pub/Sub در دات‌نت چیست و چگونه از نشت حافظه (Memory Leak) در رویدادها جلوگیری کنیم؟",
     answerContent: `### Observer vs. Mediator vs. Pub/Sub
@@ -2510,6 +2510,1441 @@ public class InsurancePolicyBuilder {
 - متدهای زنجیره‌ای (\`return this\`) خوانایی کد را به شدت افزایش می‌دهند.
 - در متد نهایی \`.Build()\` تمام قوانین اعتبارسنجی بیزینس بررسی می‌شوند تا از ساخته شدن اشیای ناقص یا نامعتبر در حافظه جلوگیری گردد.`,
   },
+  {
+    id: "dotnet-mid-q213",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-csharp-oop-records-pattern-matching"],
+    questionTitle: "How do C# Records work under the hood, and what code does the Roslyn compiler synthesize?",
+    questionTitle_fa: "ساختار Records در سی‌شارپ در پشت صحنه چگونه کار می‌کند و کامپایلر Roslyn چه کدهایی برای آن تولید می‌کند؟",
+    answerContent: `### Roslyn Record Code Synthesis Under the Hood
+
+When declaring a positional record in C#:
+
+\`\`\`csharp
+public record OrderPlacedEvent(Guid OrderId, decimal Amount, DateTime Timestamp);
+\`\`\`
+
+The Roslyn compiler emits a reference type (\`class\`) with extensive compiler-generated boilerplate:
+
+1. **Value-based Equality Contract (\`IEquatable<T>\`):**
+   - Implements \`IEquatable<OrderPlacedEvent>\` with a strongly-typed \`Equals(OrderPlacedEvent? other)\` method comparing every field using \`EqualityComparer<T>.Default\`.
+   - Overrides \`object.Equals(object?)\` and \`object.GetHashCode()\` (combining hashes of all positional fields via \`HashCode.Combine\`).
+   - Generates overloaded \`operator ==\` and \`operator !=\`.
+
+2. **Non-Destructive Mutation Clone Constructor:**
+   - Synthesizes a \`protected OrderPlacedEvent(OrderPlacedEvent original)\` copy constructor that copies all state.
+   - Emits a compiler-internal virtual method \`<Clone>$()\` invoked by the \`with\` expression to clone the instance before modifying target properties.
+
+3. **Positional Deconstruction & Formatting:**
+   - Emits a \`public void Deconstruct(out Guid OrderId, out decimal Amount, out DateTime Timestamp)\` method enabling tuple-style deconstruction.
+   - Overrides \`ToString()\` and emits a \`PrintMembers(StringBuilder)\` method returning a clean, JSON-like representation (\`"OrderPlacedEvent { OrderId = ..., Amount = ... }"\`).
+
+4. **Immutable Properties with \`init\`-only Setters:**
+   - Generates \`public Guid OrderId { get; init; }\` preventing field mutations after object initialization.`,
+    answerContent_fa: `### سازوکار داخلی کامپایلر Roslyn در تولید رکوردهای سی‌شارپ
+
+هنگامی که یک Positional Record تعریف می‌کنید:
+\`\`\`csharp
+public record OrderPlacedEvent(Guid OrderId, decimal Amount, DateTime Timestamp);
+\`\`\`
+
+کامپایلر Roslyn در پشت صحنه یک کلاس با قابلیت‌های تولیدشده زیر ایجاد می‌کند:
+
+۱. **برابری مقداری (Value-based Equality):**
+   - پیاده‌سازی اینترفیس \`IEquatable<T>\` و متد \`Equals\` برای مقایسه تک‌تک فیلدها با \`EqualityComparer<T>.Default\`.
+   - بازنویسی (Override) متدهای \`GetHashCode\` و \`Equals(object)\`.
+   - بارگذاری مجدد عملگرهای \`==\` و \`!=\`.
+
+۲. **سازنده کپی برای عملگر \`with\`:**
+   - ساخت سازنده کپی \`protected\` و متد اختصاصی \`<Clone>$()\` جهت کلون کردن ایمن مقادیر بدون تغییر شیء اصلی.
+
+۳. **متد Deconstruct و چاپ متنی:**
+   - تولید متد \`Deconstruct\` برای باز کردن پارامترها به صورت Tuple و بازنویسی \`ToString\` با فرمت خوانا.
+
+۴. **تغییرناپذیری با \`init\`:**
+   - تبدیل تمامی پارامترها به Propertyهایی با اکسسور \`init\` جهت جلوگیری از تغییر مقدار پس از ساخت.`,
+  },
+  {
+    id: "dotnet-mid-q214",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-csharp-oop-records-pattern-matching"],
+    questionTitle: "What are the differences and performance trade-offs between 'record class', 'record struct', and 'readonly record struct'?",
+    questionTitle_fa: "تفاوت‌ها و موازنه‌های عملکردی (Performance Trade-offs) بین record class، record struct و readonly record struct چیست؟",
+    answerContent: `### record class vs record struct vs readonly record struct
+
+C# 10 introduced record structs to bring value-based equality and \`with\` semantics to value types.
+
+| Metric / Behavior | \`record class\` (default \`record\`) | \`record struct\` | \`readonly record struct\` |
+| :--- | :--- | :--- | :--- |
+| **CLR Storage** | Managed Heap | Thread Stack (or inline in containing class) | Thread Stack (or inline in containing class) |
+| **Header Overhead** | 16-24 bytes (SyncBlock + TypeHandle) | **0 bytes** | **0 bytes** |
+| **Default Field Mutability** | Immutable (\`init\`) | **Mutable (\`set\`)** | **Immutable (\`init\`)** |
+| **Assignment Semantics** | Reference copy (8-byte pointer) | Value payload copy | Value payload copy |
+| **GC Pressure** | Triggers GC collections (Gen 0) | **Zero GC pressure (Stack local)** | **Zero GC pressure (Stack local)** |
+| **Defensive Copy Overhead** | None | Potential defensive copies if not readonly | None (JIT optimizes with \`in\` params) |
+
+\`\`\`csharp
+// 1. Reference type: DTOs, API responses, Domain Events
+public record UserDto(Guid Id, string Email);
+
+// 2. Mutable value type: High-frequency math, local aggregations (use with caution)
+public record struct Coordinate(double X, double Y);
+
+// 3. Recommended value object: High-throughput, zero-allocation Value Objects
+public readonly record struct Money(decimal Amount, string Currency);
+\`\`\`
+
+#### Production Best Practice:
+- Use \`record class\` for API contracts, MediatR requests/responses, and Entity Framework Core projection DTOs.
+- Use \`readonly record struct\` for lightweight domain value objects (<= 16 bytes, e.g. \`Money\`, \`GeoPoint\`, \`DateRange\`) to eliminate heap allocations in high-throughput loops (> 50,000 ops/sec).`,
+    answerContent_fa: `### مقایسه record class، record struct و readonly record struct
+
+| ویژگی | \`record class\` | \`record struct\` | \`readonly record struct\` |
+| :--- | :--- | :--- | :--- |
+| **محل تخصیص** | روی Managed Heap | روی Thread Stack یا درون کلاس والد | روی Thread Stack یا درون کلاس والد |
+| **سربار هدر شیء** | ۱۶ تا ۲۴ بایت | **صفر بایت** | **صفر بایت** |
+| **تغییرپذیری پیش‌فرض** | تغییرناپذیر (\`init\`) | **تغییرپذیر (\`set\`)** | **تغییرناپذیر (\`init\`)** |
+| **فشار بر GC** | ایجاد سربار روی Gen 0 | **بدون سربار روی Heap** | **بدون سربار روی Heap** |
+
+- **\`record class\`:** مناسب‌ترین گزینه برای DTOها، پیام‌های ایونت، و درخواست‌های MediatR.
+- **\`readonly record struct\`:** بهترین انتخاب برای Value Objectهای سبک دامین (زیر ۱۶ بایت مانند \`Money\` و \`Coordinate\`) جهت به صفر رساندن بار GC در سیستم‌های پرترافیک.`,
+  },
+  {
+    id: "dotnet-mid-q215",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-csharp-oop-records-pattern-matching"],
+    questionTitle: "How do Property, Positional, Relational, and List Patterns work in C# Pattern Matching, and how does the JIT optimize them?",
+    questionTitle_fa: "الگوهای Property، Positional، Relational و List در Pattern Matching سی‌شارپ چگونه کار می‌کنند و JIT چگونه آنها را بهینه‌سازی می‌کند؟",
+    answerContent: `### Advanced Pattern Matching in C#
+
+Pattern matching provides declarative, null-safe data inspection without clumsy casting or cascading \`if/else\` chains.
+
+#### 1. Property Patterns (Nested & Combined):
+\`\`\`csharp
+public static decimal GetShippingCost(Order order) => order switch
+{
+    { DeliveryAddress.Country: "IR", TotalWeightKg: < 5 } => 50_000m,
+    { DeliveryAddress.Country: "IR", TotalWeightKg: >= 5 } => 120_000m,
+    { DeliveryAddress.IsInternational: true, Customer.IsVip: true } => 250_000m,
+    { DeliveryAddress.IsInternational: true } => 500_000m,
+    _ => 0m
+};
+\`\`\`
+
+#### 2. Positional Patterns (with \`Deconstruct\`):
+\`\`\`csharp
+public readonly record struct Point(int X, int Y);
+
+public static string ClassifyQuadrant(Point p) => p switch
+{
+    (0, 0)      => "Origin",
+    ( > 0, > 0) => "Quadrant I",
+    ( < 0, > 0) => "Quadrant II",
+    ( < 0, < 0) => "Quadrant III",
+    ( > 0, < 0) => "Quadrant IV",
+    _           => "On Axis"
+};
+\`\`\`
+
+#### 3. List Patterns (C# 11+ Slice and Discard):
+\`\`\`csharp
+public static string ParseCommand(string[] tokens) => tokens switch
+{
+    ["AUTH", var user, var pass]       => $"Authenticate user: {user}",
+    ["GET", "users", var id]           => $"Fetch user by ID: {id}",
+    ["POST", "orders", .., "urgent"]   => "Urgent order creation",
+    ["PING"]                           => "PONG",
+    []                                 => "Empty command",
+    _                                  => "Invalid command syntax"
+};
+\`\`\`
+
+#### JIT / IL Optimization:
+The Roslyn compiler and RyuJIT optimize switch expressions into **direct jump tables** (IL \`switch\` instruction) or binary decision trees, executing conditions in \`O(1)\` or \`O(log N)\` instead of linear \`O(N)\` sequential condition checks.`,
+    answerContent_fa: `### الگوهای پیشرفته Pattern Matching در سی‌شارپ
+
+۱. **الگوهای ویژگی (Property Patterns):**
+   - بررسی مشخصات اشیای تودرتو بدون نیاز به بررسی دستی \`null\` یا کست کردن نوع داده.
+
+۲. **الگوهای موقعیتی (Positional Patterns):**
+   - استفاده مستقیم از متد \`Deconstruct\` رکوردها یا Tupleها جهت بررسی مختصات داده‌ها.
+
+۳. **الگوهای لیستی (List Patterns در C# 11+):**
+   - تطبیق ساختار آرایه‌ها و لیست‌ها با الگوهای برش \`..\` (Slice) و نادیده‌گیری \`_\` (Discard).
+
+#### بهینه‌سازی در سطح JIT:
+کامپایلر Roslyn و رانتایم JIT عبارات \`switch\` را به جداول پرش مستقیم (Jump Table در IL) یا درخت‌های دودویی تصمیم‌گیری تبدیل می‌کنند که پیچیدگی زمانی ارزیابی شروط را از \`O(N)\` به \`O(1)\` یا \`O(log N)\` کاهش می‌دهد.`,
+  },
+  {
+    id: "dotnet-mid-q216",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-csharp-oop-records-pattern-matching"],
+    questionTitle: "How should Domain-Driven Design (DDD) Value Objects be implemented using C# Records, and what are the EF Core mapping pitfalls?",
+    questionTitle_fa: "الگوی Value Object در DDD چگونه با استفاده از C# Records پیاده‌سازی می‌شود و چالش‌های مپینگ آن در EF Core چیست؟",
+    answerContent: `### Implementing DDD Value Objects with C# Records
+
+In Domain-Driven Design (DDD), a **Value Object** has no conceptual identity; it is defined solely by its attributes, is immutable, and enforces validation invariants upon creation.
+
+\`\`\`csharp
+public sealed record Money
+{
+    public decimal Amount { get; }
+    public string Currency { get; }
+
+    public Money(decimal amount, string currency)
+    {
+        if (amount < 0)
+            throw new ArgumentOutOfRangeException(nameof(amount), "Amount cannot be negative.");
+        if (string.IsNullOrWhiteSpace(currency) || currency.Length != 3)
+            throw new ArgumentException("Currency must be a 3-letter ISO code.", nameof(currency));
+
+        Amount = amount;
+        Currency = currency.ToUpperInvariant();
+    }
+
+    public static Money operator +(Money a, Money b)
+    {
+        if (a.Currency != b.Currency)
+            throw new InvalidOperationException($"Cannot add {a.Currency} to {b.Currency}.");
+        return new Money(a.Amount + b.Amount, a.Currency);
+    }
+}
+\`\`\`
+
+#### EF Core Mapping Strategies & Pitfalls:
+1. **Owned Entity Types (\`OwnsOne\`):**
+   \`\`\`csharp
+   builder.Entity<Order>().OwnsOne(o => o.TotalAmount, money =>
+   {
+       money.Property(m => m.Amount).HasColumnName("TotalAmount").HasPrecision(18, 2);
+       money.Property(m => m.Currency).HasColumnName("Currency").HasMaxLength(3);
+   });
+   \`\`\`
+
+2. **EF Core Tracking Pitfall with Records:**
+   - **Problem:** EF Core's change tracker compares entities by identity. Because records implement value-based equality, treating a record as an EF Core Entity (with an \`Id\`) can cause EF Core's Change Tracker to confuse two distinct database rows if all their field values happen to be identical!
+   - **Rule:** Use \`record\` for **Value Objects** and **DTOs**. Use standard \`class\` (with reference equality) for **Aggregate Roots** and **Entities**.`,
+    answerContent_fa: `### پیاده‌سازی Value Objectهای DDD با رکوردهای سی‌شارپ
+
+در الگوی DDD، شیء مقداری (Value Object) شناسه (Identity) ندارد، غیرقابل تغییر (Immutable) است و برابری آن بر پایه مقادیر فیلدهاست.
+
+\`\`\`csharp
+public sealed record Money(decimal Amount, string Currency)
+{
+    public Money
+    {
+        if (Amount < 0) throw new ArgumentException("مبلغ نمی‌تواند منفی باشد.");
+        Currency = Currency.ToUpperInvariant();
+    }
+}
+\`\`\`
+
+#### مپینگ در EF Core و چالش‌های Change Tracker:
+۱. **استفاده از \`OwnsOne\`:** برای ذخیره Value Objectها به صورت ستون‌های درون همان جدول موجودیت اصلی.
+۲. **هشدار مهم:** از \`record\` برای موجودیت‌های اصلی (Entities با کلید اصلی Id) در EF Core استفاده نکنید؛ زیرا برابری مقداری در رکوردها باعث اختلال در مکانیزم Change Tracking دیتابیس در صورت برابر بودن تمامی فیلدهای دو ردیف مختلف می‌شود. موجودیت‌های دارای Identity باید همیشه \`class\` باشند.`,
+  },
+  {
+    id: "dotnet-mid-q217",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-csharp-oop-records-pattern-matching"],
+    questionTitle: "What causes hidden Boxing/Unboxing memory allocations with Structs, and how do 'readonly struct', 'in' parameters, and 'ref struct' prevent them?",
+    questionTitle_fa: "چه عواملی باعث Boxing و Unboxing پنهان در استراکت‌ها می‌شوند و چگونه readonly struct، پارامترهای in و ref struct مانع آن می‌شوند؟",
+    answerContent: `### Boxing, Unboxing, and High-Performance Value Types
+
+**Boxing** occurs when a Value Type (\`struct\`) is converted into a Reference Type (\`object\` or an \`interface\`). The CLR allocates a box on the Managed Heap, copies the struct value into it, and returns an object reference.
+
+#### Common Hidden Boxing Traps in Backend Code:
+1. **Calling Non-Overridden Methods on \`System.Object\`:** Calling \`GetType()\` or default un-overridden \`ToString()\` on a struct forces boxing.
+2. **Casting Struct to Interfaces:** Passing a struct to a method expecting \`IComparable\`, \`IDisposable\`, or \`IEnumerable\` causes heap allocations.
+3. **String Interpolation / String.Format:** \`$"Total: {myStruct}"\` boxes the struct if \`IFormattable\` isn't implemented.
+
+\`\`\`csharp
+// TRAP: Boxing on interface cast
+public interface IValidator<T> { bool IsValid(T item); }
+public struct OrderValidator : IValidator<Order> { public bool IsValid(Order item) => true; }
+
+public void Process(IValidator<Order> validator) // Heap allocation (Boxing) on every call!
+{
+    validator.IsValid(new Order());
+}
+
+// SOLUTION: Generic type parameter with struct constraint (Zero allocations)
+public void ProcessOptimized<TValidator>(TValidator validator) where TValidator : struct, IValidator<Order>
+{
+    validator.IsValid(new Order()); // Direct non-virtual call, zero heap allocation
+}
+\`\`\`
+
+#### Preventing Memory Copies with \`in\` and \`ref struct\`:
+- **\`in\` Parameter Modifier:** Passes a large struct by readonly reference (pointer size: 8 bytes) instead of copying the whole payload across stack frames.
+- **\`readonly struct\`:** Assures the JIT compiler that no internal fields mutate, preventing the compiler from creating hidden defensive copies when accessing fields via \`in\` references.
+- **\`ref struct\` (\`Span<T>\`, \`ReadOnlySpan<T>\`):** Stack-only struct that can **never be boxed**, cannot be placed on the heap, cannot be stored in fields of normal classes, and cannot be used across async/await boundaries.`,
+    answerContent_fa: `### بررسی Boxing، Unboxing و تکنیک‌های بهینه‌سازی حافظه در استراکت‌ها
+
+**Boxing** زمانی رخ می‌دهد که یک نوع مقداری (Value Type) به \`object\` یا یک \`interface\` تبدیل شود. در این حالت CLR یک شیء جدید روی Heap ایجاد کرده و داده‌ها را در آن کپی می‌کند.
+
+#### تله‌های رایج Boxing در کدهای بک‌اند:
+۱. کست کردن استراکت به اینترفیس‌ها (مانند \`IComparable\` یا \`IDisposable\`).
+۲. استفاده از کالکشن‌های غیرجنریک یا \`List<object>\`.
+۳. صدا زدن متدهایی مثل \`GetType()\` روی استراکت.
+
+#### راهکارهای پیشگیری:
+- **متدهای جنریک با قید \`where T : struct\`:** مانع بوکسینگ در اینترفیس‌ها می‌شود.
+- **پیراینده \`in\`:** ارسال استراکت با ارجاع فقط‌خواندنی (Read-only Reference) به جای کپی فیزیکی بایت‌ها.
+- **\`readonly struct\`:** حذف کپی‌های دفاعی (Defensive Copies) توسط کامپایلر در زمان استفاده از \`in\`.
+- **\`ref struct\` (مانند \`Span<T>\`):** استراکتی با تضمین ۱۰۰٪ تخصیص فقط روی Stack که در زمان کامپایل امکان بوکسینگ یا قرارگیری روی Heap را نمی‌پذیرد.`,
+  },
+  {
+    id: "dotnet-mid-q218",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-csharp-generics-collections-linq"],
+    questionTitle: "How does the .NET CLR handle generic type compilation differently for Value Types versus Reference Types, and what are the memory and runtime implications?",
+    questionTitle_fa: "سازوکار کامپایل کدهای جنریک در CLR برای انواع مقداری (Value Types) در مقایسه با انواع ارجاعی (Reference Types) چگونه است و چه تاثیری بر حافظه و کارایی دارد؟",
+    answerContent: `### CLR Generics Compilation: Value Types vs. Reference Types
+
+The .NET Common Language Runtime (CLR) uses **Reified Generics**, preserving complete type information at runtime. When compiling generic types (e.g. \`List<T>\` or \`Dictionary<TKey, TValue>\`), the JIT (Just-In-Time) compiler employs two distinct compilation strategies:
+
+#### 1. Value Type Specialization (Dedicated Machine Code):
+- For every distinct value type parameter (\`int\`, \`Guid\`, \`DateTime\`, or custom \`struct\`), the JIT compiler produces a dedicated, separate native machine code implementation.
+- **Why?** Value types differ in physical byte size (\`int\` is 4 bytes, \`Guid\` is 16 bytes, \`decimal\` is 16 bytes). Operating on them requires specialized CPU instructions, direct stack offsets, and registers.
+- **Benefits:**
+  - **Zero Boxing:** Elements are stored inline inside the contiguous array without pointer indirection.
+  - **Maximum CPU Performance:** Enables CPU register allocation, loop unrolling, and SIMD hardware acceleration.
+- **Trade-off:** Minimal "code bloat" as each unique value type instantiates a separate native method table in memory.
+
+#### 2. Reference Type Canonical Code Sharing (\`List<object>\`):
+- For all reference types (\`string\`, \`Customer\`, \`Order\`), the physical memory layout is identical: an 8-byte address pointer on 64-bit architectures.
+- To prevent native code bloat, the JIT compiles a **single shared canonical machine code implementation** (effectively compiled against \`List<object>\`).
+- **How type safety is maintained:** The CLR passes a hidden runtime parameter (a pointer to the type's \`MethodTable*\`) to generic methods so the runtime can enforce type checks, invoke correct virtual methods, and instantiate the exact type.
+
+\`\`\`csharp
+// JIT Compilation Reality:
+List<int> intList = new();       // Unique native machine code specialized for 4-byte integers
+List<double> dblList = new();    // Unique native machine code specialized for 8-byte floating point
+List<string> strList = new();     // Shares compiled canonical code with List<object>
+List<UserDto> userList = new();   // Shares compiled canonical code with List<object>
+\`\`\`
+
+#### Production Architectural Takeaways:
+1. Generics eliminate the heavy GC Gen 0 pressure and Boxing overhead of legacy collections (\`ArrayList\`).
+2. Generic structs and math operations execute at the same speed as hand-written, non-generic assembly code.`,
+    answerContent_fa: `### سازوکار کامپایل Generics در رانتایم CLR برای Value Typeها و Reference Typeها
+
+رانتایم دات‌نت (CLR) بر خلاف جاوا از **Reified Generics** استفاده می‌کند و نوع داده‌ها را در زمان اجرا به طور کامل حفظ می‌نماید. کامپایلر JIT بر اساس ماهیت نوع داده \`T\` از دو استراتژی مجزا استفاده می‌کند:
+
+#### ۱. تخصص‌یافتگی کامل برای Value Typeها (Specialization):
+- برای هر نوع مقداری متمایز (مانند \`int\`، \`Guid\`، \`DateTime\` یا استراکت‌های سفارشی)، کامپایلر JIT یک نسخه کد ماشین (Native Code) کاملاً مجزا و بهینه‌سازی‌شده تولید می‌کند.
+- **علت:** انواع مقداری اندازه بایت متفاوتی در حافظه دارند (\`int\` چهار بایت، \`Guid\` شانزده بایت) و دستورات پردازنده برای مدیریت آنها کاملاً متفاوت است.
+- **مزایا:** عدم ایجاد هیچ‌گونه Boxing، ذخیره متوالی داده‌ها در حافظه، و استفاده حداکثری از رجیسترهای CPU و دستورات برداری SIMD.
+
+#### ۲. اشتراک کد ماشین برای Reference Typeها (Canonical Code Sharing):
+- تمامی انواع ارجاعی (مانند \`string\`، \`Customer\`، \`Order\`) بر روی معماری ۶۴ بیتی یک اشاره‌گر ۸ بایتی یکسان دارند.
+- جهت جلوگیری از اتلاف رم و اشغال بیهوده حافظه کد (Code Bloat)، کامپایلر JIT صرفاً **یک نسخه کد ماشین مشترک** (بر پایه \`List<object>\`) کامپایل می‌کند و نوع واقعی هر کلاس را با ارسال اشاره‌گر مخفی \`MethodTable*\` در زمان اجرا تشخیص می‌دهد.`,
+  },
+  {
+    id: "dotnet-mid-q219",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-csharp-generics-collections-linq"],
+    questionTitle: "Deep dive into the internal data structure of Dictionary<TKey, TValue> in .NET. How are buckets, entries, and hash collisions managed, and what happens during a resize?",
+    questionTitle_fa: "کالبدشکافی معماری داخلی Dictionary<TKey, TValue> در دات‌نت: باکت‌ها، آرایه Entryها و برخوردهای هش چگونه مدیریت می‌شوند و در زمان تغییر اندازه (Resize) چه رخ می‌دهد؟",
+    answerContent: `### Internal Architecture of Dictionary<TKey, TValue> in .NET
+
+The .NET \`Dictionary<TKey, TValue>\` does not allocate separate heap objects for linked list nodes. Instead, it is built upon a high-performance **Separate Chaining with Flat Struct Arrays** architecture.
+
+\`\`\`csharp
+public class Dictionary<TKey, TValue>
+{
+    private int[] _buckets;      // Array storing 1-based indices pointing into _entries (-1/0 means empty)
+    private Entry[] _entries;    // Flat array storing elements and collision chain links
+    private int _count;          // Number of active entries
+    private int _freeList;       // Head index of deleted slots for reuse (O(1) recycling)
+    private int _freeCount;
+    private int _version;        // Incremented on mutation to invalidate iterators
+
+    private struct Entry
+    {
+        public uint HashCode;    // Cached 31-bit hash code (with top bit masked)
+        public int Next;         // Index of next entry in collision chain (-1 if tail)
+        public TKey Key;         // Key instance
+        public TValue Value;     // Value instance
+    }
+}
+\`\`\`
+
+---
+
+#### 1. Lookup & Collision Mechanics (\`O(1)\` Average):
+1. **Hash Calculation:** The dictionary calls \`comparer.GetHashCode(key)\` and masks the result to produce a positive 31-bit integer.
+2. **Bucket Indexing:** The target bucket is resolved via \`bucketIndex = hashCode % _buckets.Length\`.
+3. **Chain Traversal:** 
+   - It reads \`entryIndex = _buckets[bucketIndex] - 1\`.
+   - It inspects \`_entries[entryIndex]\`. If \`entry.HashCode == hashCode\` AND \`comparer.Equals(entry.Key, key)\`, the value is returned immediately.
+   - If not equal, it follows \`entry.Next\` down the linked chain in the flat \`_entries\` array.
+   - If \`entry.Next == -1\`, the key is absent (\`O(1)\` average, worst-case \`O(N)\` under malicious hash collisions).
+
+---
+
+#### 2. What Happens During a Resize?
+When \`_count == _entries.Length\` (Load factor reaches 1.0):
+1. **Prime Number Allocation:** The runtime allocates new \`_buckets\` and \`_entries\` arrays sized to the **next prime number** greater than 2 * currentCapacity (e.g. 3 -> 7 -> 17 -> 37 -> 79 ...). Prime sizes minimize bucket collisions caused by non-uniform hash distributions.
+2. **Re-Hashing & Array Migration:**
+   - Existing entries are copied to the new \`_entries\` array.
+   - All entries are re-bucketed: for each entry, \`newBucket = entry.HashCode % newBuckets.Length\`.
+   - The collision chain \`entry.Next\` pointers and \`_buckets\` indices are completely reconstructed.
+3. **Latency Impact:** Resizing is an \`O(N)\` operation that triggers GC allocations and CPU spikes. In high-throughput APIs (> 10,000 req/sec), always **pre-size the dictionary** using \`new Dictionary<TKey, TValue>(expectedCapacity)\`.`,
+    answerContent_fa: `### کالبدشکافی معماری داخلی Dictionary<TKey, TValue> در دات‌نت
+
+دیکشنری دات‌نت بر خلاف پیاده‌سازی‌های سنتی، برای نودهای لیست پیوندی آبجکت‌های مجزا روی Heap نمی‌سازد؛ بلکه از معماری بهینه **Separate Chaining با آرایه‌های تخت استراکت** استفاده می‌کند:
+
+\`\`\`csharp
+private int[] _buckets;      // آرایه‌ای از اندیس‌های ۱-پایه که به آرایه entries اشاره دارند
+private Entry[] _entries;    // آرایه پیوسته و تختی از استراکت‌های حاوی داده
+
+private struct Entry
+{
+    public uint HashCode;    // مقدار هش کش‌شده جهت مقایسه سریع عددی
+    public int Next;         // اندیس نود بعدی در زنجیره برخورد (-1 یعنی انتهای زنجیره)
+    public TKey Key;         // کلید
+    public TValue Value;     // مقدار
+}
+\`\`\`
+
+#### ۱. فرآیند جستجو و مدیریت برخوردهای هش (Hash Collisions):
+۱. مقدار هش کلید محاسبه شده و با فرمول \`hashCode % _buckets.Length\` اندیس باکت به دست می‌آید.
+۲. باکت اندیس خانه مربوطه در آرایه \`_entries\` را می‌دهد.
+۳. مقدار کش‌شده \`entry.HashCode\` و سپس متد \`Equals\` کلید بررسی می‌شود. در صورت عدم تطابق، فیلد \`entry.Next\` در همان آرایه تخت دنبال می‌شود تا مقدار پیدا شود یا به \`-1\` برسد.
+
+#### ۲. در زمان تغییر اندازه (Resize) چه اتفاقی می‌افتد؟
+- با پر شدن ظرفیت (Load Factor = 1.0)، اندازه آرایه‌ها به **اولین عدد اول بزرگتر از دو برابر ظرفیت فعلی** افزایش می‌یابد (اعداد اول توزیع یکنواخت‌تری از باکت‌ها می‌سازند).
+- آرایه‌های قبلی در حافظه رها شده و کل عناصر Re-hash می‌شوند که عملیاتی با پیچیدگی \`O(N)\` است.
+- **نکته پروداکشن:** برای جلوگیری از افت ناگهانی Latency در پردازش‌های پرترافیک، همیشه ظرفیت اولیه دیکشنری را از قبل با \`new Dictionary<K, V>(capacity)\` مشخص کنید.`,
+  },
+  {
+    id: "dotnet-mid-q220",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-csharp-generics-collections-linq"],
+    questionTitle: "What is the difference between Deferred Execution and Immediate Execution in LINQ, and how does the compiler's 'yield return' state machine operate under the hood?",
+    questionTitle_fa: "تفاوت اجرای تنبل (Deferred Execution) با اجرای فوری در LINQ چیست و ماشین حالت کامپایلر برای yield return در پشت صحنه چگونه کار می‌کند؟",
+    answerContent: `### LINQ Execution Model: Deferred vs. Immediate Execution
+
+LINQ to Objects operates on the \`IEnumerable<T>\` pulling protocol. Rather than loading whole datasets into memory, LINQ expressions define **declarative pipelines**.
+
+---
+
+#### 1. Deferred Execution (Lazy Evaluation)
+Execution is postponed until the sequence is actively enumerated (e.g. via \`foreach\`, \`ToList()\`, or \`await foreach\`).
+
+- **Streaming Operators (\`Where\`, \`Select\`, \`Take\`, \`Skip\`):**
+  - Process items **one at a time on demand**.
+  - Memory consumption is \`O(1)\` constant overhead.
+- **Buffering Operators (\`OrderBy\`, \`GroupBy\`, \`Reverse\`):**
+  - Still deferred, but **must consume all upstream elements** into an internal buffer before yielding the very first output item (\`O(N)\` memory buffer).
+
+\`\`\`csharp
+// Zero execution, 0 database queries, 0 allocations here:
+var query = dbContext.Orders
+    .Where(o => o.Status == OrderStatus.Pending)
+    .Select(o => new OrderDto(o.Id, o.TotalAmount));
+
+// Execution triggers HERE:
+foreach (var order in query) { /* items streamed */ }
+\`\`\`
+
+---
+
+#### 2. Immediate Execution
+Operators that trigger the query immediately and materialize results into memory:
+- **Materializers:** \`ToList()\`, \`ToArray()\`, \`ToDictionary()\`, \`ToHashSet()\`
+- **Aggregators & Reducers:** \`Count()\`, \`Sum()\`, \`Min()\`, \`Max()\`, \`Average()\`
+- **Element Operators:** \`First()\`, \`FirstOrDefault()\`, \`Single()\`, \`Any()\`, \`All()\`
+
+---
+
+#### 3. How the \`yield return\` State Machine Works Under the Hood
+When you write an iterator method containing \`yield return\`, the Roslyn compiler synthesizes a nested private class implementing \`IEnumerable<T>\`, \`IEnumerator<T>\`, and \`IDisposable\`:
+
+\`\`\`csharp
+public static IEnumerable<int> GetEvenNumbers(int max)
+{
+    for (int i = 0; i < max; i++)
+    {
+        if (i % 2 == 0)
+            yield return i;
+    }
+}
+\`\`\`
+
+#### Synthesized State Machine Mechanics:
+1. **State Field (\`<>1__state\`):** Tracks execution progress:
+   - \`0\`: Initialized / not started.
+   - \`-1\`: Currently running / inside iterator loop.
+   - \`1\`: Yielded a value (paused).
+   - \`-2\`: Disposed / terminated.
+2. **\`MoveNext()\` Method:** Implements a \`switch (<>1__state)\` jump table. It resumes execution from the exact line where \`yield return\` previously yielded, restores local variables stored as fields in the state machine class, computes the next item, assigns it to \`<>2__current\`, sets state to \`1\`, and returns \`true\`. When the loop terminates, it returns \`false\`.`,
+    answerContent_fa: `### مدل اجرای LINQ: اجرای به تعویق افتاده (Deferred) در برابر اجرای فوری (Immediate)
+
+کوئری‌های LINQ مبتنی بر اینترفیس \`IEnumerable<T>\` هستند و تا زمانی که داده‌ها صریحاً پیمایش نشوند، هیچ داده‌ای در حافظه بارگذاری یا پردازش نمی‌شود.
+
+#### ۱. عملگرهای با اجرای به تعویق افتاده (Deferred / Lazy Execution):
+- **عملگرهای جریانی (Streaming):** مانند \`Where\` و \`Select\`؛ عناصر را تک‌به‌تک بر حسب تقاضا پردازش کرده و مصرف حافظه \`O(1)\` دارند.
+- **عملگرهای بافرکننده (Buffering):** مانند \`OrderBy\` و \`GroupBy\`؛ اجرای آنها به تعویق می‌افتد اما برای تولید اولین خروجی، کل دیتای ورودی را در رم بافر می‌کنند (\`O(N)\` حافظه).
+
+#### ۲. عملگرهای با اجرای فوری (Immediate Execution):
+متدهایی مانند \`ToList()\`, \`ToArray()\`, \`Count()\`, \`Sum()\`, \`Any()\` که کل کوئری را در همان لحظه ارزیابی و نتیجه را در حافظه مادی‌سازی می‌کنند.
+
+#### ۳. سازوکار ماشین حالت کامپایلر Roslyn برای \`yield return\`:
+هنگام استفاده از \`yield return\`، کامپایلر یک کلاس داخلی ماشین حالت (State Machine) می‌سازد که فیلد \`<>1__state\` وضعیت حلقه را نگهداری می‌کند. با هر فراخوانی \`MoveNext\`، رانتایم اجرای کد را دقیقاً از نقطه توقف قبلی ادامه داده، متغیرهای محلی را بازیابی کرده و پس از مقداردهی به \`Current\`، وضعیت را مجدداً متوقف (Pause) می‌سازد.`,
+  },
+  {
+    id: "dotnet-mid-q221",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-csharp-generics-collections-linq"],
+    questionTitle: "Explain Generic Variance in C# (Covariance 'out', Contravariance 'in', and Invariance). Why are classes invariant while interfaces can be variant?",
+    questionTitle_fa: "مفهوم واریانس در جنریک‌های سی‌شارپ (Covariance با out، Contravariance با in و Invariance) چیست و چرا کلاس‌ها Invariant هستند اما اینترفیس‌ها می‌توانند Variant باشند؟",
+    answerContent: `### Generic Variance in C#: Covariance, Contravariance & Invariance
+
+Variance controls how inheritance relationships between underlying types (\`Dog : Animal\`) apply to generic types wrapping them.
+
+---
+
+| Mode | Keyword | Position | Subtyping Rule | Supported Construct |
+| :--- | :--- | :--- | :--- | :--- |
+| **Covariance** | \`out T\` | **Output only** (Return types) | \`IEnumerable<Dog>\` -> \`IEnumerable<Animal>\` | Interfaces, Delegates |
+| **Contravariance** | \`in T\` | **Input only** (Parameters) | \`IComparable<Animal>\` -> \`IComparable<Dog>\` | Interfaces, Delegates |
+| **Invariance** | None | **Both Input & Output** | \`List<Dog>\` != \`List<Animal>\` | Classes, Structs, Invariant Interfaces |
+
+---
+
+#### 1. Covariance (\`out T\`):
+Used when a generic interface or delegate **only outputs / produces** values of type \`T\`.
+\`\`\`csharp
+public interface IReadOnlyRepository<out T>
+{
+    T GetById(Guid id); // T is in OUTPUT position
+}
+
+IReadOnlyRepository<Dog> dogRepo = new DogRepository();
+IReadOnlyRepository<Animal> animalRepo = dogRepo; // VALID: Every Dog is an Animal
+Animal animal = animalRepo.GetById(Guid.NewGuid());
+\`\`\`
+
+#### 2. Contravariance (\`in T\`):
+Used when a generic interface or delegate **only accepts / consumes** values of type \`T\` as input parameters.
+\`\`\`csharp
+public interface IConsumer<in T>
+{
+    void Consume(T item); // T is in INPUT position
+}
+
+IConsumer<Animal> animalConsumer = new GeneralAnimalConsumer();
+IConsumer<Dog> dogConsumer = animalConsumer; // VALID: Can process any Dog using Animal consumer!
+dogConsumer.Consume(new Dog());
+\`\`\`
+
+---
+
+#### 3. Why Classes and Mutable Collections Are Strictly Invariant
+Classes in C# cannot be variant. If \`List<T>\` supported covariance, it would lead to fatal runtime memory corruption and type-safety violations:
+
+\`\`\`csharp
+List<Dog> dogs = new List<Dog>();
+
+// If List<T> were covariant:
+List<Animal> animals = dogs; // Hypothetical compiler allowance
+
+// CRITICAL TYPE VIOLATION:
+animals.Add(new Cat()); // Adds Cat into an actual List<Dog> instance!
+
+// Now accessing dogs[0] expects a Dog but receives a Cat -> Memory & Runtime Crash!
+Dog dog = dogs[0]; 
+\`\`\`
+
+Because \`List<T>\` allows reading (\`T this[int index]\` - Output) AND writing (\`void Add(T item)\` - Input), it is strictly **Invariant**.`,
+    answerContent_fa: `### واریانس در جنریک‌های C#: تفاوت Covariance، Contravariance و Invariance
+
+واریانس مشخص می‌کند که وراثت بین دو کلاس (مانند \`Dog : Animal\`) چگونه به جنریک‌های دربرگیرنده آنها اعمال می‌شود:
+
+#### ۱. هم‌وردایی یا Covariance (\`out T\`):
+- زمانی که نوع جنریک **صرفاً در موقعیت خروجی (Return Type)** متدها قرار می‌گیرد.
+- امکان نسبت دادن نوع مشتق‌شده‌تر به نوع پایه: \`IEnumerable<Animal> animals = new List<Dog>();\`
+
+#### ۲. پادوردایی یا Contravariance (\`in T\`):
+- زمانی که نوع جنریک **صرفاً در موقعیت ورودی (Parameter)** متدها قرار می‌گیرد.
+- امکان نسبت دادن نوع عمومی‌تر به متغیر مشتق‌شده: \`IComparer<Dog> comparer = new AnimalComparer();\`
+
+#### ۳. علت Invariant بودن کلاس‌ها و کالکشن‌های تغییرپذیر:
+کلاس‌ها نمی‌توانند Variant باشند چون همزمان متدهای خواندن (خروجی) و نوشتن (ورودی) دارند. اگر \`List<T>\` از Covariance پشتیبانی می‌کرد:
+\`\`\`csharp
+List<Dog> dogs = new List<Dog>();
+List<Animal> animals = dogs; // اگر مجاز بود
+animals.Add(new Cat());      // یک گربه درون لیست سگ‌ها درج می‌شد و رانتایم کرش می‌کرد!
+\`\`\``,
+  },
+  {
+    id: "dotnet-mid-q222",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-csharp-generics-collections-linq"],
+    questionTitle: "When should you use FrozenDictionary<TKey, TValue>, ImmutableDictionary, ConcurrentDictionary, or standard Dictionary in .NET 8/9, and how does CollectionsMarshal optimize hot paths?",
+    questionTitle_fa: "چه زمانی در دات‌نت ۸ و ۹ باید از FrozenDictionary، ImmutableDictionary، ConcurrentDictionary یا Dictionary استاندارد استفاده کنیم و CollectionsMarshal چگونه دسترسی‌های پرترافیک را بهینه می‌کند؟",
+    answerContent: `### Choosing the Right Dictionary in Modern .NET 8/9
+
+Choosing the correct dictionary structure has a massive impact on memory allocations, thread contention, and lookup throughput (> 50,000 ops/sec).
+
+---
+
+| Collection | Thread Safety | Mutation Cost | Read Throughput | Best Architectural Use Case |
+| :--- | :--- | :--- | :--- | :--- |
+| **\`Dictionary<K, V>\`** | None (Single-threaded) | \`O(1)\` fast | \`O(1)\` fast | Local request-scoped lookups, per-thread caches |
+| **\`ConcurrentDictionary<K, V>\`** | Lock-Free Reads + Striped Locks on Writes | \`O(1)\` (with lock striping) | \`O(1)\` fast | Multi-threaded shared caches, singleton services with concurrent writes |
+| **\`ImmutableDictionary<K, V>\`** | Thread-Safe (Immutable AVL Tree) | \`O(log N)\` (rebuilds tree path) | \`O(log N)\` (tree traversal) | Functional pipelines, Roslyn analyzers, state snapshots |
+| **\`FrozenDictionary<K, V>\`** (.NET 8+) | Thread-Safe (Immutable Perfect Hash) | Immutable (constructed once) | **\`O(1)\` Blazing Fast (2x-3x standard)** | Static lookup tables initialized at Startup (Routing, Enum/ISO mappings) |
+
+---
+
+#### 1. Why \`FrozenDictionary\` Outperforms Everything for Read-Only Lookups
+Introduced in \`.NET 8\` (\`System.Collections.Frozen\`), \`FrozenDictionary\` performs upfront algorithmic analysis during \`.ToFrozenDictionary()\`:
+- If key count is small (<= 10), it builds an unrolled jump table or scan.
+- For string keys, it selects specialized string hashing algorithms (e.g. ASCII / Span comparisons) that avoid full string hashing.
+- For integer keys, it constructs **perfect hash functions** (zero bucket collisions guaranteed).
+
+\`\`\`csharp
+public class RouteRegistry
+{
+    // Created once at Startup:
+    private static readonly FrozenDictionary<string, EndpointHandler> Handlers = 
+        RegisterRoutes().ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+
+    public EndpointHandler? Resolve(string path) => Handlers.GetValueOrDefault(path);
+}
+\`\`\`
+
+---
+
+#### 2. \`CollectionsMarshal\` for Zero-Copy Hot Paths (\`System.Runtime.InteropServices\`)
+In standard dictionary mutation, updating a value requires two lookups (\`dict.ContainsKey\` followed by \`dict[key] = ...\`) or copying struct values.
+
+\`CollectionsMarshal.GetValueRefOrNullRef\` retrieves a \`ref TValue\` directly to the internal array slot:
+
+\`\`\`csharp
+public void IncrementCounter(Dictionary<string, RequestStats> dict, string route)
+{
+    ref var entry = ref CollectionsMarshal.GetValueRefOrNullRef(dict, route);
+    
+    if (System.Runtime.CompilerServices.Unsafe.IsNullRef(ref entry))
+    {
+        dict[route] = new RequestStats { HitCount = 1 };
+    }
+    else
+    {
+        // Mutates struct in-place without double hash lookup or stack copying!
+        entry.HitCount++;
+    }
+}
+\`\`\``,
+    answerContent_fa: `### انتخاب دیکشنری مناسب در دات‌نت ۸ و ۹ و بهینه‌سازی با CollectionsMarshal
+
+انتخاب ساختار مناسب دیکشنری تاثیر مستقیم بر نرخ Throughput و میزان مصرف CPU دارد:
+
+#### مقایسه انواع دیکشنری:
+۱. **\`Dictionary<K, V>\` استاندارد:** مناسب‌ترین گزینه برای اسکوپ‌های تک‌نخی (مانند درون یک متد یا Request دات‌نت).
+۲. **\`ConcurrentDictionary<K, V>\`:** برای سناریوهای چندنخی با خواندن و نوشتن همزمان در سرویس‌های Singleton (استفاده از قفل‌های نواری Striped Locks).
+۳. **\`ImmutableDictionary<K, V>\`:** ساختار درختی AVL غیرقابل تغییر؛ مناسب برای ذخیره Snapshot وضعیت‌ها با پیچیدگی \`O(log N)\`.
+۴. **\`FrozenDictionary<K, V>\` (جدید در دات‌نت ۸):** فقط‌خواندنی و غیرقابل تغییر؛ کامپایلر با ساخت **تابع هش کامل (Perfect Hash)** سرعتی تا ۳ برابر بالاتر از دیکشنری عادی در جستجوها فراهم می‌کند (ایده‌آل برای جداول ثابت، نگاشت روت‌ها و دسترسی‌ها در زمان استارتاپ).
+
+#### بهینه‌سازی مسیرهای بحرانی با \`CollectionsMarshal\`:
+متد \`CollectionsMarshal.GetValueRefOrNullRef\` یک ارجاع مستقیم (\`ref\`) به اسلات داخلی استراکت در آرایه دیکشنری می‌دهد تا از دو بار محاسبه هش کلید و کپی کردن استراکت در رم جلوگیری شود.`,
+  },
+  {
+    id: "dotnet-mid-q223",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-csharp-delegates-lambdas-events"],
+    questionTitle: "How does the CLR implement MulticastDelegate under the hood, and what happens when an exception is thrown in a multi-handler delegate chain?",
+    questionTitle_fa: "معماری داخلی MulticastDelegate در CLR چگونه است و در صورت بروز خطا (Exception) در یکی از متدهای زنجیره چه اتفاقی می‌افتد؟",
+    answerContent: `### CLR MulticastDelegate Internal Architecture & Exception Handling
+
+In .NET, all delegate types inherit from \`System.MulticastDelegate\` (which derives from \`System.Delegate\`). A delegate is a reference type allocated on the **Managed Heap** that encapsulates:
+
+\`\`\`csharp
+public abstract class Delegate
+{
+    internal object _target;         // The object instance (null for static methods)
+    internal IntPtr _methodPtr;      // Function pointer to the JIT-compiled native code
+}
+
+public abstract class MulticastDelegate : Delegate
+{
+    internal object _invocationList; // Array of Delegate objects when combined via +=
+}
+\`\`\`
+
+---
+
+#### 1. Single-Cast vs Multicast Mechanics:
+- **Single Target:** \`_invocationList\` is \`null\`. The runtime invokes \`_methodPtr\` directly against \`_target\`.
+- **Multicast Combination (\`+=\`):** Calling \`Delegate.Combine(a, b)\` creates a **new immutable \`MulticastDelegate\` instance** whose \`_invocationList\` holds an array of delegates (\`Delegate[]\`). Delegates in C# are immutable—subscribing or unsubscribing always produces a new delegate object.
+
+---
+
+#### 2. What Happens When an Exception Is Thrown?
+When invoking a multicast delegate (e.g. \`myAction()\`), the CLR iterates through the \`_invocationList\` sequentially in the order handlers were registered.
+
+**The Danger:** If any handler throws an unhandled exception, **the delegate invocation pipeline immediately terminates**. Subsequent subscribers in the invocation chain are **never executed**, leaving application state inconsistent!
+
+\`\`\`csharp
+// HAZARDOUS: If handler 1 throws, handler 2 and 3 are skipped!
+public void FireNotifications(Action notify)
+{
+    notify?.Invoke();
+}
+
+// PRODUCTION BEST PRACTICE: Safe Invocation Loop
+public void FireNotificationsSafely(Action notify)
+{
+    if (notify == null) return;
+
+    var exceptions = new List<Exception>();
+
+    foreach (var handler in notify.GetInvocationList().Cast<Action>())
+    {
+        try
+        {
+            handler();
+        }
+        catch (Exception ex)
+        {
+            // Capture exception and continue invoking subsequent subscribers
+            exceptions.Add(ex);
+            _logger.LogError(ex, "Error in subscriber handler.");
+        }
+    }
+
+    if (exceptions.Count > 0)
+    {
+        throw new AggregateException("One or more event handlers failed.", exceptions);
+    }
+}
+\`\`\``,
+    answerContent_fa: `### ساختار داخلی MulticastDelegate در CLR و مدیریت خطا در زنجیره فراخوانی
+
+در دات‌نت تمامی دلیگیت‌ها از کلاس \`System.MulticastDelegate\` ارث‌بری می‌کنند که ساختار زیر را روی Managed Heap دارد:
+
+\`\`\`csharp
+internal object _target;         // ارجاع به نمونه شیء (null برای متدهای استاتیک)
+internal IntPtr _methodPtr;      // اشاره‌گر کد ماشین متد
+internal object _invocationList; // آرایه دلیگیت‌ها در حالت Multicast
+\`\`\`
+
+#### ۱. ترکیب دلیگیت‌ها (\`+=\`):
+دلیگیت‌ها تغییرناپذیر (Immutable) هستند؛ اضافه کردن متد با \`+=\` یا \`Delegate.Combine\` یک شیء دلیگیت جدید ساخته و آرایه \`_invocationList\` را مقداردهی می‌کند.
+
+#### ۲. رفتار در زمان بروز Exception:
+اگر دلیگیت چندگانه به صورت مستقیم فراخوانی شود (\`myAction()\`)، متدها به ترتیب اجرا می‌شوند. **در صورتی که یکی از متدها Exception پرتاب کند، اجرای زنجیره بلافاصله متوقف شده و متدهای بعدی اجرا نمی‌شوند!**
+
+#### راهکار پروداکشن:
+استفاده از متد \`GetInvocationList()\` و پیمایش دستی تک‌تک هندلرها درون بلوک \`try-catch\` جهت تضمین اجرای تمامی مشترکین و بسته‌بندی خطاها در \`AggregateException\`.`,
+  },
+  {
+    id: "dotnet-mid-q224",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-csharp-delegates-lambdas-events"],
+    questionTitle: "Explain how Closures work in C#. What is the Roslyn compiler's DisplayClass, and how can capturing variables cause memory allocations and bugs in loops?",
+    questionTitle_fa: "سازوکار Closureها در سی‌شارپ چیست؟ کلاس DisplayClass تولیدشده توسط Roslyn چگونه کار می‌کند و Capture کردن متغیرها چه هزینه‌های حافظه‌ای و باگ‌هایی در حلقه‌ها ایجاد می‌کند؟",
+    answerContent: `### Closures, Scope Capture, and Roslyn DisplayClass
+
+A **Closure** occurs when a lambda expression or anonymous function references variables declared outside its immediate parameter list (outer local variables, parameters, or the enclosing \`this\` reference).
+
+---
+
+#### 1. What Roslyn Synthesizes Under the Hood
+Local variables normally reside on the thread's Stack frame. When captured by a closure, their lifetime must outlive the containing method.
+
+To achieve this, the Roslyn compiler **lifts the captured variables into fields of a hidden heap-allocated class** called the **Display Class** (\`<>c__DisplayClass\`):
+
+\`\`\`csharp
+public Func<int, int> CreateAdder(int amount)
+{
+    return x => x + amount; // 'amount' is captured
+}
+\`\`\`
+
+#### Conceptual Decompilation:
+\`\`\`csharp
+[CompilerGenerated]
+private sealed class <>c__DisplayClass0_0
+{
+    public int amount; // Stack variable lifted to a Heap field!
+
+    internal int <CreateAdder>b__0(int x) => x + this.amount;
+}
+
+public Func<int, int> CreateAdder(int amount)
+{
+    var display = new <>c__DisplayClass0_0(); // HEAP ALLOCATION on every call!
+    display.amount = amount;
+    return new Func<int, int>(display.<CreateAdder>b__0);
+}
+\`\`\`
+
+---
+
+#### 2. The Classic "Captured Loop Variable" Trap
+In standard \`for\` loops, capturing the loop counter variable captures the **same variable reference** across all lambda instances:
+
+\`\`\`csharp
+var actions = new List<Action>();
+for (int i = 0; i < 5; i++)
+{
+    actions.Add(() => Console.WriteLine(i)); // TRAP: Captures shared 'i' reference
+}
+
+foreach (var act in actions) act(); // Output: 5, 5, 5, 5, 5 (NOT 0, 1, 2, 3, 4)
+\`\`\`
+
+**Fix:** Create a local scope copy inside the loop body (\`int copy = i;\`) or use \`foreach\` (which creates per-iteration scope in C# 5+).
+
+---
+
+#### 3. Modern Zero-Allocation Best Practices:
+1. **Static Lambdas (C# 9+):** Use \`static (x) => ...\` to enforce at compile time that no outer variables or \`this\` are captured.
+2. **State-Passing Overloads:** In high-throughput code, use API overloads that accept an explicit \`TState\` argument:
+   \`\`\`csharp
+   // ZERO ALLOCATIONS:
+   _cache.GetOrAdd(key, static (k, state) => LoadTenantData(k, state), tenantId);
+   \`\`\``,
+    answerContent_fa: `### نحوه کارکرد Closureها، کلاس DisplayClass در کامپایلر Roslyn و خطرات تخصیص حافظه
+
+**Closure** زمانی تشکیل می‌شود که یک تابع لامبدا به متغیرهای تعریف‌شده در خارج از پارامترهای خود (متغیرهای محلی، پارامترهای ورودی یا \`this\`) دسترسی پیدا کند.
+
+#### ۱. سازوکار داخلی Roslyn (تولید DisplayClass):
+متغیرهای محلی معمولاً روی Stack قرار دارند. از آنجا که طول عمر دلیگیت ممکن است بیشتر از متد جاری باشد، کامپایلر Roslyn یک کلاس مخفی روی Managed Heap به نام **DisplayClass** می‌سازد و تمام متغیرهای تسخیرشده را به فیلدهای این کلاس روی Heap تبدیل می‌کند.
+
+#### ۲. تله مشهور متغیر حلقه (Captured Loop Variable):
+در حلقه‌های \`for\`، اگر متغیر شمارنده حلقه در لامبدا Capture شود، تمامی دلیگیت‌ها به همان آدرس مشترک ارجاع داده و مقدار نهایی حلقه را چاپ می‌کنند:
+\`\`\`csharp
+for (int i = 0; i < 5; i++)
+{
+    int localCopy = i; // راهکار: کپی متغیر در اسکوپ داخلی
+    actions.Add(() => Console.WriteLine(localCopy));
+}
+\`\`\`
+
+#### ۳. راهکارهای بهینه‌سازی و به صفر رساندن Garbage Collection:
+- استفاده از **Static Lambdas** (\`static (x) => ...\`) برای جلوگیری قطعی از تسخیر متغیرها.
+- استفاده از متدهای با ورودی State (مانند \`ConcurrentDictionary.GetOrAdd\`) به جای ایجاد کلوژر.`,
+  },
+  {
+    id: "dotnet-mid-q225",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-csharp-delegates-lambdas-events"],
+    questionTitle: "What are the fundamental differences between an 'event' and a public delegate in C# regarding encapsulation, IL generation, and thread safety?",
+    questionTitle_fa: "تفاوت‌های بنیادین بین event و یک دلیگیت عمومی (public delegate) در سی‌شارپ از نظر کپسوله‌سازی، کدهای IL تولیدشده و ایمنی چندنخی چیست؟",
+    answerContent: `### Events vs. Public Delegates in C#
+
+While both represent callbacks, an \`event\` is a **language modifier and encapsulation construct**, not a distinct data type.
+
+---
+
+| Dimension | Public Delegate Field (\`public Action Handler\`) | Encapsulated Event (\`public event Action Handler\`) |
+| :--- | :--- | :--- |
+| **External Subscription** | \`obj.Handler += Method;\` | \`obj.Handler += Method;\` |
+| **External Unsubscription** | \`obj.Handler -= Method;\` | \`obj.Handler -= Method;\` |
+| **External Overwrite** | **Allowed (\`obj.Handler = null;\`)** — Overwrites all other subscribers! | **Prohibited (Compile Error)** |
+| **External Invocation** | **Allowed (\`obj.Handler();\`)** — Any caller can trigger the callback! | **Prohibited (Compile Error)** — Can only be invoked from within declaring class |
+| **Interface Support** | Cannot declare fields in interfaces | **Supported in interfaces** (\`event Action OnChanged;\`) |
+| **Thread Safety** | Must be handled manually | **Compiler-generated atomic subscription** via \`Interlocked.CompareExchange\` |
+
+---
+
+#### IL Code Generation for Events
+When declaring \`public event EventHandler<OrderEventArgs>? OrderCreated;\`, the Roslyn compiler synthesizes:
+1. A private backing field: \`private EventHandler<OrderEventArgs>? OrderCreated;\`
+2. An **\`add_OrderCreated\`** accessor method.
+3. A **\`remove_OrderCreated\`** accessor method.
+
+#### Thread-Safe Accessor Synthesis (Conceptual IL):
+\`\`\`csharp
+public void add_OrderCreated(EventHandler<OrderEventArgs> value)
+{
+    EventHandler<OrderEventArgs> root = this.OrderCreated;
+    EventHandler<OrderEventArgs> current;
+    do
+    {
+        current = root;
+        EventHandler<OrderEventArgs> combined = (EventHandler<OrderEventArgs>)Delegate.Combine(current, value);
+        root = Interlocked.CompareExchange(ref this.OrderCreated, combined, current);
+    }
+    while (root != current); // Atomic lock-free CAS loop
+}
+\`\`\``,
+    answerContent_fa: `### تفاوت‌های بنیادین بین event و دلیگیت عمومی (public delegate) در سی‌شارپ
+
+کلمه کلیدی \`event\` یک نوع داده نیست، بلکه یک **پیراینده و لایه کپسوله‌سازی** روی فیلد دلیگیت است:
+
+#### تفاوت‌های کلیدی:
+۱. **کپسوله‌سازی و امنیت:** در یک دلیگیت عمومی، هر کلاس خارجی می‌تواند آن را \`null\` کرده یا کل مشترکین را پاک کند (\`obj.Handler = null\`) یا آن را صدا بزند. در \`event\`، کدهای خارجی **صرفاً مجاز به \`+=\` و \`-=\` هستند** و حق فراخوانی یا پاک‌سازی آن را ندارند.
+۲. **تعریف در اینترفیس‌ها:** فیلدهای دلیگیت نمی‌توانند در Interface قرار گیرند، اما \`event\` قابلیت تعریف در اینترفیس دارد.
+۳. **ایمنی در برابر چندنخی (Thread Safety):** کامپایلر برای متدهای \`add\` و \`remove\` رویداد، یک حلقه Lock-Free با استفاده از \`Interlocked.CompareExchange\` تولید می‌کند تا ثبت همزمان اشتراک‌ها در محیط‌های چندنخی دچار Race Condition نشود.`,
+  },
+  {
+    id: "dotnet-mid-q226",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-csharp-delegates-lambdas-events"],
+    questionTitle: "What is the Lapsed Listener Problem in .NET event architectures, and how do you prevent severe memory leaks between Singleton publishers and Scoped subscribers?",
+    questionTitle_fa: "مشکل Lapsed Listener در معماری رویدادهای دات‌نت چیست و چگونه از نشت حافظه شدید میان ناشران Singleton و مشترکان Scoped جلوگیری کنیم؟",
+    answerContent: `### The Lapsed Listener Problem in .NET
+
+The **Lapsed Listener Problem** is one of the most common causes of memory leaks in .NET applications.
+
+---
+
+#### 1. Why the Leak Occurs (GC Mechanics)
+When an object subscribes to an event:
+\`\`\`csharp
+publisher.OrderCompleted += this.OnOrderCompleted;
+\`\`\`
+
+Under the hood, \`publisher._invocationList\` stores a \`Delegate\` object where \`_target\` points to **\`this\`** (the subscriber instance).
+
+- **The Problem:** If the publisher has a **Long Lifetime** (e.g. Singleton service, Static class, Application Cache) and the subscriber has a **Short Lifetime** (e.g. Scoped Service, Controller, UI View):
+- The Singleton publisher holds a **strong reference** to the Scoped subscriber.
+- When the HTTP request finishes, the Garbage Collector scans the root graph. Because the Singleton is still alive, the Scoped subscriber and **every large object graph it references (DbContext, caches, memory buffers) remain rooted and CANNOT be collected!**
+
+---
+
+#### 2. Prevention & Mitigation Strategies:
+
+1. **Explicit Unsubscription in \`Dispose()\`:**
+   Implement \`IDisposable\` on the subscriber and unsubscribe:
+   \`\`\`csharp
+   public class InvoiceHandler : IDisposable
+   {
+       private readonly GlobalEventBus _bus;
+       public InvoiceHandler(GlobalEventBus bus)
+       {
+           _bus = bus;
+           _bus.OrderPlaced += HandleOrder;
+       }
+
+       public void Dispose()
+       {
+           _bus.OrderPlaced -= HandleOrder; // Frees the strong reference!
+       }
+   }
+   \`\`\`
+
+2. **Weak Event Pattern (\`WeakReference<T>\`):**
+   Uses weak references so the event subscription does not prevent the GC from reclaiming the subscriber if no other strong references exist.
+
+3. **In-Process Decoupled Event Buses (MediatR):**
+   In modern ASP.NET Core Clean Architecture, avoid direct C# \`event\` subscriptions between services. Use **MediatR Notifications** (\`INotification\` / \`INotificationHandler<T>\`) where handlers are resolved from the DI container per scope and automatically collected after dispatch.`,
+    answerContent_fa: `### تحلیل چالش Lapsed Listener و رفع نشت حافظه میان Singleton و Scoped
+
+مشکل **Lapsed Listener** زمانی رخ می‌دهد که یک شیء با طول عمر کوتاه به رویداد یک شیء با طول عمر بلند متصل شود:
+
+#### ریشه مشکل در Garbage Collector:
+هنگام اتصال رویداد (\`publisher.Event += this.Handler\`)، فیلد \`_target\` دلیگیت یک رفرنس قوی (Strong Reference) به شیء مشترک نگه می‌دارد. اگر ناشر یک شیء **Singleton** باشد، تا زمان خاموش شدن برنامه به شیء مشترک (مانند یک سرویس Scoped یا کانتینر UI) اشاره دارد؛ در نتیجه GC هرگز نمی‌تواند شیء مشترک و اشیای وابسته به آن (مانند DbContext) را از رم آزاد کند که منجر به نشت حافظه فاجعه‌بار می‌شود.
+
+#### راهکارهای رفع:
+۱. پیاده‌سازی اینترفیس \`IDisposable\` و لغو صریح اشتراک (\`-=\`).
+۲. استفاده از الگوی **Weak Event** جهت نگهداری ارجاع ضعیف (\`WeakReference\`).
+۳. جایگزینی رویدادهای سنتی C# با **سیستم‌های پیام‌رسان درون‌برنامه‌ای (مانند MediatR \`INotification\`)** که طول عمر هندلرها را متناسب با اسکوپ DI مدیریت می‌کنند.`,
+  },
+  {
+    id: "dotnet-mid-q227",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-csharp-delegates-lambdas-events"],
+    questionTitle: "Compare Func<T, bool> and Expression<Func<T, bool>> in .NET. How does Entity Framework Core parse expression trees into SQL queries?",
+    questionTitle_fa: "مقایسه دلیگیت Func<T, bool> و درخت عبارت Expression<Func<T, bool>>: انتیتی فریم‌ورک کور چگونه درخت عبارت را به کوئری SQL ترجمه می‌کند؟",
+    answerContent: `### Func<T, bool> vs. Expression<Func<T, bool>> in .NET
+
+Understanding the difference between compiled delegates and Expression Trees is essential for mastering LINQ, Entity Framework Core, and high-performance querying.
+
+---
+
+| Dimension | \`Func<T, bool>\` (Delegate) | \`Expression<Func<T, bool>>\` (Expression Tree) |
+| :--- | :--- | :--- |
+| **Data Nature** | Compiled Intermediate Language (IL) executable code | In-memory **Abstract Syntax Tree (AST)** data structure |
+| **Inspection** | Opaque black box (cannot inspect parameters, operators) | Fully inspectable at runtime (Nodes, BinaryExpressions, MemberAccess) |
+| **Execution Engine** | Executed directly in CPU/RAM (LINQ to Objects) | Parsed and translated into SQL queries (LINQ to Entities / EF Core) |
+| **Memory Cost** | Low (Single delegate instance) | Higher (Allocates multiple expression tree nodes on the Heap) |
+| **Compilation** | Pre-compiled at build time | Can be parsed as data, or dynamically compiled at runtime via \`.Compile()\` |
+
+---
+
+#### How Entity Framework Core Translates Expressions to SQL
+When you execute:
+\`\`\`csharp
+dbContext.Users.Where(u => u.Age > 18 && u.IsActive).ToList();
+\`\`\`
+
+1. **AST Representation:** The C# compiler creates an \`Expression<Func<User, bool>>\` object graph consisting of \`BinaryExpression\` (AndAlso), \`MemberExpression\` (\`u.Age\`), and \`ConstantExpression\` (\`18\`).
+2. **EF Core Query Pipeline (ExpressionVisitor):**
+   - EF Core traverses the AST using custom \`ExpressionVisitor\` classes.
+   - It maps \`u.Age\` to the SQL column \`[Age]\`.
+   - It maps \`>\` to the SQL operator \`>\`.
+   - It maps \`&&\` to SQL \`AND\`.
+3. **Relational Command Generation:** EF Core produces parameterized SQL:
+   \`\`\`sql
+   SELECT [u].[Id], [u].[Age], [u].[IsActive]
+   FROM [Users] AS [u]
+   WHERE [u].[Age] > 18 AND [u].[IsActive] = 1
+   \`\`\`
+
+#### The Critical Pitfall:
+Passing a compiled \`Func<T, bool>\` into an \`IQueryable<T>\` causes **Client-Side Evaluation**: EF Core pulls ALL rows from the database into RAM and filters them in C#, causing devastating network latency and memory exhaustion!`,
+    answerContent_fa: `### مقایسه دلیگیت Func<T, bool> و درخت عبارت Expression<Func<T, bool>>
+
+درک تفاوت این دو ساختار برای تسلط بر LINQ و Entity Framework Core حیاتی است:
+
+#### تفاوت‌های بنیادین:
+#### تله خطرناک:
+اگر به جای \`Expression\` از \`Func\` در کوئری‌های EF Core استفاده شود، کل دیتای جدول ابتدا از دیتابیس دانلود شده و سپس در رم C# فیلتر می‌گردد (Client-Side Evaluation) که باعث افت وحشتناک سرعت و پر شدن رم سرور می‌شود.`,
+  },
+  {
+    id: "dotnet-mid-q228",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-csharp-exceptions-idisposable"],
+    questionTitle: "How does the CLR two-pass exception handling model work under the hood, and why do C# Exception Filters ('when' clause) evaluate without unwinding the stack?",
+    questionTitle_fa: "مدل مدیریت استثنای دو فازی (Two-Pass) در CLR چگونه کار می‌کند و چرا فیلترهای استثنا (عبارت when) بدون پشته‌زدایی (Stack Unwinding) اجرا می‌شوند؟",
+    answerContent: `### CLR Two-Pass Exception Pipeline & Exception Filters
+
+The .NET CLR implements Structured Exception Handling (SEH) using a **Two-Pass Exception Architecture**:
+
+---
+
+#### 1. Pass 1: The Search Phase (Inspection without Unwinding)
+- When an exception is thrown, the CLR walks up the call stack frame by frame looking for an enclosing \`try/catch\` block that handles the exception type.
+- If a \`catch\` block specifies an **Exception Filter** (\`catch (Exception ex) when (Condition)\`), the runtime executes the boolean filter expression **immediately on the current stack**.
+- **Crucial Architectural Benefit:** During Pass 1, **no stack unwinding occurs**. The call stack frames, CPU registers, local variables, and execution context between the throw site and catch site remain 100% intact.
+- If the filter returns \`false\`, the CLR skips the catch block and continues searching higher up the stack.
+
+---
+
+#### 2. Pass 2: The Unwind Phase (Execution & Cleanup)
+- Once a matching handler is found (whose filter returned \`true\`), the CLR initiates **Stack Unwinding**.
+- It walks back down from the throw point to the target catch block, executing all intervening **\`finally\` blocks** and **\`using\` cleanup blocks** in reverse order of entry.
+- Control is finally transferred to the target \`catch\` block body.
+
+---
+
+#### 3. Why Exception Filters (\`when\`) Outperform \`catch + if + throw\`:
+
+\`\`\`csharp
+// ANTI-PATTERN: Unwinds the stack BEFORE checking condition!
+try
+{
+    await httpClient.GetAsync(url);
+}
+catch (HttpRequestException ex)
+{
+    if (ex.StatusCode == HttpStatusCode.NotFound)
+    {
+        _logger.LogWarning("Endpoint missing: {Url}", url);
+    }
+    else
+    {
+        throw; // The stack was ALREADY unwound and finally blocks executed!
+    }
+}
+
+// MODERN C# BEST PRACTICE (Exception Filter):
+try
+{
+    await httpClient.GetAsync(url);
+}
+catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+{
+    // Filter evaluated during Pass 1 while entire call stack and crash dump state are preserved!
+    _logger.LogWarning("Endpoint missing: {Url}", url);
+}
+\`\`\`
+
+#### Production Diagnostic Impact:
+If an unhandled exception triggers a Windows Minidump or crash dump, an exception filter that returned \`false\` leaves the stack completely pristine at the exact line of failure, rather than unwound to an intermediate logging block.`,
+    answerContent_fa: `### مدل دو فازی (Two-Pass) مدیریت استثناها در CLR و فیلترهای استثنا (when)
+
+رانتایم CLR استثناها را در دو فاز کاملاً تفکیک‌شده مدیریت می‌کند:
+
+#### ۱. فاز اول: مرحله جستجو (Search Phase بدون پشته‌زدایی):
+- با پرتاب خطا (\`throw\`)، CLR پشته فراخوانی (Call Stack) را برای یافتن بلوک \`catch\` مناسب بررسی می‌کند.
+- در صورت وجود **فیلتر استثنا** (\`catch (...) when (...)\`)، شرط فیلتر **دقیقاً در همان لحظه و بدون باز کردن پشته (Stack Unwinding)** ارزیابی می‌شود.
+- در این فاز، تمامی متغیرهای محلی و فریم‌های پشته ۱۰۰٪ دست‌نخورده باقی می‌مانند که امکان تحلیل دقیق وضعیت در هنگام وقوع کرش و ثبت Crash Dump را مهیا می‌سازد.
+
+#### ۲. فاز دوم: مرحله پشته‌زدایی (Unwind Phase):
+- پس از تایید شرط فیلتر، پشته باز شده و تمام بلوک‌های \`finally\` و \`using\` در طول مسیر به ترتیب معکوس اجرا می‌شوند و در نهایت کنترل به بدنه \`catch\` منتقل می‌شود.
+
+#### مزیت فیلتر \`when\` نسبت به \`catch + if + throw\`:
+در روش سنتی، پشته قبل از بررسی شرط باز می‌شد؛ اما با فیلتر \`when\`، اگر شرط برقرار نباشد، برنامه طوری پشته را حفظ می‌کند که گویی خطایی در آن لایه مدیریت نشده و اطلاعات عیب‌یابی برای لایه‌های بالاتر حفظ می‌گردد.`,
+  },
+  {
+    id: "dotnet-mid-q229",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-csharp-exceptions-idisposable"],
+    questionTitle: "What is the critical difference between 'throw;', 'throw ex;', and 'ExceptionDispatchInfo.Capture(ex).Throw();' in C#, and how do they impact the stack trace?",
+    questionTitle_fa: "تفاوت حیاتی میان 'throw;'، 'throw ex;' و 'ExceptionDispatchInfo.Capture(ex).Throw()' در سی‌شارپ چیست و هر کدام چه تاثیری بر Stack Trace دارند؟",
+    answerContent: `### Exception Propagation Mechanics in C#
+
+Maintaining accurate stack traces is critical for diagnosing production bugs. How you re-throw exceptions fundamentally alters the stack trace metadata captured by the runtime.
+
+---
+
+\`\`\`csharp
+public async Task ExecutePaymentAsync(Order order)
+{
+    try
+    {
+        await _gateway.ChargeCreditCardAsync(order);
+    }
+    catch (PaymentGatewayException ex)
+    {
+        // Option 1: throw ex;
+        // Option 2: throw;
+        // Option 3: ExceptionDispatchInfo.Capture(ex).Throw();
+    }
+}
+\`\`\`
+
+---
+
+#### 1. \`throw ex;\` (Catastrophic Anti-Pattern)
+- **Behavior:** Resets the exception's origin to the current line where \`throw ex;\` is executed.
+- **Consequence:** Completely **erases the entire upstream call stack** (the exact method, file name, and line number where the original error occurred inside \`_gateway.ChargeCreditCardAsync\`).
+- **Verdict:** **Strictly prohibited in production code.**
+
+---
+
+#### 2. \`throw;\` (Standard Re-Throw)
+- **Behavior:** Instructs the CLR to resume stack propagation of the active exception object without modifying its origin.
+- **Consequence:** Preserves 100% of the original call stack trace from the point of origin.
+- **Verdict:** The standard best practice inside synchronous catch blocks.
+
+---
+
+#### 3. \`ExceptionDispatchInfo.Capture(ex).Throw();\` (\`System.Runtime.ExceptionServices\`)
+- **Behavior:** Captures the exception and its complete stack state at a specific point in time, and re-throws it elsewhere (even on a different thread or asynchronous continuation).
+- **Consequence:** Preserves the original stack trace AND inserts a clear runtime delimiter:
+  \`\`\`text
+  --- End of stack trace from previous location where exception was thrown ---
+  \`\`\`
+- **Use Cases:**
+  - Asynchronous task state machines and \`Task.WhenAll\` aggregations.
+  - Polly resilience policies and custom retry interceptors.
+  - Cross-thread error marshaling from ThreadPool workers to main threads.`,
+    answerContent_fa: `### سازوکار انتشار مجدد استثناها: مقایسه throw، throw ex و ExceptionDispatchInfo
+
+نحوه پرتاب مجدد استثناها تاثیر مستقیمی بر حفظ تاریخچه Call Stack و ریشه‌یابی خطاها در پروداکشن دارد:
+
+#### ۱. عبارت \`throw ex;\` (الگوی ضدکارایی و ممنوع):
+- **رفتار:** نقطه شروع استثنا را به همین خط جاری ریست می‌کند.
+- **پیامد:** کل تاریخچه پشته قبلی (فایل و خطی که خطای واقعی در آن رخ داده بود) پاک می‌شود. در کدهای پروداکشن هرگز نباید استفاده شود.
+
+#### ۲. عبارت \`throw;\` (استاندارد):
+- **رفتار:** همان شیء استثنا را بدون تغییر در پشته به سمت لایه‌های بالاتر هدایت می‌کند.
+- **پیامد:** ۱۰۰٪ اطلاعات خط اصلی وقوع خطا و تمام متدهای والد حفظ می‌شود.
+
+#### ۳. متد \`ExceptionDispatchInfo.Capture(ex).Throw()\`:
+- **رفتار:** پشته استثنا را در لحظه ثبت کرده و امکان پرتاب مجدد آن را در نخ‌های دیگر یا چرخه‌های بعدی Async فراهم می‌سازد.
+- **پیامد:** پشته اصلی را کاملاً حفظ کرده و یک خط جداکننده به لاگ اضافه می‌کند.
+- **کاربرد:** موتورهای پردازش ناهمگام، الگوهای Retry در Polly و جابجایی خطا میان Threadها.`,
+  },
+  {
+    id: "dotnet-mid-q230",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-csharp-exceptions-idisposable"],
+    questionTitle: "How does the CLR Garbage Collector handle finalizable objects (Finalization Queue vs F-Reachable Queue), and why is calling GC.SuppressFinalize mandatory in Dispose()?",
+    questionTitle_fa: "موتور Garbage Collector در CLR چگونه اشیای دارای Finalizer را مدیریت می‌کند (صف Finalization در برابر F-Reachable) و چرا فراخوانی GC.SuppressFinalize در متد Dispose الزامی است؟",
+    answerContent: `### CLR Finalization Pipeline: Finalization Queue vs. F-Reachable Queue
+
+The .NET Garbage Collector automatically reclaims managed memory, but it cannot know how to release unmanaged resources (file handles, sockets, native memory allocated via \`Marshal.AllocHGlobal\`).
+
+When a class defines a Finalizer (\`~ClassName()\`), the runtime handles its lifecycle through a specialized two-queue mechanism:
+
+---
+
+\`\`\`csharp
+public class NativeBuffer : IDisposable
+{
+    private IntPtr _buffer;
+
+    public NativeBuffer(int size) => _buffer = Marshal.AllocHGlobal(size);
+
+    public void Dispose()
+    {
+        CleanUpUnmanaged();
+        GC.SuppressFinalize(this); // MANDATORY!
+    }
+
+    ~NativeBuffer() => CleanUpUnmanaged(); // Fallback finalizer
+
+    private void CleanUpUnmanaged()
+    {
+        if (_buffer != IntPtr.Zero)
+        {
+            Marshal.FreeHGlobal(_buffer);
+            _buffer = IntPtr.Zero;
+        }
+    }
+}
+\`\`\`
+
+---
+
+#### 1. What Happens When \`new NativeBuffer()\` Is Instantiated:
+- The CLR allocates the object on the Managed Heap and places an internal pointer into the **Finalization Queue**.
+
+---
+
+#### 2. What Happens During Garbage Collection (If \`Dispose()\` Was NOT Called):
+1. **Detection:** When a Gen 0 GC collection occurs, the GC determines that the object is no longer referenced by user code.
+2. **Survival & Promotion:** Because the object has a pending finalizer, **the GC CANNOT reclaim its memory yet**. It moves the pointer from the *Finalization Queue* to the **F-Reachable Queue** (Finalization Reachable).
+3. **Generational Penalty:** Because the *F-Reachable Queue* now holds a strong root to the object, the object survives Gen 0 and is **promoted to Generation 1 (or Generation 2)**!
+4. **Finalizer Thread Execution:** A dedicated low-priority background thread (the *Finalizer Thread*) drains the F-Reachable Queue and executes \`~NativeBuffer()\`.
+5. **Delayed Memory Reclamation:** The object's memory is only freed during a *subsequent* Gen 1/Gen 2 GC cycle, significantly increasing application memory footprint and GC pause times!
+
+---
+
+#### 3. Why \`GC.SuppressFinalize(this)\` Is Mandatory in \`Dispose()\`:
+When the developer deterministically calls \`Dispose()\`, \`GC.SuppressFinalize(this)\` flips an internal bit on the object's header. It tells the runtime:
+*"The unmanaged resources have already been freed. Remove this object from the Finalization Queue."*
+
+**The Result:** When the GC collects Gen 0, the object is reclaimed **immediately in Gen 0 with zero generational promotion penalty and zero Finalizer Thread overhead!**`,
+    answerContent_fa: `### سازوکار صف‌های Finalization و F-Reachable در GC و ضرورت GC.SuppressFinalize
+
+موتور Garbage Collector حافظه Managed را مدیریت می‌کند اما از منابع سیستم‌عامل (Unmanaged Resources مانند Handle فایل، کانکشن‌های شبکه و حافظه C++) بی‌خبر است.
+
+کلاس‌هایی که دارای Finalizer (\`~ClassName()\`) هستند، چرخه‌ای پرهزینه در حافظه طی می‌کنند:
+
+#### ۱. صف‌های Finalization Queue و F-Reachable Queue:
+- هنگام ساخت شیء، اشاره‌گر آن در **Finalization Queue** ثبت می‌شود.
+- در زمان اجرای GC در نسل صفر (Gen 0)، شیء به دلیل داشتن Finalizer **آزاد نمی‌شود**، بلکه به **F-Reachable Queue** منتقل می‌گردد.
+- به دلیل ارجاع داشتن از این صف، شیء از جمع‌آوری جان سالم به در برده و به **نسل‌های بالاتر (Gen 1 یا Gen 2)** ترفیع می‌یابد!
+- یک نخ پس‌زمینه اختصاصی (Finalizer Thread) متد مخرب شیء را اجرا می‌کند و در نهایت حافظه شیء در چرخه‌های بعدی GC آزاد می‌شود که فشار سنگینی بر رم وارد می‌سازد.
+
+#### ۲. ضرورت حیاتی متد \`GC.SuppressFinalize(this)\`:
+هنگامی که متد \`Dispose()\` فراخوانی می‌شود، دستور \`GC.SuppressFinalize(this)\` شیء را بلافاصله از صف Finalization حذف می‌کند تا در همان نسل صفر (Gen 0) به طور کامل آزاد شده و از ارتقای مخرب به Gen 1/2 و فعال شدن Finalizer Thread جلوگیری شود.`,
+  },
+  {
+    id: "dotnet-mid-q231",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-csharp-exceptions-idisposable"],
+    questionTitle: "How do you implement the complete, thread-safe Dispose Pattern supporting both IDisposable and IAsyncDisposable with ValueTask in .NET?",
+    questionTitle_fa: "چگونه الگوی کامل و Thread-Safe آزادسازی منابع (Dispose Pattern) را با پشتیبانی همزمان از IDisposable و IAsyncDisposable و ساختار ValueTask پیاده‌سازی کنیم؟",
+    answerContent: `### Implementing the Complete Dispose Pattern (IDisposable + IAsyncDisposable)
+
+Modern .NET backend applications require deterministic cleanup for both synchronous resources (in-memory buffers, timers) and asynchronous resources (network sockets, database transactions, gRPC channels) without thread blocking.
+
+---
+
+\`\`\`csharp
+using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
+
+public class ResilientResourceManager : IDisposable, IAsyncDisposable
+{
+    // Managed disposable resources
+    private Stream? _managedStream;
+
+    // Safe unmanaged wrapper
+    private SafeHandle? _safeHandle;
+
+    // Raw unmanaged memory (if any)
+    private IntPtr _unmanagedBuffer;
+
+    // Thread-safe disposal tracking (0 = Active, 1 = Disposed)
+    private int _disposedState;
+
+    public bool IsDisposed => Volatile.Read(ref _disposedState) != 0;
+
+    public ResilientResourceManager(string filePath)
+    {
+        _managedStream = new FileStream(filePath, FileMode.OpenOrCreate);
+        _unmanagedBuffer = Marshal.AllocHGlobal(1024);
+        _safeHandle = File.OpenHandle(filePath);
+    }
+
+    // ── Synchronous Disposal (IDisposable) ─────────────────────
+    public void Dispose()
+    {
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this); // Remove from Finalization Queue
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        // Thread-safe atomic check to prevent double disposal
+        if (Interlocked.Exchange(ref _disposedState, 1) != 0)
+            return;
+
+        if (disposing)
+        {
+            // Free MANAGED objects
+            _managedStream?.Dispose();
+            _managedStream = null;
+
+            _safeHandle?.Dispose();
+            _safeHandle = null;
+        }
+
+        // Free RAW UNMANAGED memory (always executed, even from finalizer)
+        if (_unmanagedBuffer != IntPtr.Zero)
+        {
+            Marshal.FreeHGlobal(_unmanagedBuffer);
+            _unmanagedBuffer = IntPtr.Zero;
+        }
+    }
+
+    // ── Asynchronous Disposal (IAsyncDisposable - C# 8+) ──────
+    public async ValueTask DisposeAsync()
+    {
+        // 1. Perform async cleanup
+        await DisposeAsyncCore().ConfigureAwait(false);
+
+        // 2. Dispose unmanaged resources (passing false to skip managed objects already cleaned)
+        Dispose(disposing: false);
+
+        // 3. Suppress finalization
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual async ValueTask DisposeAsyncCore()
+    {
+        if (Interlocked.Exchange(ref _disposedState, 1) != 0)
+            return;
+
+        if (_managedStream != null)
+        {
+            await _managedStream.DisposeAsync().ConfigureAwait(false);
+            _managedStream = null;
+        }
+
+        if (_safeHandle != null)
+        {
+            _safeHandle.Dispose();
+            _safeHandle = null;
+        }
+    }
+
+    // ── Finalizer (Fallback only for raw unmanaged pointers) ───
+    ~ResilientResourceManager()
+    {
+        Dispose(disposing: false);
+    }
+}
+\`\`\`
+
+---
+
+#### Key Design Highlights:
+1. **Thread-Safe Idempotency:** \`Interlocked.Exchange(ref _disposedState, 1)\` guarantees that calling \`Dispose()\` multiple times concurrently across threads will execute cleanup logic **exactly once**.
+2. **ValueTask Efficiency:** \`ValueTask\` returns synchronously without heap allocation if cleanup completes immediately without yielding.
+3. **\`ConfigureAwait(false)\`:** Prevents deadlocks in synchronization contexts.`,
+    answerContent_fa: `### پیاده‌سازی کامل الگوی Dispose همگام و ناهمگام در سی‌شارپ
+
+در سیستم‌های مدرن دات‌نت، منابع همگام (استریم‌ها و قفل‌ها) و ناهمگام (کانکشن‌های شبکه و دیتابیس) باید بدون بلاک کردن Threadها آزاد شوند:
+
+#### نکات کلیدی پیاده‌سازی:
+۱. **ایمنی در برابر چندنخی (Thread-Safe Idempotency):** استفاده از \`Interlocked.Exchange\` جهت تضمین اینکه فراخوانی همزمان یا مکرر متد \`Dispose\` باعث اجرای چندباره کدهای پاکسازی نشود.
+۲. **بهینه‌سازی با \`ValueTask\`:** متد \`DisposeAsync\` از نوع \`ValueTask\` استفاده می‌کند تا در صورت آزادسازی فوری، هیچ آبجکتی روی Heap تخصیص نیابد.
+۳. **پشتیبانی از ارث‌بری:** متدهای \`protected virtual void Dispose(bool disposing)\` و \`DisposeAsyncCore\` به کلاس‌های فرزند اجازه می‌دهند منابع خود را به درستی پاکسازی کنند.
+۴. **تفکیک منابع Managed و Unmanaged:** منابع Managed فقط زمانی آزاد می‌شوند که \`disposing == true\` باشد، در حالی که حافظه Unmanaged حتی توسط Finalizer نیز آزاد می‌گردد.`,
+  },
+  {
+    id: "dotnet-mid-q232",
+    stackId: "dotnet",
+    categoryId: "csharp-advanced",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-csharp-exceptions-idisposable"],
+    questionTitle: "What is SafeHandle in .NET, why has it completely replaced writing custom Finalizers (~Destructors) in modern C#, and how does it prevent native resource leaks?",
+    questionTitle_fa: "کلاس SafeHandle در دات‌نت چیست، چرا در سی‌شارپ مدرن جایگزین کامل نوشتن Finalizer شده است و چگونه مانع نشت منابع سیستم‌عامل در زمان خطاهای بحرانی نخ‌ها می‌شود؟",
+    answerContent: `### SafeHandle vs. Custom Finalizers in Modern .NET
+
+In legacy .NET (1.0/1.1), developers wrapped native operating system pointers using raw \`IntPtr\` and wrote custom Finalizers (\`~Destructor\`). This approach was fraught with critical flaws:
+
+1. **Recycle Race Conditions:** An unmanaged handle could be closed while another thread was actively using it, resulting in operating system handle corruption.
+2. **Asynchronous Thread Aborts:** If an asynchronous exception (e.g. \`ThreadAbortException\` or \`OutOfMemoryException\`) occurred between acquiring the handle and assigning it to the \`IntPtr\` field, the native handle leaked permanently.
+
+---
+
+#### What is \`SafeHandle\`? (\`System.Runtime.InteropServices\`)
+Introduced in .NET 2.0 and expanded in modern .NET, \`SafeHandle\` is an abstract class inheriting from \`CriticalFinalizerObject\` that encapsulates a native operating system resource handle:
+
+\`\`\`csharp
+using Microsoft.Win32.SafeHandles;
+using System.Runtime.InteropServices;
+
+public class CustomProcessHandle : SafeHandleZeroOrMinusOneIsInvalid
+{
+    private CustomProcessHandle() : base(ownsHandle: true) { }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool CloseHandle(IntPtr handle);
+
+    protected override bool ReleaseHandle()
+    {
+        // Called automatically in a Constrained Execution Region (CER)
+        return CloseHandle(handle);
+    }
+}
+\`\`\`
+
+---
+
+#### Why \`SafeHandle\` Eliminates Custom Finalizers:
+1. **Critical Finalization:** Inheriting from \`CriticalFinalizerObject\` guarantees that the CLR JIT-compiles all cleanup code upfront and executes \`ReleaseHandle()\` even during catastrophic runtime events (StackOverflow, OutOfMemory, Thread Aborts).
+2. **Reference Counting:** \`SafeHandle\` internally maintains an atomic reference count (\`DangerousAddRef\` / \`DangerousRelease\`), preventing premature handle closure while P/Invoke operations are in-flight.
+3. **Zero Boilerplate:** When using \`SafeFileHandle\`, \`SafeWaitHandle\`, or \`SafeProcessHandle\`, your wrapping classes **no longer need custom finalizers (\`~Class()\`) or \`GC.SuppressFinalize\`** because \`SafeHandle\` manages its own critical finalization!`,
+    answerContent_fa: `### مزایای SafeHandle نسبت به Finalizerهای سنتی در دات‌نت مدرن
+
+در نسخه‌های اولیه C#، برنامه‌نویسان پوینترهای سیستم‌عامل را در متغیر \`IntPtr\` ذخیره کرده و برای آن Finalizer می‌نوشتند. این کار باعث بروز Race Condition در زمان بازیافت Handleها و نشت منابع در زمان خطاهای OutOfMemory می‌شد.
+
+#### کلاس \`SafeHandle\` چیست؟
+کلاس انتزاعی \`SafeHandle\` کپسوله‌ساز استاندارد پوینترهای سیستم‌عامل است که از \`CriticalFinalizerObject\` ارث‌بری می‌کند:
+
+#### مزایای کلیدی SafeHandle:
+۱. **تضمین ۱۰۰٪ اجرای پاکسازی (Critical Finalization):** رانتایم تضمین می‌کند که کدهای درون \`ReleaseHandle\` حتی در بدترین شرایط (مانند کمبود رم شدید) اجرا شوند.
+۲. **مدیریت شمارش ارجاعات (Reference Counting):** مانع بسته شدن Handle در حین اجرای کدهای P/Invoke در نخ‌های دیگر می‌شود.
+۳. **حذف نیاز به نوشتن Finalizer دستی:** کلاس‌های شما با استفاده از \`SafeFileHandle\` یا نمونه‌های استاندارد دیگر، دیگر نیازی به نوشتن مخرب (\`~Class\`) یا مدیریت دستی GC ندارند چون SafeHandle این کار را به صورت امن در سطح سیستم‌عامل انجام می‌دهد.`,
+  },
 ];
+
+
 
 

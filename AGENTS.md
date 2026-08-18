@@ -55,13 +55,13 @@ When developing or updating Roadmap Topics and Tutorials, execute this **exact 5
 ### Step 4: Link Existing Questions & Create 5+ Deep Interview Questions
 1. Search existing questions in `src/data/questions/{stack}/` for relevant questions and append the topic ID to `topicIds`:
    ```typescript
-   topicIds: ["topic-dotnet-concurrency-channels-memory"],
+   topicIds: ["topic-dotnet-csharp-oop-records-pattern-matching"],
    ```
-2. Author at least **5 new senior/lead level interview questions** adhering to:
-   - Multi-paragraph, architectural depth answering all edge cases.
-   - C# code examples, mermaid diagrams, and terminal diagnostic commands.
+2. Author at least **5 new in-depth interview questions** appropriate for the target level of the topic and step (Junior, Mid, Senior, or Lead) adhering to:
+   - Multi-paragraph, architectural depth answering all mechanics and edge cases.
+   - C# code examples, mermaid diagrams (in questions where appropriate), and diagnostic commands.
    - Full English and Persian versions (`questionTitle` + `questionTitle_fa`, `answerContent` + `answerContent_fa`).
-3. Append them to `src/data/questions/{stack}/senior-questions.ts`.
+3. Append them to the corresponding level file in `src/data/questions/{stack}/{level}-questions.ts` (e.g. `mid-questions.ts`, `senior-questions.ts`, `junior-questions.ts`, etc.).
 
 ### Step 5: Verification & Compilation
 - Run `npx tsc --noEmit` to ensure **Exit code 0** with zero TypeScript or syntax errors.
@@ -92,11 +92,11 @@ When developing or updating Roadmap Topics and Tutorials, execute this **exact 5
 
 ---
 
-## 5. Golden Rules for Senior/Lead Interview Questions
+## 5. Golden Rules for Interview Questions (All Levels)
 
 1. **Markdown Formatting**: Use `###` headings, bullet lists, markdown tables, and fenced code blocks with language identifiers (```csharp, ```tsx, ```typescript, ```sql, ```bash).
 2. **Bilingual Completeness**: Always supply both English and Persian versions (`questionTitle` + `questionTitle_fa`, `answerContent` + `answerContent_fa`).
-3. **Architectural Depth**: Include internal mechanics (memory, thread safety, asymptotic complexity), trade-offs & alternatives, and real-world production pitfalls.
+3. **Architectural Depth**: Include internal mechanics (memory, thread safety, asymptotic complexity), trade-offs & alternatives, and real-world production pitfalls tailored to the level.
 4. **Never Mutate Existing IDs**: IDs must remain permanent and unique across the codebase.
 
 <!-- BEGIN:nextjs-agent-rules -->

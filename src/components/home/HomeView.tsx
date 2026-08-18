@@ -46,9 +46,17 @@ export const HomeView: React.FC<HomeViewProps> = ({
               px: 1.5,
               py: 0.4,
               borderRadius: "100px",
-              backgroundColor: "rgba(99, 102, 241, 0.08)",
-              border: "1px solid rgba(99, 102, 241, 0.2)",
-              color: "#A5B4FC",
+              backgroundColor: (theme) =>
+                theme.palette.mode === "dark"
+                  ? "rgba(99, 102, 241, 0.08)"
+                  : "rgba(79, 70, 229, 0.08)",
+              border: "1px solid",
+              borderColor: (theme) =>
+                theme.palette.mode === "dark"
+                  ? "rgba(99, 102, 241, 0.2)"
+                  : "rgba(79, 70, 229, 0.2)",
+              color: (theme) =>
+                theme.palette.mode === "dark" ? "#A5B4FC" : "#4338CA",
               fontSize: "0.75rem",
               fontWeight: 500,
               mb: 2.5,
@@ -75,7 +83,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
               letterSpacing: isRtl ? "0" : "-0.03em",
               lineHeight: 1.25,
               mb: 2,
-              color: "#FFFFFF",
+              color: "text.primary",
               maxWidth: 820,
               mx: "auto",
             }}
@@ -84,7 +92,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <Box
               component="span"
               sx={{
-                color: "#818CF8",
+                color: "primary.main",
               }}
             >
               {t("homeHeroTitle2")}
@@ -95,7 +103,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <Typography
             variant="body1"
             sx={{
-              color: "#94A3B8",
+              color: "text.secondary",
               maxWidth: 600,
               mx: "auto",
               fontSize: { xs: "0.9rem", md: "0.975rem" },
@@ -114,27 +122,27 @@ export const HomeView: React.FC<HomeViewProps> = ({
               flexWrap: "wrap",
               justifyContent: "center",
               gap: { xs: 1.5, sm: 2 },
-              color: "#64748B",
+              color: "text.secondary",
               fontSize: "0.8rem",
               fontWeight: 500,
             }}
           >
             <span>
-              <strong style={{ color: "#F8FAFC" }}>{stacksData.length}</strong> {isRtl ? "فناوری" : "Stacks"}
+              <Box component="strong" sx={{ color: "text.primary" }}>{stacksData.length}</Box> {isRtl ? "فناوری" : "Stacks"}
             </span>
-            <Box sx={{ width: 3, height: 3, borderRadius: "50%", backgroundColor: "#475569" }} />
+            <Box sx={{ width: 3, height: 3, borderRadius: "50%", backgroundColor: "divider" }} />
             <span>
-              <strong style={{ color: "#818CF8" }}>{totalQuestions}</strong> {t("questions")}
+              <Box component="strong" sx={{ color: "primary.main" }}>{totalQuestions}</Box> {t("questions")}
             </span>
-            <Box sx={{ width: 3, height: 3, borderRadius: "50%", backgroundColor: "#475569" }} />
+            <Box sx={{ width: 3, height: 3, borderRadius: "50%", backgroundColor: "divider" }} />
             <span>
-              <strong style={{ color: "#38BDF8" }}>{totalConcepts}</strong> {t("concepts")}
+              <Box component="strong" sx={{ color: "secondary.main" }}>{totalConcepts}</Box> {t("concepts")}
             </span>
             {totalRoadmaps > 0 && (
               <>
-                <Box sx={{ width: 3, height: 3, borderRadius: "50%", backgroundColor: "#475569" }} />
+                <Box sx={{ width: 3, height: 3, borderRadius: "50%", backgroundColor: "divider" }} />
                 <span>
-                  <strong style={{ color: "#F43F5E" }}>{totalRoadmaps}</strong> {t("roadmaps")}
+                  <Box component="strong" sx={{ color: "#F43F5E" }}>{totalRoadmaps}</Box> {t("roadmaps")}
                 </span>
               </>
             )}

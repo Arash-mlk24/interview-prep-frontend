@@ -17,11 +17,15 @@ export const TopicTutorialTab: React.FC<TopicTutorialTabProps> = ({ topic }) => 
   return (
     <Card
       sx={{
-        backgroundColor: "#0F121C",
-        border: "1px solid rgba(255, 255, 255, 0.08)",
+        backgroundColor: "background.paper",
+        border: "1px solid",
+        borderColor: "divider",
         borderRadius: 3.5,
         overflow: "hidden",
-        boxShadow: "0 4px 20px -2px rgba(0, 0, 0, 0.5)",
+        boxShadow: (theme) =>
+          theme.palette.mode === "dark"
+            ? "0 4px 20px -2px rgba(0, 0, 0, 0.5)"
+            : "0 4px 20px -2px rgba(0, 0, 0, 0.05)",
       }}
     >
       <CardContent sx={{ p: { xs: 3, sm: 4, md: 5 } }}>

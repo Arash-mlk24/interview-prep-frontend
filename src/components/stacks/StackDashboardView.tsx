@@ -127,8 +127,13 @@ export const StackDashboardView: React.FC<StackDashboardViewProps> = ({
             p: { xs: 2.5, md: 3 },
             mb: 3,
             borderRadius: 3,
-            backgroundColor: "#0F121C",
-            border: "1px solid rgba(255, 255, 255, 0.06)",
+            backgroundColor: "background.paper",
+            border: "1px solid",
+            borderColor: "divider",
+            boxShadow: (theme) =>
+              theme.palette.mode === "dark"
+                ? "none"
+                : "0 2px 12px -2px rgba(0, 0, 0, 0.04)",
             display: "flex",
             flexDirection: { xs: "column", sm: "row" },
             alignItems: { xs: "flex-start", sm: "center" },
@@ -142,8 +147,12 @@ export const StackDashboardView: React.FC<StackDashboardViewProps> = ({
                 width: 44,
                 height: 44,
                 borderRadius: 2,
-                backgroundColor: "rgba(255, 255, 255, 0.04)",
-                border: "1px solid rgba(255, 255, 255, 0.08)",
+                backgroundColor: (theme) =>
+                  theme.palette.mode === "dark"
+                    ? "rgba(255, 255, 255, 0.04)"
+                    : "rgba(0, 0, 0, 0.04)",
+                border: "1px solid",
+                borderColor: "divider",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -159,7 +168,7 @@ export const StackDashboardView: React.FC<StackDashboardViewProps> = ({
                 component="h1"
                 sx={{
                   fontWeight: 700,
-                  color: "#FFFFFF",
+                  color: "text.primary",
                   fontSize: { xs: "1.25rem", md: "1.45rem" },
                   mb: 0.5,
                 }}
@@ -168,7 +177,7 @@ export const StackDashboardView: React.FC<StackDashboardViewProps> = ({
               </Typography>
               <Typography
                 variant="body2"
-                sx={{ color: "#94A3B8", maxWidth: 640, lineHeight: 1.6, fontSize: "0.85rem" }}
+                sx={{ color: "text.secondary", maxWidth: 640, lineHeight: 1.6, fontSize: "0.85rem" }}
               >
                 {localizedDesc}
               </Typography>
@@ -190,15 +199,19 @@ export const StackDashboardView: React.FC<StackDashboardViewProps> = ({
                 px: 1.5,
                 py: 0.75,
                 borderRadius: 2,
-                backgroundColor: "rgba(255, 255, 255, 0.03)",
-                border: "1px solid rgba(255, 255, 255, 0.06)",
+                backgroundColor: (theme) =>
+                  theme.palette.mode === "dark"
+                    ? "rgba(255, 255, 255, 0.03)"
+                    : "rgba(0, 0, 0, 0.03)",
+                border: "1px solid",
+                borderColor: "divider",
                 textAlign: "center",
               }}
             >
-              <Typography variant="caption" sx={{ color: "#64748B", display: "block", fontSize: "0.68rem" }}>
+              <Typography variant="caption" sx={{ color: "text.secondary", display: "block", fontSize: "0.68rem" }}>
                 {t("questions")}
               </Typography>
-              <Typography sx={{ fontWeight: 700, color: "#818CF8", fontSize: "0.95rem" }}>
+              <Typography sx={{ fontWeight: 700, color: "primary.main", fontSize: "0.95rem" }}>
                 {stats.questionCount}
               </Typography>
             </Box>
@@ -208,15 +221,19 @@ export const StackDashboardView: React.FC<StackDashboardViewProps> = ({
                 px: 1.5,
                 py: 0.75,
                 borderRadius: 2,
-                backgroundColor: "rgba(255, 255, 255, 0.03)",
-                border: "1px solid rgba(255, 255, 255, 0.06)",
+                backgroundColor: (theme) =>
+                  theme.palette.mode === "dark"
+                    ? "rgba(255, 255, 255, 0.03)"
+                    : "rgba(0, 0, 0, 0.03)",
+                border: "1px solid",
+                borderColor: "divider",
                 textAlign: "center",
               }}
             >
-              <Typography variant="caption" sx={{ color: "#64748B", display: "block", fontSize: "0.68rem" }}>
+              <Typography variant="caption" sx={{ color: "text.secondary", display: "block", fontSize: "0.68rem" }}>
                 {t("concepts")}
               </Typography>
-              <Typography sx={{ fontWeight: 700, color: "#38BDF8", fontSize: "0.95rem" }}>
+              <Typography sx={{ fontWeight: 700, color: "secondary.main", fontSize: "0.95rem" }}>
                 {stats.conceptCount}
               </Typography>
             </Box>
@@ -227,12 +244,16 @@ export const StackDashboardView: React.FC<StackDashboardViewProps> = ({
                   px: 1.5,
                   py: 0.75,
                   borderRadius: 2,
-                  backgroundColor: "rgba(255, 255, 255, 0.03)",
-                  border: "1px solid rgba(255, 255, 255, 0.06)",
+                  backgroundColor: (theme) =>
+                    theme.palette.mode === "dark"
+                      ? "rgba(255, 255, 255, 0.03)"
+                      : "rgba(0, 0, 0, 0.03)",
+                  border: "1px solid",
+                  borderColor: "divider",
                   textAlign: "center",
                 }}
               >
-                <Typography variant="caption" sx={{ color: "#64748B", display: "block", fontSize: "0.68rem" }}>
+                <Typography variant="caption" sx={{ color: "text.secondary", display: "block", fontSize: "0.68rem" }}>
                   {t("roadmaps")}
                 </Typography>
                 <Typography sx={{ fontWeight: 700, color: "#F43F5E", fontSize: "0.95rem" }}>
@@ -244,11 +265,21 @@ export const StackDashboardView: React.FC<StackDashboardViewProps> = ({
         </Box>
 
         {/* Minimal Navigation Tabs */}
-        <Box sx={{ borderBottom: "1px solid rgba(255, 255, 255, 0.06)", mb: 3 }}>
+        <Box
+          sx={{
+            borderBottom: "1px solid",
+            borderColor: "divider",
+            mb: 3,
+            maxWidth: "100%",
+          }}
+        >
           <Tabs
             value={activeTab}
             onChange={handleTabChange}
             aria-label="stack sections"
+            variant="scrollable"
+            scrollButtons="auto"
+            allowScrollButtonsMobile
           >
             <Tab
               icon={<QuizOutlinedIcon sx={{ fontSize: 17 }} />}

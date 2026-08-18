@@ -29,11 +29,16 @@ export async function generateMetadata({
 
   return {
     title: isFa
-      ? "دِو‌پِرِپ — آمادگی مصاحبه‌های مهندسی و مرور مفاهیم عمیق"
-      : "DevPrep — Engineering Interview & Concept Review",
+      ? "تِلوس (Telos) — مرجع جامع ارتقای مهندسی نرم‌افزار و نقشه‌های راه"
+      : "Telos — Software Engineering Mastery & Technical Roadmaps",
     description: isFa
-      ? "مجموعه سؤالات تخصصی مصاحبه فنی، مفاهیم معماری نرم‌افزار و الگوهای پیشرفته مهندسی."
-      : "Curated technical interview questions, deep architectural concepts, and engineering best practices.",
+      ? "پلتفرم جامع مهندسی نرم‌افزار، نقشه‌های راه تخصصی، مفاهیم عمیق معماری و سوالات مصاحبه سطح پیشرفته."
+      : "High-performance software engineering mastery platform: comprehensive technical roadmaps, runtime internals, and curated interview questions.",
+    icons: {
+      icon: "/images/telos-apex-logo.jpg",
+      shortcut: "/images/telos-apex-logo.jpg",
+      apple: "/images/telos-apex-logo.jpg",
+    },
   };
 }
 
@@ -69,13 +74,13 @@ export default async function LocaleLayout({
           href="https://fonts.googleapis.com/css2?family=Rubik:wght@300..700&subset=arabic&display=swap"
           rel="stylesheet"
         />
+        <link rel="icon" href="/images/telos-apex-logo.jpg" />
       </head>
       <body
         style={{
           margin: 0,
           padding: 0,
           minHeight: "100vh",
-          backgroundColor: "#090A0F",
           display: "flex",
           flexDirection: "column",
           fontFamily: "var(--font-rubik), sans-serif",
@@ -88,8 +93,8 @@ export default async function LocaleLayout({
               display: "flex",
               flexDirection: "column",
               minHeight: "100vh",
-              background:
-                "radial-gradient(1200px 400px at 50% 0px, rgba(99, 102, 241, 0.03) 0%, transparent 100%), #090A0F",
+              backgroundColor: "background.default",
+              transition: "background-color 0.25s ease, color 0.25s ease",
             }}
           >
             <Navbar />

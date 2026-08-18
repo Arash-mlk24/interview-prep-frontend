@@ -4,11 +4,12 @@ import React, { useState } from "react";
 import Link from "next/link";
 import {
   Box,
+  Card,
   Typography,
   Collapse,
   IconButton,
+  Theme,
 } from "@mui/material";
-import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import QuizOutlinedIcon from "@mui/icons-material/QuizOutlined";
 import ArrowForwardIosIcon from "@mui/icons-material/ArrowForwardIos";
 import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew";
@@ -60,29 +61,39 @@ export const RoadmapStepCard: React.FC<RoadmapStepCardProps> = ({
   const isStepComplete = step.topics.length > 0 && completedCount === step.topics.length;
 
   return (
-    <Box
+    <Card
       sx={{
-        backgroundColor: "#0F121C",
+        backgroundColor: "background.paper",
         border: "1px solid",
         borderColor: isStepComplete
-          ? "rgba(16, 185, 129, 0.25)"
+          ? "rgba(16, 185, 129, 0.4)"
           : isExpanded
-          ? "rgba(129, 140, 248, 0.22)"
-          : "rgba(255, 255, 255, 0.08)",
-        borderRadius: 3.5,
-        mb: 3,
-        position: "relative",
-        transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+          ? "primary.main"
+          : "divider",
+        borderRadius: 3,
         overflow: "hidden",
+        transition: "border-color 0.2s ease, box-shadow 0.2s ease",
+        boxShadow: isExpanded
+          ? (theme: Theme) =>
+              theme.palette.mode === "dark"
+                ? "0 4px 20px -2px rgba(99, 102, 241, 0.12)"
+                : "0 4px 20px -2px rgba(79, 70, 229, 0.08)"
+          : (theme: Theme) =>
+              theme.palette.mode === "dark"
+                ? "none"
+                : "0 2px 8px -2px rgba(0, 0, 0, 0.04)",
         "&:hover": {
           borderColor: isStepComplete
-            ? "rgba(16, 185, 129, 0.4)"
-            : "rgba(129, 140, 248, 0.35)",
-          boxShadow: "0 8px 24px -6px rgba(0, 0, 0, 0.45)",
+            ? "rgba(16, 185, 129, 0.6)"
+            : "primary.main",
+          boxShadow: (theme: Theme) =>
+            theme.palette.mode === "dark"
+              ? "0 6px 24px -4px rgba(99, 102, 241, 0.15)"
+              : "0 6px 20px -2px rgba(79, 70, 229, 0.1)",
         },
       }}
     >
-      {/* Clickable Step Header */}
+      {/* Step Header (Clickable Accordion Trigger) */}
       <Box
         onClick={handleToggle}
         onKeyDown={(e) => {
@@ -96,17 +107,27 @@ export const RoadmapStepCard: React.FC<RoadmapStepCardProps> = ({
         aria-expanded={isExpanded}
         sx={{
           display: "flex",
-          alignItems: "flex-start",
-          gap: 2.5,
-          p: { xs: 2.5, sm: 3, md: 3.5 },
+          alignItems: { xs: "flex-start", sm: "center" },
+          gap: 2,
+          p: { xs: 2, sm: 2.5 },
           cursor: "pointer",
           userSelect: "none",
-          transition: "background-color 0.2s ease",
+          backgroundColor: isExpanded
+            ? (theme) =>
+                theme.palette.mode === "dark"
+                  ? "rgba(99, 102, 241, 0.04)"
+                  : "rgba(79, 70, 229, 0.03)"
+            : "transparent",
+          transition: "background-color 0.18s ease",
           "&:hover": {
-            backgroundColor: "rgba(255, 255, 255, 0.02)",
+            backgroundColor: (theme) =>
+              theme.palette.mode === "dark"
+                ? "rgba(255, 255, 255, 0.03)"
+                : "rgba(0, 0, 0, 0.02)",
           },
           "&:focus-visible": {
-            outline: "2px solid #818CF8",
+            outline: "2px solid",
+            outlineColor: "primary.main",
             outlineOffset: -2,
           },
         }}
@@ -140,9 +161,9 @@ export const RoadmapStepCard: React.FC<RoadmapStepCardProps> = ({
             variant="h6"
             sx={{
               fontWeight: 700,
-              color: "#FFFFFF",
-              fontSize: { xs: "0.96rem", md: "1.08rem" },
-              mb: 0.5,
+              color: "text.primary",
+              fontSize: { xs: "0.96rem", md: "1.05rem" },
+              mb: 0.35,
               lineHeight: 1.4,
             }}
           >
@@ -152,7 +173,7 @@ export const RoadmapStepCard: React.FC<RoadmapStepCardProps> = ({
           <Typography
             variant="body2"
             sx={{
-              color: "#94A3B8",
+              color: "text.secondary",
               fontSize: "0.8rem",
               lineHeight: 1.6,
             }}
@@ -189,15 +210,22 @@ export const RoadmapStepCard: React.FC<RoadmapStepCardProps> = ({
             size="small"
             aria-label={isExpanded ? "Collapse step" : "Expand step"}
             sx={{
-              color: "#94A3B8",
-              backgroundColor: "rgba(255, 255, 255, 0.03)",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
+              color: "text.secondary",
+              backgroundColor: (theme) =>
+                theme.palette.mode === "dark"
+                  ? "rgba(255, 255, 255, 0.03)"
+                  : "rgba(0, 0, 0, 0.04)",
+              border: "1px solid",
+              borderColor: "divider",
               p: 0.75,
               transition: "transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s ease",
               transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
               "&:hover": {
-                backgroundColor: "rgba(99, 102, 241, 0.12)",
-                color: "#F8FAFC",
+                backgroundColor: (theme) =>
+                  theme.palette.mode === "dark"
+                    ? "rgba(99, 102, 241, 0.12)"
+                    : "rgba(79, 70, 229, 0.08)",
+                color: "text.primary",
               },
             }}
           >
@@ -210,13 +238,14 @@ export const RoadmapStepCard: React.FC<RoadmapStepCardProps> = ({
       <Collapse in={isExpanded} timeout={250} unmountOnExit={false}>
         <Box
           sx={{
-            px: { xs: 2.5, sm: 3, md: 3.5 },
-            pb: { xs: 2.5, sm: 3, md: 3.5 },
-            pt: { xs: 2.5, sm: 3, md: 3.5 },
-            borderTop: "1px solid rgba(255, 255, 255, 0.05)",
+            px: { xs: 2, sm: 2.5 },
+            pb: { xs: 2, sm: 2.5 },
+            pt: { xs: 2, sm: 2.5 },
+            borderTop: "1px solid",
+            borderColor: "divider",
             display: "flex",
             flexDirection: "column",
-            gap: 1.5,
+            gap: 1.25,
           }}
         >
           {step.topics.map((topic, topicIdx) => {
@@ -240,21 +269,27 @@ export const RoadmapStepCard: React.FC<RoadmapStepCardProps> = ({
                   p: { xs: 2, sm: 2.25 },
                   borderRadius: 2.5,
                   backgroundColor: isCompleted
-                    ? "rgba(16, 185, 129, 0.04)"
-                    : "rgba(255, 255, 255, 0.02)",
+                    ? "rgba(16, 185, 129, 0.06)"
+                    : (theme) =>
+                        theme.palette.mode === "dark"
+                          ? "rgba(255, 255, 255, 0.02)"
+                          : "rgba(0, 0, 0, 0.02)",
                   border: "1px solid",
                   borderColor: isCompleted
-                    ? "rgba(16, 185, 129, 0.2)"
-                    : "rgba(255, 255, 255, 0.05)",
+                    ? "rgba(16, 185, 129, 0.25)"
+                    : "divider",
                   textDecoration: "none",
                   transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
                   "&:hover": {
                     backgroundColor: isCompleted
-                      ? "rgba(16, 185, 129, 0.08)"
-                      : "rgba(99, 102, 241, 0.08)",
+                      ? "rgba(16, 185, 129, 0.1)"
+                      : (theme) =>
+                          theme.palette.mode === "dark"
+                            ? "rgba(99, 102, 241, 0.08)"
+                            : "rgba(79, 70, 229, 0.05)",
                     borderColor: isCompleted
-                      ? "rgba(16, 185, 129, 0.35)"
-                      : "rgba(129, 140, 248, 0.3)",
+                      ? "rgba(16, 185, 129, 0.4)"
+                      : "primary.main",
                     transform: isRtl ? "translateX(-4px)" : "translateX(4px)",
                   },
                 }}
@@ -293,7 +328,7 @@ export const RoadmapStepCard: React.FC<RoadmapStepCardProps> = ({
                   <Box sx={{ flexGrow: 1, minWidth: 0 }}>
                     <Typography
                       sx={{
-                        color: isCompleted ? "#F1F5F9" : "#F8FAFC",
+                        color: "text.primary",
                         fontWeight: 600,
                         fontSize: "0.86rem",
                         mb: 0.4,
@@ -304,7 +339,7 @@ export const RoadmapStepCard: React.FC<RoadmapStepCardProps> = ({
                     </Typography>
                     <Typography
                       sx={{
-                        color: "#64748B",
+                        color: "text.secondary",
                         fontSize: "0.76rem",
                         lineHeight: 1.5,
                         display: "-webkit-box",
@@ -335,12 +370,6 @@ export const RoadmapStepCard: React.FC<RoadmapStepCardProps> = ({
                     />
                   )}
 
-                  <MetaBadge
-                    icon={<AccessTimeIcon />}
-                    label={t("readingTime", { minutes: topic.readingTimeMinutes })}
-                    variant="neutral"
-                  />
-
                   {questionCount > 0 && (
                     <MetaBadge
                       icon={<QuizOutlinedIcon />}
@@ -368,6 +397,6 @@ export const RoadmapStepCard: React.FC<RoadmapStepCardProps> = ({
           })}
         </Box>
       </Collapse>
-    </Box>
+    </Card>
   );
 };

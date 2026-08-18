@@ -89,10 +89,10 @@ export const StackGrid: React.FC<StackGridProps> = ({ stacksData }) => {
       {/* Empty State */}
       {filteredStacks.length === 0 && (
         <Box sx={{ textAlign: "center", py: 7 }}>
-          <Typography variant="h6" sx={{ color: "#94A3B8", mb: 0.5, fontSize: "0.95rem" }}>
+          <Typography variant="h6" sx={{ color: "text.secondary", mb: 0.5, fontSize: "0.95rem" }}>
             {t("noStacksFound", { term: searchTerm })}
           </Typography>
-          <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.8rem" }}>
+          <Typography variant="body2" sx={{ color: "text.disabled", fontSize: "0.8rem" }}>
             {t("trySearching")}
           </Typography>
         </Box>

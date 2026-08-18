@@ -44,8 +44,13 @@ export const ConceptsExplorer: React.FC<ConceptsExplorerProps> = ({
           p: 1.5,
           mb: 3,
           borderRadius: 2.5,
-          backgroundColor: "#0F121C",
-          border: "1px solid rgba(255, 255, 255, 0.06)",
+          backgroundColor: "background.paper",
+          border: "1px solid",
+          borderColor: "divider",
+          boxShadow: (theme) =>
+            theme.palette.mode === "dark"
+              ? "none"
+              : "0 2px 8px -2px rgba(0, 0, 0, 0.04)",
           display: "flex",
           flexDirection: { xs: "column", sm: "row" },
           alignItems: { xs: "stretch", sm: "center" },
@@ -65,7 +70,7 @@ export const ConceptsExplorer: React.FC<ConceptsExplorerProps> = ({
 
         <Typography
           variant="body2"
-          sx={{ color: "#64748B", fontSize: "0.78rem", whiteSpace: "nowrap" }}
+          sx={{ color: "text.secondary", fontSize: "0.78rem", whiteSpace: "nowrap" }}
         >
           {filteredConcepts.length} {t("concepts")}
         </Typography>
@@ -86,10 +91,10 @@ export const ConceptsExplorer: React.FC<ConceptsExplorerProps> = ({
             textAlign: "center",
           }}
         >
-          <Typography variant="h6" sx={{ color: "#94A3B8", mb: 0.5, fontSize: "0.95rem" }}>
+          <Typography variant="h6" sx={{ color: "text.secondary", mb: 0.5, fontSize: "0.95rem" }}>
             {t("noConceptsFound", { term: searchTerm })}
           </Typography>
-          <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.8rem" }}>
+          <Typography variant="body2" sx={{ color: "text.disabled", fontSize: "0.8rem" }}>
             {t("tryAnotherTopic")}
           </Typography>
         </Box>

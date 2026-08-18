@@ -17,7 +17,6 @@ import NavigateBeforeIcon from "@mui/icons-material/NavigateBefore";
 import HomeIcon from "@mui/icons-material/Home";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 import QuizOutlinedIcon from "@mui/icons-material/QuizOutlined";
-import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
@@ -102,9 +101,9 @@ export const TopicPageView: React.FC<TopicPageViewProps> = ({
         <Breadcrumbs
           separator={
             isRtl ? (
-              <NavigateBeforeIcon sx={{ fontSize: 14, color: "#475569" }} />
+              <NavigateBeforeIcon sx={{ fontSize: 14, color: "text.disabled" }} />
             ) : (
-              <NavigateNextIcon sx={{ fontSize: 14, color: "#475569" }} />
+              <NavigateNextIcon sx={{ fontSize: 14, color: "text.disabled" }} />
             )
           }
           aria-label="breadcrumb"
@@ -117,10 +116,10 @@ export const TopicPageView: React.FC<TopicPageViewProps> = ({
             sx={{
               display: "flex",
               alignItems: "center",
-              color: "#64748B",
+              color: "text.secondary",
               gap: 0.5,
               fontSize: "0.82rem",
-              "&:hover": { color: "#F8FAFC" },
+              "&:hover": { color: "text.primary" },
             }}
           >
             <HomeIcon sx={{ fontSize: 15 }} />
@@ -132,9 +131,9 @@ export const TopicPageView: React.FC<TopicPageViewProps> = ({
             href={`/${language}/stack/${stack.slug}`}
             underline="hover"
             sx={{
-              color: "#64748B",
+              color: "text.secondary",
               fontSize: "0.82rem",
-              "&:hover": { color: "#F8FAFC" },
+              "&:hover": { color: "text.primary" },
             }}
           >
             {localizedStackName}
@@ -145,15 +144,15 @@ export const TopicPageView: React.FC<TopicPageViewProps> = ({
             href={`/${language}/stack/${stack.slug}/roadmap/${roadmap.slug}`}
             underline="hover"
             sx={{
-              color: "#64748B",
+              color: "text.secondary",
               fontSize: "0.82rem",
-              "&:hover": { color: "#F8FAFC" },
+              "&:hover": { color: "text.primary" },
             }}
           >
             {localizedRoadmapTitle}
           </MuiLink>
 
-          <Typography sx={{ color: "#94A3B8", fontWeight: 500, fontSize: "0.82rem" }}>
+          <Typography sx={{ color: "text.primary", fontWeight: 500, fontSize: "0.82rem" }}>
             {localizedTopicTitle}
           </Typography>
         </Breadcrumbs>
@@ -164,11 +163,14 @@ export const TopicPageView: React.FC<TopicPageViewProps> = ({
             p: { xs: 3, md: 4 },
             mb: 4,
             borderRadius: 3.5,
-            backgroundColor: "#0F121C",
+            backgroundColor: "background.paper",
             border: "1px solid",
-            borderColor: isCompleted ? "rgba(16, 185, 129, 0.3)" : "rgba(255, 255, 255, 0.08)",
+            borderColor: isCompleted ? "rgba(16, 185, 129, 0.4)" : "divider",
             transition: "all 0.2s ease",
-            boxShadow: "0 4px 20px -2px rgba(0, 0, 0, 0.4)",
+            boxShadow: (theme) =>
+              theme.palette.mode === "dark"
+                ? "0 4px 20px -2px rgba(0, 0, 0, 0.4)"
+                : "0 4px 20px -2px rgba(0, 0, 0, 0.05)",
           }}
         >
           <Box
@@ -191,12 +193,6 @@ export const TopicPageView: React.FC<TopicPageViewProps> = ({
                 label={topic.difficulty.toUpperCase()}
                 variant={diffVariant}
               />
-
-              <MetaBadge
-                icon={<AccessTimeIcon />}
-                label={t("readingTime", { minutes: topic.readingTimeMinutes })}
-                variant="neutral"
-              />
             </Box>
 
             <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
@@ -209,7 +205,7 @@ export const TopicPageView: React.FC<TopicPageViewProps> = ({
                   isCompleted ? (
                     <CheckCircleIcon sx={{ fontSize: "15px !important", color: "#FFFFFF" }} />
                   ) : (
-                    <CheckCircleOutlinedIcon sx={{ fontSize: "15px !important", color: "#94A3B8" }} />
+                    <CheckCircleOutlinedIcon sx={{ fontSize: "15px !important", color: "text.secondary" }} />
                   )
                 }
                 sx={{
@@ -220,12 +216,12 @@ export const TopicPageView: React.FC<TopicPageViewProps> = ({
                   px: 2,
                   py: 0.75,
                   backgroundColor: isCompleted ? "#059669" : "transparent",
-                  color: isCompleted ? "#FFFFFF" : "#CBD5E1",
-                  borderColor: isCompleted ? "#059669" : "rgba(255, 255, 255, 0.15)",
+                  color: isCompleted ? "#FFFFFF" : "text.secondary",
+                  borderColor: isCompleted ? "#059669" : "divider",
                   "&:hover": {
                     backgroundColor: isCompleted ? "#047857" : "rgba(16, 185, 129, 0.08)",
                     borderColor: isCompleted ? "#047857" : "#10B981",
-                    color: isCompleted ? "#FFFFFF" : "#34D399",
+                    color: isCompleted ? "#FFFFFF" : "#059669",
                   },
                 }}
               >
@@ -244,11 +240,11 @@ export const TopicPageView: React.FC<TopicPageViewProps> = ({
                   )
                 }
                 sx={{
-                  color: "#64748B",
+                  color: "text.secondary",
                   fontSize: "0.8rem",
                   textTransform: "none",
                   display: { xs: "none", sm: "inline-flex" },
-                  "&:hover": { color: "#F8FAFC" },
+                  "&:hover": { color: "text.primary" },
                 }}
               >
                 {t("backToRoadmap")}
@@ -261,7 +257,7 @@ export const TopicPageView: React.FC<TopicPageViewProps> = ({
             component="h1"
             sx={{
               fontWeight: 800,
-              color: "#FFFFFF",
+              color: "text.primary",
               fontSize: { xs: "1.25rem", md: "1.55rem" },
               mb: 1.5,
               lineHeight: 1.4,
@@ -273,7 +269,7 @@ export const TopicPageView: React.FC<TopicPageViewProps> = ({
           <Typography
             variant="body1"
             sx={{
-              color: "#94A3B8",
+              color: "text.secondary",
               fontSize: "0.86rem",
               lineHeight: 1.75,
               maxWidth: 900,
@@ -284,11 +280,21 @@ export const TopicPageView: React.FC<TopicPageViewProps> = ({
         </Box>
 
         {/* Dual Navigation Tabs */}
-        <Box sx={{ borderBottom: "1px solid rgba(255, 255, 255, 0.08)", mb: 3.5 }}>
+        <Box
+          sx={{
+            borderBottom: "1px solid",
+            borderColor: "divider",
+            mb: 3.5,
+            maxWidth: "100%",
+          }}
+        >
           <Tabs
             value={activeTab}
             onChange={handleTabChange}
             aria-label="topic sections"
+            variant="scrollable"
+            scrollButtons="auto"
+            allowScrollButtonsMobile
           >
             <Tab
               icon={<MenuBookIcon sx={{ fontSize: 18 }} />}

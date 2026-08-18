@@ -20,13 +20,18 @@ export const ConceptCard: React.FC<ConceptCardProps> = ({ concept, index }) => {
   return (
     <Card
       sx={{
-        backgroundColor: "#0F121C",
-        border: "1px solid rgba(255, 255, 255, 0.06)",
+        backgroundColor: "background.paper",
+        border: "1px solid",
+        borderColor: "divider",
         borderRadius: 2.5,
         mb: 2.5,
-        transition: "border-color 0.15s ease",
+        transition: "border-color 0.15s ease, box-shadow 0.15s ease",
         "&:hover": {
-          borderColor: "rgba(255, 255, 255, 0.12)",
+          borderColor: "primary.main",
+          boxShadow: (theme) =>
+            theme.palette.mode === "dark"
+              ? "none"
+              : "0 4px 16px -2px rgba(0, 0, 0, 0.05)",
         },
       }}
     >
@@ -39,9 +44,17 @@ export const ConceptCard: React.FC<ConceptCardProps> = ({ concept, index }) => {
               px: 1,
               py: 0.2,
               borderRadius: 1,
-              backgroundColor: "rgba(56, 189, 248, 0.08)",
-              color: "#38BDF8",
-              border: "1px solid rgba(56, 189, 248, 0.18)",
+              backgroundColor: (theme) =>
+                theme.palette.mode === "dark"
+                  ? "rgba(56, 189, 248, 0.08)"
+                  : "rgba(2, 132, 199, 0.08)",
+              color: (theme) =>
+                theme.palette.mode === "dark" ? "#38BDF8" : "#0284C7",
+              border: "1px solid",
+              borderColor: (theme) =>
+                theme.palette.mode === "dark"
+                  ? "rgba(56, 189, 248, 0.18)"
+                  : "rgba(2, 132, 199, 0.2)",
               fontSize: "0.68rem",
               fontWeight: 600,
               mb: 1,
@@ -55,7 +68,7 @@ export const ConceptCard: React.FC<ConceptCardProps> = ({ concept, index }) => {
             component="h2"
             sx={{
               fontWeight: 600,
-              color: "#F8FAFC",
+              color: "text.primary",
               fontSize: "1.05rem",
               lineHeight: 1.45,
             }}
@@ -65,7 +78,7 @@ export const ConceptCard: React.FC<ConceptCardProps> = ({ concept, index }) => {
         </Box>
 
         {/* Content Body - rendered cleanly without nested wrapper boxes */}
-        <Box sx={{ pt: 1, borderTop: "1px solid rgba(255, 255, 255, 0.04)" }}>
+        <Box sx={{ pt: 1, borderTop: "1px solid", borderColor: "divider" }}>
           <MarkdownRenderer content={content} />
         </Box>
       </CardContent>

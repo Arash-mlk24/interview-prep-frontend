@@ -10,7 +10,6 @@ import {
   Button,
 } from "@mui/material";
 import AltRouteIcon from "@mui/icons-material/AltRoute";
-import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import LayersIcon from "@mui/icons-material/Layers";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
@@ -64,16 +63,24 @@ export const RoadmapsList: React.FC<RoadmapsListProps> = ({ roadmaps, stackSlug 
                 height: "100%",
                 display: "flex",
                 flexDirection: "column",
-                backgroundColor: "#0F121C",
-                border: "1px solid rgba(255, 255, 255, 0.08)",
+                backgroundColor: "background.paper",
+                border: "1px solid",
+                borderColor: "divider",
                 borderRadius: 3.5,
                 transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
                 position: "relative",
                 overflow: "hidden",
+                boxShadow: (theme) =>
+                  theme.palette.mode === "dark"
+                    ? "none"
+                    : "0 4px 20px -2px rgba(0, 0, 0, 0.05)",
                 "&:hover": {
                   transform: "translateY(-4px)",
-                  borderColor: "rgba(129, 140, 248, 0.35)",
-                  boxShadow: "0 12px 30px -10px rgba(99, 102, 241, 0.2)",
+                  borderColor: "primary.main",
+                  boxShadow: (theme) =>
+                    theme.palette.mode === "dark"
+                      ? "0 12px 30px -10px rgba(99, 102, 241, 0.2)"
+                      : "0 12px 30px -10px rgba(79, 70, 229, 0.15)",
                 },
               }}
             >
@@ -94,11 +101,6 @@ export const RoadmapsList: React.FC<RoadmapsListProps> = ({ roadmaps, stackSlug 
                       label={localizedLevel}
                       variant="indigo"
                     />
-                    <MetaBadge
-                      icon={<AccessTimeIcon />}
-                      label={t("estimatedHours", { hours: roadmap.estimatedHours })}
-                      variant="sky"
-                    />
                   </Box>
                 </Box>
 
@@ -108,7 +110,7 @@ export const RoadmapsList: React.FC<RoadmapsListProps> = ({ roadmaps, stackSlug 
                   component="h2"
                   sx={{
                     fontWeight: 700,
-                    color: "#FFFFFF",
+                    color: "text.primary",
                     fontSize: "1.15rem",
                     mb: 1,
                     lineHeight: 1.4,
@@ -120,7 +122,7 @@ export const RoadmapsList: React.FC<RoadmapsListProps> = ({ roadmaps, stackSlug 
                 <Typography
                   variant="body2"
                   sx={{
-                    color: "#94A3B8",
+                    color: "text.secondary",
                     fontSize: "0.86rem",
                     lineHeight: 1.6,
                     mb: 3,
@@ -134,7 +136,8 @@ export const RoadmapsList: React.FC<RoadmapsListProps> = ({ roadmaps, stackSlug 
                 <Box
                   sx={{
                     pt: 2,
-                    borderTop: "1px solid rgba(255, 255, 255, 0.06)",
+                    borderTop: "1px solid",
+                    borderColor: "divider",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
@@ -143,14 +146,14 @@ export const RoadmapsList: React.FC<RoadmapsListProps> = ({ roadmaps, stackSlug 
                 >
                   <Box sx={{ display: "flex", gap: 2 }}>
                     <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                      <LayersIcon sx={{ fontSize: 16, color: "#64748B" }} />
-                      <Typography sx={{ color: "#94A3B8", fontSize: "0.78rem" }}>
+                      <LayersIcon sx={{ fontSize: 16, color: "text.secondary" }} />
+                      <Typography sx={{ color: "text.secondary", fontSize: "0.78rem" }}>
                         {roadmap.steps.length} {t("steps")}
                       </Typography>
                     </Box>
                     <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                      <MenuBookIcon sx={{ fontSize: 16, color: "#64748B" }} />
-                      <Typography sx={{ color: "#94A3B8", fontSize: "0.78rem" }}>
+                      <MenuBookIcon sx={{ fontSize: 16, color: "text.secondary" }} />
+                      <Typography sx={{ color: "text.secondary", fontSize: "0.78rem" }}>
                         {totalTopics} {t("topics")}
                       </Typography>
                     </Box>
@@ -163,19 +166,25 @@ export const RoadmapsList: React.FC<RoadmapsListProps> = ({ roadmaps, stackSlug 
                     size="small"
                     endIcon={isRtl ? <ArrowBackIcon /> : <ArrowForwardIcon />}
                     sx={{
-                      backgroundColor: "#1E2235",
-                      color: "#E2E8F0",
+                      backgroundColor: (theme) =>
+                        theme.palette.mode === "dark" ? "#1E2235" : "#EEF2FF",
+                      color: (theme) =>
+                        theme.palette.mode === "dark" ? "#E2E8F0" : "#4338CA",
                       fontWeight: 600,
                       fontSize: "0.8rem",
                       textTransform: "none",
                       borderRadius: 2,
                       px: 2,
                       py: 0.75,
-                      border: "1px solid rgba(255, 255, 255, 0.1)",
+                      border: "1px solid",
+                      borderColor: (theme) =>
+                        theme.palette.mode === "dark"
+                          ? "rgba(255, 255, 255, 0.1)"
+                          : "rgba(79, 70, 229, 0.15)",
                       "&:hover": {
-                        backgroundColor: "#6366F1",
+                        backgroundColor: "primary.main",
                         color: "#FFFFFF",
-                        borderColor: "#6366F1",
+                        borderColor: "primary.main",
                       },
                     }}
                   >

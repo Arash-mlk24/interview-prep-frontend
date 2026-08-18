@@ -44,8 +44,13 @@ export const GroupingControls: React.FC<GroupingControlsProps> = ({
         p: 1.5,
         mb: 3,
         borderRadius: 2.5,
-        backgroundColor: "#0F121C",
-        border: "1px solid rgba(255, 255, 255, 0.06)",
+        backgroundColor: "background.paper",
+        border: "1px solid",
+        borderColor: "divider",
+        boxShadow: (theme) =>
+          theme.palette.mode === "dark"
+            ? "none"
+            : "0 2px 8px -2px rgba(0, 0, 0, 0.04)",
         display: "flex",
         flexDirection: { xs: "column", md: "row" },
         alignItems: { xs: "stretch", md: "center" },
@@ -69,7 +74,7 @@ export const GroupingControls: React.FC<GroupingControlsProps> = ({
         <Typography
           variant="body2"
           sx={{
-            color: "#64748B",
+            color: "text.secondary",
             fontSize: "0.78rem",
             display: { xs: "none", sm: "block" },
           }}
@@ -106,7 +111,7 @@ export const GroupingControls: React.FC<GroupingControlsProps> = ({
       >
         <Typography
           variant="body2"
-          sx={{ color: "#64748B", fontSize: "0.78rem", whiteSpace: "nowrap" }}
+          sx={{ color: "text.secondary", fontSize: "0.78rem", whiteSpace: "nowrap" }}
         >
           {totalFilteredQuestions} {t("questions")}
         </Typography>
@@ -117,11 +122,17 @@ export const GroupingControls: React.FC<GroupingControlsProps> = ({
             onClick={onExpandAll}
             startIcon={<UnfoldMoreIcon sx={{ fontSize: 15 }} />}
             sx={{
-              color: "#94A3B8",
+              color: "text.secondary",
               fontSize: "0.78rem",
               px: 1,
               py: 0.35,
-              "&:hover": { color: "#F8FAFC", backgroundColor: "rgba(255, 255, 255, 0.04)" },
+              "&:hover": {
+                color: "text.primary",
+                backgroundColor: (theme) =>
+                  theme.palette.mode === "dark"
+                    ? "rgba(255, 255, 255, 0.04)"
+                    : "rgba(0, 0, 0, 0.04)",
+              },
             }}
           >
             {t("expandAll")}
@@ -131,11 +142,17 @@ export const GroupingControls: React.FC<GroupingControlsProps> = ({
             onClick={onCollapseAll}
             startIcon={<UnfoldLessIcon sx={{ fontSize: 15 }} />}
             sx={{
-              color: "#94A3B8",
+              color: "text.secondary",
               fontSize: "0.78rem",
               px: 1,
               py: 0.35,
-              "&:hover": { color: "#F8FAFC", backgroundColor: "rgba(255, 255, 255, 0.04)" },
+              "&:hover": {
+                color: "text.primary",
+                backgroundColor: (theme) =>
+                  theme.palette.mode === "dark"
+                    ? "rgba(255, 255, 255, 0.04)"
+                    : "rgba(0, 0, 0, 0.04)",
+              },
             }}
           >
             {t("collapseAll")}

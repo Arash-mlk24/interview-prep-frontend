@@ -23,7 +23,22 @@ interface QuestionAccordionProps {
   showBadges?: boolean;
 }
 
-function getLevelChipColor(levelId?: string) {
+function getLevelChipColor(levelId?: string, isDark: boolean = true) {
+  if (!isDark) {
+    switch (levelId) {
+      case "junior":
+        return { bg: "rgba(16, 185, 129, 0.1)", color: "#047857", border: "1px solid rgba(16, 185, 129, 0.25)" };
+      case "mid":
+        return { bg: "rgba(2, 132, 199, 0.1)", color: "#0369A1", border: "1px solid rgba(2, 132, 199, 0.25)" };
+      case "senior":
+        return { bg: "rgba(79, 70, 229, 0.1)", color: "#4338CA", border: "1px solid rgba(79, 70, 229, 0.25)" };
+      case "lead":
+        return { bg: "rgba(245, 158, 11, 0.1)", color: "#B45309", border: "1px solid rgba(245, 158, 11, 0.25)" };
+      default:
+        return { bg: "rgba(0, 0, 0, 0.04)", color: "#475569", border: "1px solid rgba(0, 0, 0, 0.08)" };
+    }
+  }
+
   switch (levelId) {
     case "junior":
       return { bg: "rgba(16, 185, 129, 0.08)", color: "#34D399", border: "1px solid rgba(16, 185, 129, 0.2)" };
@@ -47,7 +62,6 @@ export const QuestionAccordion: React.FC<QuestionAccordionProps> = ({
   showBadges = true,
 }) => {
   const { getLocalized } = useLanguage();
-  const levelStyle = getLevelChipColor(level?.id || question.levelId);
 
   const title = getLocalized(question.questionTitle, question.questionTitle_fa);
   const answer = getLocalized(question.answerContent, question.answerContent_fa);
@@ -70,7 +84,7 @@ export const QuestionAccordion: React.FC<QuestionAccordionProps> = ({
               component="h3"
               sx={{
                 fontWeight: 500,
-                color: "#F8FAFC",
+                color: "text.primary",
                 lineHeight: 1.5,
                 fontSize: "0.9rem",
                 mb: showBadges ? 0.5 : 0,
@@ -85,13 +99,16 @@ export const QuestionAccordion: React.FC<QuestionAccordionProps> = ({
                   <Chip
                     label={getLocalized(level.name, level.name_fa)}
                     size="small"
-                    sx={{
-                      height: 18,
-                      fontSize: "0.65rem",
-                      fontWeight: 600,
-                      backgroundColor: levelStyle.bg,
-                      color: levelStyle.color,
-                      border: levelStyle.border,
+                    sx={(theme) => {
+                      const levelStyle = getLevelChipColor(level?.id || question.levelId, theme.palette.mode === "dark");
+                      return {
+                        height: 18,
+                        fontSize: "0.65rem",
+                        fontWeight: 600,
+                        backgroundColor: levelStyle.bg,
+                        color: levelStyle.color,
+                        border: levelStyle.border,
+                      };
                     }}
                   />
                 )}
@@ -102,9 +119,13 @@ export const QuestionAccordion: React.FC<QuestionAccordionProps> = ({
                     sx={{
                       height: 18,
                       fontSize: "0.65rem",
-                      backgroundColor: "rgba(255, 255, 255, 0.04)",
-                      color: "#94A3B8",
-                      border: "1px solid rgba(255, 255, 255, 0.06)",
+                      backgroundColor: (theme) =>
+                        theme.palette.mode === "dark"
+                          ? "rgba(255, 255, 255, 0.04)"
+                          : "rgba(0, 0, 0, 0.04)",
+                      color: "text.secondary",
+                      border: "1px solid",
+                      borderColor: "divider",
                     }}
                   />
                 )}

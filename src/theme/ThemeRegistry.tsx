@@ -9,11 +9,13 @@ import { prefixer } from "stylis";
 import { getAppTheme } from "./theme";
 import { LanguageProvider, useLanguage } from "../context/LanguageContext";
 import { RoadmapProgressProvider } from "../context/RoadmapProgressContext";
+import { ThemeModeProvider, useThemeMode } from "../context/ThemeModeContext";
 import { Language } from "../i18n/translations";
 
 function ThemeRegistryInner({ children }: { children: React.ReactNode }) {
   const { direction, isRtl } = useLanguage();
-  const currentTheme = React.useMemo(() => getAppTheme(direction), [direction]);
+  const { mode } = useThemeMode();
+  const currentTheme = React.useMemo(() => getAppTheme(direction, mode), [direction, mode]);
 
   return (
     <AppRouterCacheProvider
@@ -40,9 +42,12 @@ export default function ThemeRegistry({
 }) {
   return (
     <LanguageProvider initialLocale={initialLocale}>
-      <RoadmapProgressProvider>
-        <ThemeRegistryInner>{children}</ThemeRegistryInner>
-      </RoadmapProgressProvider>
+      <ThemeModeProvider>
+        <RoadmapProgressProvider>
+          <ThemeRegistryInner>{children}</ThemeRegistryInner>
+        </RoadmapProgressProvider>
+      </ThemeModeProvider>
     </LanguageProvider>
   );
 }
+

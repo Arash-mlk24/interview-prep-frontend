@@ -53,13 +53,14 @@ export const TopicQuestionsTab: React.FC<TopicQuestionsTabProps> = ({
           py: 8,
           px: 3,
           textAlign: "center",
-          backgroundColor: "#0F121C",
+          backgroundColor: "background.paper",
           borderRadius: 3,
-          border: "1px solid rgba(255, 255, 255, 0.08)",
+          border: "1px solid",
+          borderColor: "divider",
         }}
       >
-        <QuizOutlinedIcon sx={{ fontSize: 40, color: "#64748B", mb: 1.5 }} />
-        <Typography sx={{ color: "#94A3B8", fontSize: "0.95rem" }}>
+        <QuizOutlinedIcon sx={{ fontSize: 40, color: "text.secondary", mb: 1.5 }} />
+        <Typography sx={{ color: "text.secondary", fontSize: "0.95rem" }}>
           {t("noQuestionsForTopic")}
         </Typography>
       </Box>
@@ -76,10 +77,11 @@ export const TopicQuestionsTab: React.FC<TopicQuestionsTabProps> = ({
           alignItems: "center",
           mb: 2,
           pb: 1.5,
-          borderBottom: "1px solid rgba(255, 255, 255, 0.06)",
+          borderBottom: "1px solid",
+          borderColor: "divider",
         }}
       >
-        <Typography sx={{ color: "#94A3B8", fontSize: "0.85rem", fontWeight: 500 }}>
+        <Typography sx={{ color: "text.secondary", fontSize: "0.85rem", fontWeight: 500 }}>
           {questions.length} {t("questions")}
         </Typography>
 
@@ -89,10 +91,10 @@ export const TopicQuestionsTab: React.FC<TopicQuestionsTabProps> = ({
             onClick={handleExpandAll}
             startIcon={<UnfoldMoreIcon sx={{ fontSize: 16 }} />}
             sx={{
-              color: "#94A3B8",
+              color: "text.secondary",
               fontSize: "0.75rem",
               textTransform: "none",
-              "&:hover": { color: "#F8FAFC" },
+              "&:hover": { color: "text.primary" },
             }}
           >
             {t("expandAll")}
@@ -102,10 +104,10 @@ export const TopicQuestionsTab: React.FC<TopicQuestionsTabProps> = ({
             onClick={handleCollapseAll}
             startIcon={<UnfoldLessIcon sx={{ fontSize: 16 }} />}
             sx={{
-              color: "#94A3B8",
+              color: "text.secondary",
               fontSize: "0.75rem",
               textTransform: "none",
-              "&:hover": { color: "#F8FAFC" },
+              "&:hover": { color: "text.primary" },
             }}
           >
             {t("collapseAll")}

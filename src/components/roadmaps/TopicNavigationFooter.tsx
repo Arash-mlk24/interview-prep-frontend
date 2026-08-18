@@ -33,7 +33,8 @@ export const TopicNavigationFooter: React.FC<TopicNavigationFooterProps> = ({
       sx={{
         mt: 5,
         pt: 3,
-        borderTop: "1px solid rgba(255, 255, 255, 0.08)",
+        borderTop: "1px solid",
+        borderColor: "divider",
         display: "flex",
         justifyContent: "space-between",
         alignItems: "stretch",
@@ -52,22 +53,25 @@ export const TopicNavigationFooter: React.FC<TopicNavigationFooterProps> = ({
             flex: 1,
             justifyContent: "flex-start",
             p: 2,
-            backgroundColor: "#0F121C",
-            borderColor: "rgba(255, 255, 255, 0.08)",
+            backgroundColor: "background.paper",
+            borderColor: "divider",
             borderRadius: 2.5,
-            color: "#FFFFFF",
+            color: "text.primary",
             textTransform: "none",
             "&:hover": {
-              borderColor: "#818CF8",
-              backgroundColor: "rgba(99, 102, 241, 0.06)",
+              borderColor: "primary.main",
+              backgroundColor: (theme) =>
+                theme.palette.mode === "dark"
+                  ? "rgba(99, 102, 241, 0.06)"
+                  : "rgba(79, 70, 229, 0.04)",
             },
           }}
         >
-          <Box sx={{ ml: 1 }}>
-            <Typography variant="caption" sx={{ color: "#64748B", display: "block", fontSize: "0.68rem" }}>
+          <Box sx={{ ml: isRtl ? 0 : 1, mr: isRtl ? 1 : 0 }}>
+            <Typography variant="caption" sx={{ color: "text.secondary", display: "block", fontSize: "0.68rem" }}>
               {t("previousTopic")}
             </Typography>
-            <Typography sx={{ color: "#F8FAFC", fontWeight: 600, fontSize: "0.82rem" }}>
+            <Typography sx={{ color: "text.primary", fontWeight: 600, fontSize: "0.82rem" }}>
               {getLocalized(prevTopic.title, prevTopic.title_fa)}
             </Typography>
           </Box>
@@ -87,22 +91,25 @@ export const TopicNavigationFooter: React.FC<TopicNavigationFooterProps> = ({
             flex: 1,
             justifyContent: "flex-end",
             p: 2,
-            backgroundColor: "#0F121C",
-            borderColor: "rgba(255, 255, 255, 0.08)",
+            backgroundColor: "background.paper",
+            borderColor: "divider",
             borderRadius: 2.5,
-            color: "#FFFFFF",
+            color: "text.primary",
             textTransform: "none",
             "&:hover": {
-              borderColor: "#818CF8",
-              backgroundColor: "rgba(99, 102, 241, 0.06)",
+              borderColor: "primary.main",
+              backgroundColor: (theme) =>
+                theme.palette.mode === "dark"
+                  ? "rgba(99, 102, 241, 0.06)"
+                  : "rgba(79, 70, 229, 0.04)",
             },
           }}
         >
-          <Box sx={{ mr: 1 }}>
-            <Typography variant="caption" sx={{ color: "#64748B", display: "block", fontSize: "0.68rem" }}>
+          <Box sx={{ mr: isRtl ? 0 : 1, ml: isRtl ? 1 : 0, textAlign: isRtl ? "left" : "right" }}>
+            <Typography variant="caption" sx={{ color: "text.secondary", display: "block", fontSize: "0.68rem" }}>
               {t("nextTopic")}
             </Typography>
-            <Typography sx={{ color: "#F8FAFC", fontWeight: 600, fontSize: "0.82rem" }}>
+            <Typography sx={{ color: "text.primary", fontWeight: 600, fontSize: "0.82rem" }}>
               {getLocalized(nextTopic.title, nextTopic.title_fa)}
             </Typography>
           </Box>

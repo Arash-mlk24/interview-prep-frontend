@@ -10,16 +10,22 @@ import {
   Container,
   Box,
   Button,
+  IconButton,
+  Tooltip,
 } from "@mui/material";
-import CodeIcon from "@mui/icons-material/Code";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import LanguageIcon from "@mui/icons-material/Language";
+import DarkModeOutlinedIcon from "@mui/icons-material/DarkModeOutlined";
+import LightModeOutlinedIcon from "@mui/icons-material/LightModeOutlined";
 import { useLanguage } from "../../context/LanguageContext";
+import { useThemeMode } from "../../context/ThemeModeContext";
+import { TelosLogo } from "../common/TelosLogo";
 
 export const Navbar: React.FC = () => {
   const pathname = usePathname();
   const { language, toggleLanguage, t, isRtl } = useLanguage();
+  const { mode, toggleColorMode } = useThemeMode();
 
   const isHome =
     pathname === `/${language}` ||
@@ -27,16 +33,23 @@ export const Navbar: React.FC = () => {
     pathname === "/" ||
     pathname === "";
 
+  const isDark = mode === "dark";
+
   return (
     <AppBar
       position="sticky"
       elevation={0}
       sx={{
-        backgroundColor: "rgba(9, 10, 15, 0.8)",
+        backgroundColor: (theme) =>
+          theme.palette.mode === "dark"
+            ? "rgba(9, 10, 15, 0.85)"
+            : "rgba(255, 255, 255, 0.85)",
         backdropFilter: "blur(12px)",
         WebkitBackdropFilter: "blur(12px)",
-        borderBottom: "1px solid rgba(255, 255, 255, 0.06)",
+        borderBottom: "1px solid",
+        borderColor: "divider",
         zIndex: (theme) => theme.zIndex.drawer + 1,
+        transition: "background-color 0.25s ease, border-color 0.25s ease",
       }}
     >
       <Container maxWidth="lg">
@@ -64,26 +77,13 @@ export const Navbar: React.FC = () => {
               "&:hover": { opacity: 0.9 },
             }}
           >
-            <Box
-              sx={{
-                width: 30,
-                height: 30,
-                borderRadius: "7px",
-                backgroundColor: "#6366F1",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-              }}
-            >
-              <CodeIcon sx={{ color: "#FFFFFF", fontSize: 18 }} />
-            </Box>
+            <TelosLogo size={32} />
             <Typography
               variant="h6"
               sx={{
-                fontWeight: 700,
-                fontSize: "1rem",
-                color: "#F8FAFC",
+                fontWeight: 800,
+                fontSize: "1.1rem",
+                color: "text.primary",
                 letterSpacing: language === "fa" ? "0" : "-0.02em",
               }}
             >
@@ -91,7 +91,7 @@ export const Navbar: React.FC = () => {
             </Typography>
           </Box>
 
-          {/* Actions: Navigation + Language Switcher */}
+          {/* Actions: Navigation + Theme Mode + Language Switcher */}
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             {!isHome && (
               <Button
@@ -106,14 +106,16 @@ export const Navbar: React.FC = () => {
                   )
                 }
                 sx={{
-                  color: "#94A3B8",
+                  color: "text.secondary",
                   fontSize: "0.8rem",
                   px: 1.25,
                   py: 0.5,
                   borderRadius: 1.5,
                   "&:hover": {
-                    color: "#F8FAFC",
-                    backgroundColor: "rgba(255, 255, 255, 0.04)",
+                    color: "text.primary",
+                    backgroundColor: isDark
+                      ? "rgba(255, 255, 255, 0.04)"
+                      : "rgba(0, 0, 0, 0.04)",
                   },
                 }}
               >
@@ -121,24 +123,70 @@ export const Navbar: React.FC = () => {
               </Button>
             )}
 
-            {/* Minimal Language Switcher */}
+            {/* Theme Mode Toggle Button */}
+            <Tooltip title={isDark ? (language === "fa" ? "حالت روشن" : "Light Mode") : (language === "fa" ? "حالت تاریک" : "Dark Mode")}>
+              <IconButton
+                size="small"
+                onClick={toggleColorMode}
+                aria-label="toggle light or dark theme"
+                sx={{
+                  color: "text.secondary",
+                  backgroundColor: isDark
+                    ? "rgba(255, 255, 255, 0.03)"
+                    : "rgba(0, 0, 0, 0.03)",
+                  border: "1px solid",
+                  borderColor: isDark
+                    ? "rgba(255, 255, 255, 0.06)"
+                    : "rgba(0, 0, 0, 0.08)",
+                  p: 0.75,
+                  borderRadius: 1.5,
+                  transition: "all 0.15s ease",
+                  "&:hover": {
+                    color: "text.primary",
+                    backgroundColor: isDark
+                      ? "rgba(255, 255, 255, 0.08)"
+                      : "rgba(0, 0, 0, 0.06)",
+                    borderColor: isDark
+                      ? "rgba(255, 255, 255, 0.15)"
+                      : "rgba(0, 0, 0, 0.15)",
+                  },
+                }}
+              >
+                {isDark ? (
+                  <LightModeOutlinedIcon sx={{ fontSize: 17 }} />
+                ) : (
+                  <DarkModeOutlinedIcon sx={{ fontSize: 17 }} />
+                )}
+              </IconButton>
+            </Tooltip>
+
+            {/* Language Switcher */}
             <Button
               size="small"
               onClick={toggleLanguage}
-              startIcon={<LanguageIcon sx={{ fontSize: 15, color: "#94A3B8" }} />}
+              startIcon={<LanguageIcon sx={{ fontSize: 15, color: "text.secondary" }} />}
               sx={{
-                color: "#94A3B8",
-                backgroundColor: "rgba(255, 255, 255, 0.03)",
-                border: "1px solid rgba(255, 255, 255, 0.06)",
+                color: "text.secondary",
+                backgroundColor: isDark
+                  ? "rgba(255, 255, 255, 0.03)"
+                  : "rgba(0, 0, 0, 0.03)",
+                border: "1px solid",
+                borderColor: isDark
+                  ? "rgba(255, 255, 255, 0.06)"
+                  : "rgba(0, 0, 0, 0.08)",
                 fontSize: "0.78rem",
                 fontWeight: 500,
                 px: 1.2,
                 py: 0.4,
                 borderRadius: 1.5,
                 "&:hover": {
-                  color: "#F8FAFC",
-                  backgroundColor: "rgba(255, 255, 255, 0.06)",
-                  borderColor: "rgba(255, 255, 255, 0.12)",
+                  color: "text.primary",
+                  backgroundColor: isDark
+                    ? "rgba(255, 255, 255, 0.06)"
+                    : "rgba(0, 0, 0, 0.06)",
+                  borderColor: isDark
+                    ? "rgba(255, 255, 255, 0.12)"
+                    : "rgba(0, 0, 0, 0.12)",
                 },
               }}
             >
@@ -150,3 +198,4 @@ export const Navbar: React.FC = () => {
     </AppBar>
   );
 };
+

@@ -5,39 +5,40 @@ import { createTheme, Direction } from "@mui/material/styles";
 // Rubik supports both Latin & Arabic (Persian) scripts
 const RUBIK = ["var(--font-rubik)", "Rubik", "Tahoma", "Arial", "sans-serif"].join(",");
 
-export function getAppTheme(direction: Direction = "ltr") {
+export function getAppTheme(direction: Direction = "ltr", mode: "dark" | "light" = "dark") {
   const isRtl = direction === "rtl";
+  const isDark = mode === "dark";
 
   return createTheme({
     direction,
     palette: {
-      mode: "dark",
+      mode,
       primary: {
-        main: "#6366F1", // Indigo
-        light: "#818CF8",
-        dark: "#4F46E5",
+        main: isDark ? "#6366F1" : "#4F46E5", // Indigo
+        light: isDark ? "#818CF8" : "#6366F1",
+        dark: isDark ? "#4F46E5" : "#3730A3",
         contrastText: "#FFFFFF",
       },
       secondary: {
-        main: "#38BDF8", // Sky blue
-        light: "#7DD3FC",
-        dark: "#0284C7",
+        main: isDark ? "#38BDF8" : "#0284C7", // Sky blue
+        light: isDark ? "#7DD3FC" : "#38BDF8",
+        dark: isDark ? "#0284C7" : "#0369A1",
         contrastText: "#FFFFFF",
       },
       background: {
-        default: "#090A0F", // Deep obsidian
-        paper: "#0F121C",   // Refined surface
+        default: isDark ? "#090A0F" : "#F8FAFC", // Deep obsidian vs Clean Slate 50
+        paper: isDark ? "#0F121C" : "#FFFFFF",   // Refined surface vs Pure White
       },
       text: {
-        primary: "#F8FAFC",
-        secondary: "#94A3B8",
-        disabled: "#475569",
+        primary: isDark ? "#F8FAFC" : "#0F172A",
+        secondary: isDark ? "#94A3B8" : "#475569",
+        disabled: isDark ? "#475569" : "#94A3B8",
       },
-      divider: "rgba(255, 255, 255, 0.06)",
+      divider: isDark ? "rgba(255, 255, 255, 0.06)" : "rgba(0, 0, 0, 0.08)",
       success: {
-        main: "#10B981",
+        main: isDark ? "#10B981" : "#059669",
         light: "#34D399",
-        dark: "#059669",
+        dark: "#047857",
       },
       warning: {
         main: "#F59E0B",
@@ -45,9 +46,9 @@ export function getAppTheme(direction: Direction = "ltr") {
         dark: "#D97706",
       },
       info: {
-        main: "#6366F1",
+        main: isDark ? "#6366F1" : "#4F46E5",
         light: "#818CF8",
-        dark: "#4F46E5",
+        dark: "#3730A3",
       },
       error: {
         main: "#EF4444",
@@ -110,7 +111,7 @@ export function getAppTheme(direction: Direction = "ltr") {
       body2: {
         fontSize: "0.75rem",
         lineHeight: 1.6,
-        color: "#94A3B8",
+        color: isDark ? "#94A3B8" : "#475569",
       },
       caption: {
         fontSize: "0.7rem",
@@ -138,8 +139,8 @@ export function getAppTheme(direction: Direction = "ltr") {
         styleOverrides: {
           body: {
             fontFamily: RUBIK,
-            backgroundColor: "#090A0F",
-            color: "#F8FAFC",
+            backgroundColor: isDark ? "#090A0F" : "#F8FAFC",
+            color: isDark ? "#F8FAFC" : "#0F172A",
             direction,
           },
         },
@@ -148,12 +149,14 @@ export function getAppTheme(direction: Direction = "ltr") {
         styleOverrides: {
           root: {
             backgroundImage: "none",
-            backgroundColor: "#0F121C",
-            border: "1px solid rgba(255, 255, 255, 0.06)",
+            backgroundColor: isDark ? "#0F121C" : "#FFFFFF",
+            border: isDark ? "1px solid rgba(255, 255, 255, 0.06)" : "1px solid rgba(0, 0, 0, 0.08)",
             borderRadius: 12,
-            transition: "border-color 0.2s ease, transform 0.2s ease",
+            boxShadow: isDark ? "none" : "0 2px 10px -2px rgba(0, 0, 0, 0.04)",
+            transition: "border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease",
             "&:hover": {
-              borderColor: "rgba(255, 255, 255, 0.12)",
+              borderColor: isDark ? "rgba(255, 255, 255, 0.12)" : "rgba(0, 0, 0, 0.16)",
+              boxShadow: isDark ? "none" : "0 4px 16px -2px rgba(0, 0, 0, 0.08)",
             },
           },
         },
@@ -162,6 +165,7 @@ export function getAppTheme(direction: Direction = "ltr") {
         styleOverrides: {
           root: {
             backgroundImage: "none",
+            backgroundColor: isDark ? "#0F121C" : "#FFFFFF",
           },
         },
       },
@@ -169,22 +173,24 @@ export function getAppTheme(direction: Direction = "ltr") {
         styleOverrides: {
           root: {
             backgroundImage: "none",
-            backgroundColor: "rgba(15, 18, 28, 0.6)",
-            border: "1px solid rgba(255, 255, 255, 0.06)",
+            backgroundColor: isDark ? "rgba(15, 18, 28, 0.6)" : "#FFFFFF",
+            border: isDark ? "1px solid rgba(255, 255, 255, 0.06)" : "1px solid rgba(0, 0, 0, 0.08)",
             borderRadius: "10px !important",
             marginBottom: "8px",
-            transition: "border-color 0.15s ease, background-color 0.15s ease",
+            boxShadow: isDark ? "none" : "0 1px 4px rgba(0, 0, 0, 0.03)",
+            transition: "border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease",
             "&:before": {
               display: "none",
             },
             "&:hover": {
-              borderColor: "rgba(255, 255, 255, 0.12)",
-              backgroundColor: "rgba(18, 22, 34, 0.8)",
+              borderColor: isDark ? "rgba(255, 255, 255, 0.12)" : "rgba(0, 0, 0, 0.15)",
+              backgroundColor: isDark ? "rgba(18, 22, 34, 0.8)" : "#FAFAFE",
             },
             "&.Mui-expanded": {
-              borderColor: "rgba(99, 102, 241, 0.3)",
-              backgroundColor: "rgba(18, 22, 36, 0.9)",
+              borderColor: isDark ? "rgba(99, 102, 241, 0.3)" : "rgba(79, 70, 229, 0.35)",
+              backgroundColor: isDark ? "rgba(18, 22, 36, 0.9)" : "#F5F3FF",
               marginBottom: "8px",
+              boxShadow: isDark ? "none" : "0 4px 14px rgba(79, 70, 229, 0.06)",
             },
           },
         },
@@ -198,10 +204,10 @@ export function getAppTheme(direction: Direction = "ltr") {
               minHeight: "48px",
             },
             "& .MuiAccordionSummary-expandIconWrapper": {
-              color: "#64748B",
+              color: isDark ? "#64748B" : "#64748B",
               transition: "transform 0.2s ease, color 0.15s ease",
               "&.Mui-expanded": {
-                color: "#818CF8",
+                color: isDark ? "#818CF8" : "#4F46E5",
               },
             },
           },
@@ -219,7 +225,7 @@ export function getAppTheme(direction: Direction = "ltr") {
         styleOverrides: {
           root: {
             padding: "14px 16px 20px 16px",
-            borderTop: "1px solid rgba(255, 255, 255, 0.04)",
+            borderTop: isDark ? "1px solid rgba(255, 255, 255, 0.04)" : "1px solid rgba(0, 0, 0, 0.05)",
           },
         },
       },
@@ -237,19 +243,19 @@ export function getAppTheme(direction: Direction = "ltr") {
             fontFamily: RUBIK,
             transition: "all 0.15s ease",
             "&.MuiButton-containedPrimary": {
-              backgroundColor: "#6366F1",
+              backgroundColor: isDark ? "#6366F1" : "#4F46E5",
               color: "#FFFFFF",
               "&:hover": {
-                backgroundColor: "#4F46E5",
+                backgroundColor: isDark ? "#4F46E5" : "#4338CA",
               },
             },
             "&.MuiButton-outlined": {
-              borderColor: "rgba(255, 255, 255, 0.08)",
-              color: "#94A3B8",
+              borderColor: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.12)",
+              color: isDark ? "#94A3B8" : "#475569",
               "&:hover": {
-                borderColor: "rgba(255, 255, 255, 0.16)",
-                backgroundColor: "rgba(255, 255, 255, 0.03)",
-                color: "#F8FAFC",
+                borderColor: isDark ? "rgba(255, 255, 255, 0.16)" : "rgba(0, 0, 0, 0.22)",
+                backgroundColor: isDark ? "rgba(255, 255, 255, 0.03)" : "rgba(0, 0, 0, 0.03)",
+                color: isDark ? "#F8FAFC" : "#0F172A",
               },
             },
           },
@@ -279,15 +285,37 @@ export function getAppTheme(direction: Direction = "ltr") {
         },
       },
       MuiTabs: {
+        defaultProps: {
+          variant: "scrollable",
+          scrollButtons: "auto",
+          allowScrollButtonsMobile: true,
+        },
         styleOverrides: {
           indicator: {
             height: 2,
-            backgroundColor: "#6366F1",
+            backgroundColor: isDark ? "#6366F1" : "#4F46E5",
           },
           root: {
             minHeight: "44px",
             "& .MuiTabs-flexContainer": {
               gap: "4px",
+            },
+            "& .MuiTabs-scroller": {
+              overflowX: "auto !important",
+              scrollbarWidth: "none",
+              "&::-webkit-scrollbar": {
+                display: "none",
+              },
+            },
+            "& .MuiTabs-scrollButtons": {
+              color: isDark ? "#94A3B8" : "#64748B",
+              width: "28px",
+              "&.Mui-disabled": {
+                opacity: 0.2,
+              },
+              "&:hover": {
+                color: isDark ? "#FFFFFF" : "#0F172A",
+              },
             },
           },
         },
@@ -299,15 +327,18 @@ export function getAppTheme(direction: Direction = "ltr") {
             fontWeight: 500,
             fontSize: "0.8rem",
             fontFamily: RUBIK,
-            color: "#64748B",
+            color: isDark ? "#64748B" : "#64748B",
             minHeight: "44px",
+            minWidth: "auto",
             padding: "8px 16px",
+            whiteSpace: "nowrap",
+            flexShrink: 0,
             transition: "color 0.15s ease",
             "&:hover": {
-              color: "#94A3B8",
+              color: isDark ? "#94A3B8" : "#334155",
             },
             "&.Mui-selected": {
-              color: "#F8FAFC",
+              color: isDark ? "#F8FAFC" : "#0F172A",
               fontWeight: 600,
             },
             "& .MuiTab-iconWrapper": {
@@ -324,17 +355,17 @@ export function getAppTheme(direction: Direction = "ltr") {
             "& .MuiOutlinedInput-root": {
               fontFamily: RUBIK,
               fontSize: "0.8rem",
-              backgroundColor: "rgba(15, 18, 28, 0.6)",
+              backgroundColor: isDark ? "rgba(15, 18, 28, 0.6)" : "#FFFFFF",
               borderRadius: 8,
               "& fieldset": {
-                borderColor: "rgba(255, 255, 255, 0.08)",
+                borderColor: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.12)",
                 transition: "border-color 0.15s ease",
               },
               "&:hover fieldset": {
-                borderColor: "rgba(255, 255, 255, 0.16)",
+                borderColor: isDark ? "rgba(255, 255, 255, 0.16)" : "rgba(0, 0, 0, 0.22)",
               },
               "&.Mui-focused fieldset": {
-                borderColor: "#6366F1",
+                borderColor: isDark ? "#6366F1" : "#4F46E5",
                 borderWidth: "1px",
               },
             },
@@ -344,8 +375,8 @@ export function getAppTheme(direction: Direction = "ltr") {
       MuiToggleButtonGroup: {
         styleOverrides: {
           root: {
-            backgroundColor: "rgba(15, 18, 28, 0.6)",
-            border: "1px solid rgba(255, 255, 255, 0.06)",
+            backgroundColor: isDark ? "rgba(15, 18, 28, 0.6)" : "rgba(241, 245, 249, 0.8)",
+            border: isDark ? "1px solid rgba(255, 255, 255, 0.06)" : "1px solid rgba(0, 0, 0, 0.08)",
             borderRadius: 8,
             padding: 2,
             gap: 2,
@@ -361,17 +392,18 @@ export function getAppTheme(direction: Direction = "ltr") {
             fontSize: "0.74rem",
             border: "none !important",
             borderRadius: "6px !important",
-            color: "#64748B",
+            color: isDark ? "#64748B" : "#64748B",
             padding: "4px 10px",
             "&:hover": {
-              backgroundColor: "rgba(255, 255, 255, 0.04)",
-              color: "#94A3B8",
+              backgroundColor: isDark ? "rgba(255, 255, 255, 0.04)" : "rgba(0, 0, 0, 0.04)",
+              color: isDark ? "#94A3B8" : "#334155",
             },
             "&.Mui-selected": {
-              color: "#F8FAFC",
-              backgroundColor: "rgba(255, 255, 255, 0.08)",
+              color: isDark ? "#F8FAFC" : "#0F172A",
+              backgroundColor: isDark ? "rgba(255, 255, 255, 0.08)" : "#FFFFFF",
+              boxShadow: isDark ? "none" : "0 1px 3px rgba(0, 0, 0, 0.08)",
               "&:hover": {
-                backgroundColor: "rgba(255, 255, 255, 0.1)",
+                backgroundColor: isDark ? "rgba(255, 255, 255, 0.1)" : "#FFFFFF",
               },
             },
           },
@@ -381,4 +413,4 @@ export function getAppTheme(direction: Direction = "ltr") {
   });
 }
 
-export const theme = getAppTheme("ltr");
+export const theme = getAppTheme("ltr", "dark");

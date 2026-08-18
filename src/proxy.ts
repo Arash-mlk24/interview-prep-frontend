@@ -4,7 +4,7 @@ import type { NextRequest } from "next/server";
 const supportedLocales = ["en", "fa"];
 const defaultLocale = "fa";
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Check if pathname starts with a supported locale
@@ -28,6 +28,9 @@ export function middleware(request: NextRequest) {
   const newPath = `/${locale}${pathname === "/" ? "" : pathname}${search}`;
   return NextResponse.redirect(new URL(newPath, request.url));
 }
+
+// Backwards compatibility alias
+export { proxy as middleware };
 
 export const config = {
   matcher: [
