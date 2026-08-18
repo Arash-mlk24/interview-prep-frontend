@@ -135,6 +135,9 @@ html.light .markdown-body pre {
   color: #f8fafc !important;
 }
 
+/* ─────────────────────────────────────────────────────────────
+   PERSIAN (RTL) TYPOGRAPHY & TABLE ALIGNMENT
+───────────────────────────────────────────────────────────── */
 html[dir="rtl"] .markdown-body p,
 html[dir="rtl"] .markdown-body h1,
 html[dir="rtl"] .markdown-body h2,
@@ -145,7 +148,24 @@ html[dir="rtl"] .markdown-body h6,
 html[dir="rtl"] .markdown-body ul,
 html[dir="rtl"] .markdown-body ol,
 html[dir="rtl"] .markdown-body li,
-html[dir="rtl"] .markdown-body blockquote {
+html[dir="rtl"] .markdown-body blockquote,
+html[dir="rtl"] .markdown-body table,
+html[dir="rtl"] .markdown-body thead,
+html[dir="rtl"] .markdown-body tbody,
+html[dir="rtl"] .markdown-body tr,
+html[dir="rtl"] .markdown-body th,
+html[dir="rtl"] .markdown-body td {
   direction: rtl !important;
   text-align: right !important;
+}
+
+/* English (LTR) Table Alignment */
+html[dir="ltr"] .markdown-body table,
+html[dir="ltr"] .markdown-body thead,
+html[dir="ltr"] .markdown-body tbody,
+html[dir="ltr"] .markdown-body tr,
+html[dir="ltr"] .markdown-body th,
+html[dir="ltr"] .markdown-body td {
+  direction: ltr !important;
+  text-align: left !important;
 }

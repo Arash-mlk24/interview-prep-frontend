@@ -3527,6 +3527,12 @@ Passing a compiled \`Func<T, bool>\` into an \`IQueryable<T>\` causes **Client-S
 درک تفاوت این دو ساختار برای تسلط بر LINQ و Entity Framework Core حیاتی است:
 
 #### تفاوت‌های بنیادین:
+- **\`Func<T, bool>\`:** یک کد باینری کامپایل‌شده است که مستقیماً در حافظه RAM و توسط CPU روی کالکشن‌های حافظه (LINQ to Objects) اجرا می‌شود و ساختار داخلی کد آن قابل خواندن توسط برنامه‌نویس یا پکیج‌های دیگر نیست.
+- **\`Expression<Func<T, bool>>\`:** یک ساختار داده درختی انتزاعی (**Abstract Syntax Tree یا AST**) است که نمایانگر ساختار کد (نودهای مقایسه، متغیرها، مقادیر ثابت) به صورت آبجکت‌های حافظه است.
+
+#### سازوکار ترجمه به SQL در EF Core:
+هنگام ارسال Expression به EF Core، کلاسی به نام \`ExpressionVisitor\` درخت عبارت را پیمایش کرده، نام پراپرتی‌ها را به ستون‌های جدول دیتابیس و عملگرهای C# را به دستورات معادل SQL تبدیل کرده و کوئری بهینه به سرور دیتابیس ارسال می‌کند.
+
 #### تله خطرناک:
 اگر به جای \`Expression\` از \`Func\` در کوئری‌های EF Core استفاده شود، کل دیتای جدول ابتدا از دیتابیس دانلود شده و سپس در رم C# فیلتر می‌گردد (Client-Side Evaluation) که باعث افت وحشتناک سرعت و پر شدن رم سرور می‌شود.`,
   },
@@ -3943,7 +3949,3417 @@ public class CustomProcessHandle : SafeHandleZeroOrMinusOneIsInvalid
 ۲. **مدیریت شمارش ارجاعات (Reference Counting):** مانع بسته شدن Handle در حین اجرای کدهای P/Invoke در نخ‌های دیگر می‌شود.
 ۳. **حذف نیاز به نوشتن Finalizer دستی:** کلاس‌های شما با استفاده از \`SafeFileHandle\` یا نمونه‌های استاندارد دیگر، دیگر نیازی به نوشتن مخرب (\`~Class\`) یا مدیریت دستی GC ندارند چون SafeHandle این کار را به صورت امن در سطح سیستم‌عامل انجام می‌دهد.`,
   },
+  {
+    id: "dotnet-mid-q233",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-aspnet-controllers-minimal-apis-routing"],
+    questionTitle: "How do Minimal APIs work internally in ASP.NET Core (.NET 8/9), and how does RequestDelegateFactory eliminate reflection compared to ControllerActionInvoker?",
+    questionTitle_fa: "معماری داخلی Minimal APIs در ASP.NET Core (دات‌نت ۸ و ۹) چگونه است و کلاس RequestDelegateFactory چگونه برخلاف ControllerActionInvoker نیاز به Reflection را در زمان اجرا حذف می‌کند؟",
+    answerContent: `### Minimal APIs Architecture vs. ControllerActionInvoker
+
+In traditional ASP.NET Core MVC Controllers, handling an incoming HTTP request is mediated through heavy reflection and runtime discovery:
+
+---
+
+#### 1. Controller Pipeline Overhead (\`ControllerActionInvoker\`):
+1. **Controller Discovery:** \`ControllerActionEndpointDataSource\` uses runtime reflection over loaded assemblies to discover classes inheriting from \`ControllerBase\`.
+2. **Per-Request Allocation:** \`IControllerFactory\` and \`IControllerActivator\` allocate a new controller instance on the Heap for **every single HTTP request**.
+3. **Heavy Constructor DI:** All constructor dependencies are resolved from DI per request, even if the specific invoked action only uses one service.
+4. **MVC Filter Pipeline:** Traverses 5 stages of filters (Authorization -> Resource -> Action -> Exception -> Result).
+5. **Reflection Invocation:** \`IActionInvoker\` uses reflection or compiled expressions to invoke the action method, boxing primitive return types into \`IActionResult\`.
+
+---
+
+#### 2. Minimal APIs Pipeline (.NET 8/9 \`RequestDelegateFactory\`):
+When you register \`app.MapGet("/api/users/{id:guid}", (Guid id, IUserService svc) => ...)\`:
+1. **Compilation Phase (RequestDelegateFactory):** The runtime analyzes the endpoint delegate and generates a specialized, strongly-typed **\`RequestDelegate\`** (or Roslyn Source Generator in Native AOT mode).
+2. **Direct Route Matching:** The route template is compiled into a high-speed radix tree matching table.
+3. **Zero Controller Instantiation:** There is no controller class, no constructor activation, and no \`ControllerContext\`.
+4. **Direct Service & Parameter Resolution:** Parameters are mapped directly from \`HttpContext.Request.RouteValues\` and \`HttpContext.RequestServices\`.
+5. **Direct Output Writing (\`TypedResults\`):** Writes serialized JSON directly to \`HttpResponse.BodyWriter\` (PipeWriter) with zero intermediate \`ObjectResult\` wrapper allocations.
+
+---
+
+#### Performance Metric Comparison:
+- **Throughput:** Minimal APIs achieve up to **35% higher requests/second** compared to MVC Controllers.
+- **Memory Allocation:** Up to **4x lower Gen 0 heap allocations** per request.
+- **Startup Time & Native AOT:** Minimal APIs support **100% Native AOT compilation**, achieving sub-15ms cold startup times and ultra-low memory footprints in containerized Docker environments.`,
+    answerContent_fa: `### کالبدشکافی معماری داخلی Minimal APIs و مقایسه RequestDelegateFactory با ControllerActionInvoker
+
+در معماری سنتی کنترلرها، پردازش درخواست‌های HTTP با سربار سنگین Reflection و تخصیص حافظه همراه است:
+
+#### ۱. سربار پایپ‌لاین کنترلرها:
+- **ساخت شیء به ازای هر درخواست:** در هر بار دریافت درخواست، نمونه جدیدی از کلاس کنترلر روی Heap ساخته شده و تمام سرویس‌های تعریف‌شده در Constructor از کانتینر DI فراخوانی می‌شوند (حتی اگر آن متد خاص به آنها نیازی نداشته باشد).
+- **فیلترهای پنج‌گانه MVC:** عبور اجباری از پایپ‌لاین فیلترهای Authorization، Resource، Action، Exception و Result.
+- **فراخوانی با Reflection:** متد اکشن توسط \`IActionInvoker\` با Reflection اجرا می‌شود.
+
+#### ۲. پایپ‌لاین مدرن Minimal APIs در دات‌نت ۸ و ۹:
+- **سورس جنریتور \`RequestDelegateFactory\`:** در زمان بیلد، کد کامپایل‌شده مستقیمی برای استخراج پارامترها از Route/DI و اجرای لامبدا تولید می‌شود.
+- **حذف شیء کنترلر:** کلاسی ساخته نمی‌شود و نیازی به سازنده و متادیتای کلاس نیست.
+- **نوشتن مستقیم در PipeWriter:** نتایج با \`TypedResults\` مستقیماً روی استریم شبکه نوشته می‌شوند.
+
+#### تفاوت عملکردی:
+Minimal APIs تا **۳۵٪ Throughput بالاتری** دارند، مصرف رم آنها تا ۴ برابر کمتر است و به طور کامل از **Native AOT** برای استقرار فوق‌سریع در کانتینرهای Docker پشتیبانی می‌کنند.`,
+  },
+  {
+    id: "dotnet-mid-q234",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-aspnet-controllers-minimal-apis-routing"],
+    questionTitle: "Explain Model Binding parameter sources in ASP.NET Core ([FromBody], [FromRoute], [FromQuery], [FromHeader], [FromServices], [AsParameters]), and how do you implement custom BindAsync and TryParse methods?",
+    questionTitle_fa: "منابع مختلف Model Binding در ASP.NET Core ([FromBody]، [FromRoute]، [FromQuery]، [FromHeader]، [FromServices] و [AsParameters]) چگونه کار می‌کنند و متدهای سفارشی BindAsync و TryParse را چگونه پیاده‌سازی کنیم؟",
+    answerContent: `### Model Binding Sources & Custom Binding in ASP.NET Core
+
+ASP.NET Core binds incoming HTTP request data to strongly-typed C# parameters using explicit binding source attributes:
+
+---
+
+| Binding Attribute | Source Location | Optimal Use Case |
+| :--- | :--- | :--- |
+| **\`[FromRoute]\`** | URL Path Segment (\`/api/orders/{id}\`) | Unique resource identifiers (\`id:guid\`, \`slug\`) |
+| **\`[FromQuery]\`** | URL Query String (\`?page=1&limit=20\`) | Filtering, pagination, sorting, search queries |
+| **\`[FromBody]\`** | HTTP Body JSON stream | Complex mutation DTOs in \`POST\`, \`PUT\`, \`PATCH\` |
+| **\`[FromHeader]\`** | HTTP Request Header (\`X-Tenant-ID\`) | Authentication tokens, Correlation IDs, API keys |
+| **\`[FromServices]\`** | Dependency Injection Container | Request-scoped services, repositories, loggers |
+| **\`[AsParameters]\`** | Aggregates multiple sources into a struct | Encapsulating complex query/route filters into a single DTO |
+
+---
+
+#### 1. Custom Binding with \`TryParse\` (Zero-Allocation Query/Route Parsing)
+By implementing \`public static bool TryParse(string? value, IFormatProvider? provider, out T result)\` on your struct, ASP.NET Core automatically binds query strings or route segments without custom model binders:
+
+\`\`\`csharp
+public readonly record struct DateRange(DateOnly Start, DateOnly End)
+{
+    // Binds from "?range=2026-01-01_2026-01-31"
+    public static bool TryParse(string? value, IFormatProvider? provider, out DateRange result)
+    {
+        result = default;
+        if (string.IsNullOrWhiteSpace(value)) return false;
+
+        var parts = value.Split('_');
+        if (parts.Length == 2 && 
+            DateOnly.TryParse(parts[0], provider, out var start) && 
+            DateOnly.TryParse(parts[1], provider, out var end) && 
+            start <= end)
+        {
+            result = new DateRange(start, end);
+            return true;
+        }
+        return false;
+    }
+}
+
+// Minimal API Endpoint:
+app.MapGet("/reports", (DateRange range) => TypedResults.Ok($"Report from {range.Start} to {range.End}"));
+\`\`\`
+
+---
+
+#### 2. Custom Binding with \`BindAsync\` (Full \`HttpContext\` Access)
+For complex parameter resolution requiring header inspection, route parsing, and database lookups:
+
+\`\`\`csharp
+public readonly record struct TenantContext(string TenantId, string Region)
+{
+    public static ValueTask<TenantContext?> BindAsync(HttpContext context, ParameterInfo parameter)
+    {
+        var tenantId = context.Request.Headers["X-Tenant-ID"].FirstOrDefault();
+        if (string.IsNullOrEmpty(tenantId))
+        {
+            return ValueTask.FromResult<TenantContext?>(null); // Missing tenant
+        }
+
+        var region = context.Request.Headers["X-Region"].FirstOrDefault() ?? "US";
+        return ValueTask.FromResult<TenantContext?>(new TenantContext(tenantId, region));
+    }
+}
+\`\`\``,
+    answerContent_fa: `### منابع Model Binding و پیاده‌سازی متدهای سفارشی BindAsync و TryParse
+
+موتور Model Binding در ASP.NET Core ورودی‌های مختلف درخواست HTTP را به پارامترهای سی‌شارپ مپ می‌کند:
+
+#### منابع پیش‌فرض:
+- **\`[FromRoute]\`**: استخراج از سگمنت‌های URL (مانند \`/api/orders/{id}\`).
+- **\`[FromQuery]\`**: استخراج از پارامترهای رشته کوئری (مانند \`?page=1&limit=20\`).
+- **\`[FromBody]\`**: دیسریالایز کردن بدنه JSON درخواست در متدهای POST و PUT.
+- **\`[FromHeader]\`**: خواندن مقادیر هدرها (مانند \`X-Tenant-ID\` یا \`Correlation-Id\`).
+- **\`[FromServices]\`**: تزریق سرویس‌ها از کانتینر DI بدون نیاز به constructor.
+- **\`[AsParameters]\`**: تجمیع چندین منبع در یک استراکت برای تمیز نگه‌داشتن پارامترهای متد.
+
+#### بایندینگ اختصاصی با \`TryParse\` و \`BindAsync\`:
+۱. **متد \`TryParse\`**: با پیاده‌سازی متد استاتیک \`TryParse\` روی یک \`record struct\`، دات‌نت به صورت خودکار مقادیر ارسالی در URL یا Query String را به ساختار مورد نظر پارس می‌کند.
+۲. **متد \`BindAsync\`**: امکان دسترسی مستقیم به شیء \`HttpContext\` (مانند هدرها و کانتکست درخواست) را جهت استخراج خودکار DTOهای پیچیده (مانند اطلاعات Tenant یا کاربر احرازشده) فراهم می‌سازد.`,
+  },
+  {
+    id: "dotnet-mid-q235",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-aspnet-controllers-minimal-apis-routing"],
+    questionTitle: "What are Endpoint Filters (IEndpointFilter) in ASP.NET Core, how do they differ from MVC Action Filters, and how do you implement cross-cutting validation pipelines using Route Groups (MapGroup)?",
+    questionTitle_fa: "فیلترهای اندپوینت (IEndpointFilter) در ASP.NET Core چه هستند، چه تفاوتی با Action Filters در MVC دارند و چگونه می‌توان یک پایپ‌لاین اعتبارسنجی متمرکز با Route Groups (متد MapGroup) پیاده‌سازی کرد؟",
+    answerContent: `### Endpoint Filters (\`IEndpointFilter\`) & Route Groups in ASP.NET Core
+
+Introduced in .NET 7 and optimized in .NET 8/9, **\`IEndpointFilter\`** provides a lightweight, composable interception pipeline for Minimal APIs, replacing heavy MVC Action Filters.
+
+---
+
+| Dimension | MVC Action Filters (\`IActionFilter\`) | Endpoint Filters (\`IEndpointFilter\`) |
+| :--- | :--- | :--- |
+| **Pipeline Position** | Inside MVC infrastructure (after Controller activation) | Directly around the endpoint execution delegate |
+| **Reflection Cost** | High (Inspects ActionDescriptor, ControllerContext) | **Zero (Strongly typed \`EndpointFilterInvocationContext\`)** |
+| **Scope** | Controller class or Action method | Individual endpoints or **\`RouteGroupBuilder\`** |
+| **Argument Mutation** | Read/write via \`ActionExecutingContext.ActionArguments\` | Direct index-based access via \`context.Arguments\` |
+| **Native AOT** | Broken by reflection | **100% Native AOT Compatible** |
+
+---
+
+#### Implementing a Centralized FluentValidation Endpoint Filter:
+
+\`\`\`csharp
+public class ValidationFilter<TRequest> : IEndpointFilter where TRequest : class
+{
+    public async ValueTask<object?> InvokeAsync(
+        EndpointFilterInvocationContext context, 
+        EndpointFilterDelegate next)
+    {
+        // Resolve validator from DI container
+        var validator = context.HttpContext.RequestServices.GetService<IValidator<TRequest>>();
+        if (validator is not null)
+        {
+            var model = context.Arguments.OfType<TRequest>().FirstOrDefault();
+            if (model is not null)
+            {
+                var validationResult = await validator.ValidateAsync(model, context.HttpContext.RequestAborted);
+                if (!validationResult.IsValid)
+                {
+                    // Short-circuit pipeline and return RFC 7807 ValidationProblemDetails!
+                    return TypedResults.ValidationProblem(validationResult.ToDictionary());
+                }
+            }
+        }
+
+        // Proceed to subsequent filters and endpoint handler
+        return await next(context);
+    }
+}
+\`\`\`
+
+---
+
+#### Centralized Route Grouping with \`MapGroup\`:
+\`\`\`csharp
+public static class ProductEndpoints
+{
+    public static RouteGroupBuilder MapProductEndpoints(this IEndpointRouteBuilder app)
+    {
+        var group = app.MapGroup("/api/v1/products")
+            .RequireAuthorization("ProductsPolicy")
+            .WithTags("Products Management")
+            .AddEndpointFilter<PerformanceLoggingFilter>(); // Applied to ALL routes in group!
+
+        group.MapGet("/", GetAllProducts);
+        group.MapGet("/{id:guid}", GetProductById);
+        group.MapPost("/", CreateProduct).AddEndpointFilter<ValidationFilter<CreateProductRequest>>();
+
+        return group;
+    }
+}
+\`\`\``,
+    answerContent_fa: `### فیلترهای اندپوینت (IEndpointFilter) و گروه‌بندی مسیرها با MapGroup
+
+اینترفیس **\`IEndpointFilter\`** جایگزین مدرن، سریع و بهینه‌سازی‌شده برای Action Filterهای سنتی در Minimal APIs است.
+
+#### تفاوت‌های کلیدی با Action Filterهای MVC:
+۱. **حذف سربار Reflection:** فیلترهای اندپوینت مستقیماً دور متد هندلر قرار گرفته و نیازی به کانتکست‌های سنگین MVC ندارند.
+۲. **سازگاری کامل با Native AOT:** بدون وابستگی به Reflection کامپایل می‌شوند.
+3. **پشتیبانی از Route Groups:** قابلیت اعمال شدن به کل یک گروه از اندپوینت‌ها با \`MapGroup\`.
+
+#### پیاده‌سازی پایپ‌لاین اعتبارسنجی با FluentValidation:
+فیلتر اعتبارسنجی ورودی‌های متد را بررسی کرده و در صورت نامعتبر بودن داده‌ها، قبل از رسیدن به هندلر اصلی، پایپ‌لاین را متوقف (Short-Circuit) کرده و خطای استاندارد \`ValidationProblemDetails\` برمی‌گرداند.`,
+  },
+  {
+    id: "dotnet-mid-q236",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-aspnet-controllers-minimal-apis-routing"],
+    questionTitle: "What is the difference between returning IResult and TypedResults in Minimal APIs, and why is TypedResults essential for unit testing and OpenAPI/Swagger metadata generation?",
+    questionTitle_fa: "تفاوت بازگرداندن IResult با ساختار TypedResults در Minimal APIs چیست و چرا TypedResults برای تست‌های واحد و تولید خودکار متادیتای OpenAPI/Swagger ضروری است؟",
+    answerContent: `### IResult vs. TypedResults in ASP.NET Core Minimal APIs
+
+In .NET 6, Minimal APIs returned the untyped \`IResult\` interface (via \`Results.Ok()\`, \`Results.NotFound()\`). .NET 7 introduced **\`TypedResults\`**, which revolutionized static typing, OpenAPI metadata, and unit testability.
+
+---
+
+| Dimension | Legacy \`Results\` (\`IResult\`) | Modern \`TypedResults\` (\`Results<T1, T2, ...>\`) |
+| :--- | :--- | :--- |
+| **Return Type** | Non-generic \`IResult\` (Opaque object) | Strongly-typed generic struct (e.g. \`Ok<UserDto>\`, \`NotFound\`) |
+| **OpenAPI / Swagger** | Requires explicit \`.Produces<UserDto>(200)\` attributes | **Automatic schema inference** with zero annotations |
+| **Unit Testability** | Hard to test (must mock HttpContext to inspect body) | **Direct strongly-typed property inspection** (\`res.Result.Value\`) |
+| **Memory Allocation** | Heap allocates boxed \`IResult\` objects | **Zero allocation / struct optimizations** |
+| **Compile-Time Safety** | No compiler validation on returned types | **Strict compiler-enforced return type unions** |
+
+---
+
+#### 1. Real-World Minimal API with \`TypedResults\` Union:
+\`\`\`csharp
+app.MapGet("/api/users/{id:guid}", async Task<Results<Ok<UserDto>, NotFound>> (
+    Guid id, 
+    IUserService userService) =>
+{
+    var user = await userService.GetByIdAsync(id);
+    if (user is null)
+    {
+        return TypedResults.NotFound();
+    }
+
+    return TypedResults.Ok(user);
+});
+\`\`\`
+
+---
+
+#### 2. Why \`TypedResults\` Makes Unit Testing Effortless:
+When testing endpoints returning \`TypedResults\`, you do **NOT need a mock \`HttpContext\`** or in-memory test server (\`WebApplicationFactory\`):
+
+\`\`\`csharp
+[Fact]
+public async Task GetUser_ReturnsOk_WhenUserExists()
+{
+    // Arrange
+    var mockService = new Mock<IUserService>();
+    var userId = Guid.NewGuid();
+    mockService.Setup(s => s.GetByIdAsync(userId))
+               .ReturnsAsync(new UserDto(userId, "Alice"));
+
+    // Act
+    var result = await UserEndpoints.GetUserById(userId, mockService.Object);
+
+    // Assert (Direct strongly-typed casting!)
+    var okResult = Assert.IsType<Ok<UserDto>>(result.Result);
+    Assert.Equal(StatusCodes.Status200OK, okResult.StatusCode);
+    Assert.Equal("Alice", okResult.Value?.Name);
+}
+\`\`\``,
+    answerContent_fa: `### مقایسه بازگرداندن IResult با ساختار TypedResults در Minimal APIs
+
+در نسخه‌های اولیه Minimal APIs، متدها اینترفیس عمومی \`IResult\` (با \`Results.Ok\`) را برمی‌گرداندند. با معرفی **\`TypedResults\`**، بهبودهای شگرفی در تست‌پذیری و OpenAPI ایجاد شد:
+
+#### مزایای کلیدی TypedResults:
+۱. **تولید خودکار متادیتای Swagger / OpenAPI:** نیازی به نوشتن اتریبیوت‌های \`[ProducesResponseType]\` نیست؛ کامپایلر دات‌نت نوع پاسخ‌ها و کدهای وضعیت (Status Codes) را به صورت خودکار برای Swagger استخراج می‌کند.
+۲. **تست‌پذیری فوق‌العاده ساده (Unit Testing):** برای بررسی خروجی در تست‌های xUnit نیازی به شبیه‌سازی \`HttpContext\` نیست؛ می‌توان مستقیماً مقدار \`okResult.Value\` را کست کرده و داده‌ها را بررسی کرد.
+۳. **امنیت نوع داده در زمان کامپایل (Compile-Time Safety):** با استفاده از ساختار \`Results<Ok<T>, NotFound>\`، کامپایلر مانع بازگرداندن مقادیر تعریف‌نشده می‌شود.`,
+  },
+  {
+    id: "dotnet-mid-q237",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-aspnet-controllers-minimal-apis-routing"],
+    questionTitle: "What is the REPR (Request-Endpoint-Response) Pattern in Vertical Slice Architecture, and how does FastEndpoints solve the Fat Controller anti-pattern in enterprise .NET APIs?",
+    questionTitle_fa: "الگوی REPR (Request-Endpoint-Response) در معماری برش عمودی (Vertical Slice) چیست و کتابخانه FastEndpoints چگونه مشکل کنترلرهای حجیم (Fat Controllers) را در سیستم‌های سازمانی دات‌نت حل می‌کند؟",
+    answerContent: `### The REPR Pattern & FastEndpoints in Modern .NET
+
+In traditional N-Layer / Onion architectures with MVC Controllers, applications suffer from the **Fat Controller Anti-Pattern**: a single \`OrdersController\` aggregates 20+ unrelated endpoints with a bloated constructor holding a dozen injected services.
+
+---
+
+#### 1. What is the REPR (Request-Endpoint-Response) Pattern?
+The REPR pattern is the foundation of **Vertical Slice Architecture**. It states that an HTTP API is composed of independent, decoupled slices:
+- **Request (DTO):** The strongly-typed input contract.
+- **Endpoint (Handler):** The single-responsibility processing class.
+- **Response (DTO):** The strongly-typed output contract.
+
+**Core Rule:** **One Class = One Endpoint = Single Responsibility (SRP).**
+
+---
+
+#### 2. How FastEndpoints Implements REPR:
+\`\`\`csharp
+using FastEndpoints;
+
+public record CreateOrderRequest(Guid CustomerId, List<OrderItemDto> Items);
+public record CreateOrderResponse(Guid OrderId, decimal TotalAmount);
+
+public class CreateOrderEndpoint : Endpoint<CreateOrderRequest, CreateOrderResponse>
+{
+    private readonly IOrderRepository _repository;
+    private readonly IPaymentService _payment;
+
+    // Only injects what THIS SPECIFIC ENDPOINT needs!
+    public CreateOrderEndpoint(IOrderRepository repository, IPaymentService payment)
+    {
+        _repository = repository;
+        _payment = payment;
+    }
+
+    public override void Configure()
+    {
+        Post("/api/v1/orders");
+        AllowAnonymous();
+        Description(b => b
+            .Produces<CreateOrderResponse>(StatusCodes.Status201Created)
+            .ProducesProblemDetails(StatusCodes.Status400BadRequest));
+    }
+
+    public override async Task HandleAsync(CreateOrderRequest req, CancellationToken ct)
+    {
+        var order = new Order(req.CustomerId, req.Items);
+        await _repository.SaveAsync(order, ct);
+
+        await SendCreatedAtAsync<GetOrderByIdEndpoint>(
+            new { id = order.Id }, 
+            new CreateOrderResponse(order.Id, order.TotalAmount), 
+            cancellation: ct);
+    }
+}
+\`\`\`
+
+---
+
+#### Why FastEndpoints Outperforms Controllers + MediatR:
+1. **Eliminates MediatR Boilerplate:** In Controller + MediatR architectures, developers write a Controller Action -> MediatR Command -> Command Handler -> DTO (4 files!). FastEndpoints collapses this into a single cohesive slice.
+2. **Zero Reflection:** FastEndpoints generates source delegates at compile time, achieving performance comparable to raw Minimal APIs while maintaining clean file organization.`,
+    answerContent_fa: `### الگوی REPR (Request-Endpoint-Response) و کاربرد FastEndpoints در معماری Vertical Slice
+
+در معماری‌های سنتی، کنترلرها به کلاس‌های حجیم با تزریق‌های پرتعداد وابستگی در Constructor (معروف به Fat Controller Anti-Pattern) تبدیل می‌شوند که نگهداری و تست کدها را دشوار می‌سازد.
+
+#### الگوی REPR چیست؟
+الگوی **Request-Endpoint-Response** پایه معماری برش عمودی (Vertical Slice Architecture) است که در آن هر درخواست HTTP به صورت یک برش کاملاً مستقل پیاده‌سازی می‌شود:
+- **Request:** مدل ورودی داده‌ها (DTO ورودی).
+- **Endpoint:** کلاسی با تنها یک وظیفه جهت پردازش درخواست (Single Responsibility).
+- **Response:** مدل خروجی داده‌ها (DTO خروجی).
+
+#### مزایای FastEndpoints:
+۱. **حذف کدهای زائد MediatR:** در ترکیب Controller + MediatR برای یک عملیات ساده به ۴ فایل مجزا (کنترلر، کامند، هندلر، پاسخ) نیاز است، در حالی که FastEndpoints تمام این فرآیند را در یک کلاس منسجم کپسوله می‌کند.
+۲. **کارایی فوق‌العاده بالا:** بر خلاف کنترلرها از Reflection استفاده نکرده و سرعتی معادل Minimal APIs به همراه ساختاربندی بسیار تمیز در پروژه‌های سازمانی بزرگ فراهم می‌سازد.`,
+  },
+  {
+    id: "dotnet-mid-q238",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-aspnet-dependency-injection-lifetimes"],
+    questionTitle: "Explain the internal mechanics of the three DI lifetimes in ASP.NET Core (Transient, Scoped, Singleton), and how the IoC container manages instantiation, caching, and disposal.",
+    questionTitle_fa: "سازوکار داخلی سه طول عمر تزریق وابستگی در ASP.NET Core (شامل Transient، Scoped و Singleton) چگونه است و کانتینر DI چگونه نمونه‌سازی، کشینگ و آزادسازی حافظه آنها را مدیریت می‌کند؟",
+    answerContent: `### Internal Mechanics of ASP.NET Core DI Lifetimes
+
+The built-in IoC container (\`Microsoft.Extensions.DependencyInjection\`) manages object lifecycle, caching, and deterministic disposal through three distinct lifetime registrations:
+
+---
+
+#### 1. Transient (\`AddTransient<TService, TImplementation>()\`):
+- **Instantiation:** A new instance is created on **every single callsite resolution** (\`sp.GetService<T>()\` or constructor parameter).
+- **Caching:** The container **never caches** the instance.
+- **Disposal:** If the transient instance implements \`IDisposable\` or \`IAsyncDisposable\`, the enclosing \`IServiceScope\` tracks it in its internal \`_disposables\` list. When that scope is disposed, the container disposes the transient object.
+- **Optimal For:** Lightweight, stateless services (formatters, mathematical calculators, command validators).
+
+---
+
+#### 2. Scoped (\`AddScoped<TService, TImplementation>()\`):
+- **Instantiation:** Created **once per \`IServiceScope\`** (typically mapped 1-to-1 to an incoming HTTP request).
+- **Caching:** Cached in the local scope's \`_resolvedServices\` dictionary. Subsequent requests for the same service within the same HTTP request receive the identical instance.
+- **Disposal:** Automatically and deterministically disposed when the HTTP request ends and \`HttpContext.RequestServices\` (the scope) is disposed.
+- **Optimal For:** Stateful services tied to a single request lifecycle (e.g., EF Core \`DbContext\`, \`IUnitOfWork\`, \`TenantContext\`, \`ICurrentUser\`).
+
+---
+
+#### 3. Singleton (\`AddSingleton<TService, TImplementation>()\`):
+- **Instantiation:** Created **lazily on the first request** (or upfront during \`Program.cs\` startup) in the **Root ServiceProvider**.
+- **Caching:** Cached permanently in the Root Provider's thread-safe cache across the entire application runtime.
+- **Disposal:** Disposed only when the application host performs a graceful shutdown.
+- **Mandatory Requirement:** Singletons **must be strictly thread-safe** because dozens or hundreds of concurrent HTTP requests will access the exact same instance simultaneously.
+- **Optimal For:** Heavy stateless engines, shared caches (\`IMemoryCache\`), configuration options, and \`HttpClient\` instances.`,
+    answerContent_fa: `### کالبدشکافی سازوکار داخلی طول عمرهای سه‌گانه تزریق وابستگی در دات‌نت
+
+کانتینر توکار دات‌نت مدیریت چرخه حیات، کشینگ و آزادسازی منابع را در سه قالب اصلی کنترل می‌کند:
+
+#### ۱. طول عمر Transient:
+- **نحوه ساخت:** با هر بار درخواست یا تزریق در سازنده، یک نمونه کاملاً جدید ساخته می‌شود.
+- **کشینگ:** کانتینر هیچ کشی برای آن نگه نمی‌دارد.
+- **آزادسازی:** در صورت داشتن \`IDisposable\`، با نابودی اسکوپ فراخواننده آزاد می‌شود.
+- **کاربرد:** سرویس‌های سبک و بدون وضعیت (مانند فرمت‌کننده‌ها و ولیدیتورها).
+
+#### ۲. طول عمر Scoped:
+- **نحوه ساخت:** در طول یک اسکوپ (مانند یک درخواست وب HTTP) تنها یک‌بار ساخته می‌شود.
+- **کشینگ:** درون دیکشنری اسکوپ جاری کش شده و در تمام متدهای همان Request به اشتراک گذاشته می‌شود.
+- **آزادسازی:** در انتهای درخواست HTTP به صورت قطعی Dispose می‌شود.
+- **کاربرد:** سرویس‌های دارای وضعیت در طول درخواست (مانند \`DbContext\` و \`TenantContext\`).
+
+#### ۳. طول عمر Singleton:
+- **نحوه ساخت:** در اولین درخواست در کانتینر ریشه (Root) ساخته شده و تا پایان عمر برنامه زنده می‌ماند.
+- **کشینگ:** به صورت دائمی در کانتینر ریشه کش می‌شود.
+- **نکته حیاتی:** پیاده‌سازی آن باید کاملاً **Thread-Safe** باشد چون تمام نخ‌های موازی سرور همزمان به آن دسترسی دارند.`,
+  },
+  {
+    id: "dotnet-mid-q239",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-aspnet-dependency-injection-lifetimes"],
+    questionTitle: "What is a Captive Dependency in .NET Dependency Injection, what catastrophic runtime errors does it cause (e.g. DbContext multi-threading crashes & memory leaks), and how do you configure automated scope validation?",
+    questionTitle_fa: "خطای وابستگی به دام افتاده (Captive Dependency) در دات‌نت چیست، چه خطاهای فاجعه‌باری در زمان اجرا پدید می‌آورد (مانند کرش‌های چندنخی DbContext و نشت رم) و اعتبارسنجی خودکار اسکوپ‌ها چگونه تنظیم می‌شود؟",
+    answerContent: `### Captive Dependencies & Automated Scope Validation in .NET
+
+A **Captive Dependency** occurs when a service with a longer lifetime captures a service with a shorter lifetime as a constructor dependency.
+
+The classic disaster occurs when a **Singleton** captures a **Scoped service** (such as EF Core's \`DbContext\`):
+
+---
+
+\`\`\`csharp
+// DANGEROUS ANTI-PATTERN:
+public class SingletonAnalyticsEngine
+{
+    private readonly AppDbContext _db; // Scoped DbContext trapped inside a Singleton!
+
+    public SingletonAnalyticsEngine(AppDbContext db)
+    {
+        _db = db;
+    }
+
+    public async Task ProcessEventAsync(EventDto dto)
+    {
+        _db.Events.Add(new Event(dto));
+        await _db.SaveChangesAsync();
+    }
+}
+\`\`\`
+
+---
+
+#### Catastrophic Production Failures Caused by Captive DbContext:
+1. **Multi-Threaded Concurrency Crashes:**
+   - EF Core's \`DbContext\` is **NOT thread-safe**.
+   - When multiple HTTP requests concurrently invoke \`ProcessEventAsync\`, threads collide on the shared context, crashing with:
+     \`\`\`text
+     System.InvalidOperationException: A second operation was started on this context instance before a previous operation completed. This is usually caused by different threads concurrently using the same instance of DbContext.
+     \`\`\`
+2. **Memory Leak via ChangeTracker:**
+   - The \`DbContext\` instance is never disposed. Its internal \`ChangeTracker\` accumulates every tracked entity indefinitely, leading to gigabytes of leaked heap RAM.
+3. **Stale Data Corruption:**
+   - Cached entity snapshots in the first-level cache are never refreshed, serving stale, outdated data to all users.
+
+---
+
+#### Enabling Automated Scope Validation:
+By default, ASP.NET Core validates scopes **ONLY in the Development environment**. In Production, Captive Dependencies pass silently unless explicitly enforced:
+
+\`\`\`csharp
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Host.UseDefaultServiceProvider((context, options) =>
+{
+    // Throws InvalidOperationException at startup if a Singleton captures a Scoped service:
+    options.ValidateScopes = true;
+
+    // Validates that all registered service dependency trees can be resolved on build:
+    options.ValidateOnBuild = true;
+});
+\`\`\``,
+    answerContent_fa: `### خطای وابستگی به دام افتاده (Captive Dependency) و اعتبارسنجی اسکوپ‌ها در دات‌نت
+
+باگ **Captive Dependency** زمانی رخ می‌دهد که یک سرویس با طول عمر طولانی‌تر (مانند Singleton) یک سرویس با طول عمر کوتاه‌تر (مانند Scoped) را در Constructor خود تزریق کند.
+
+#### خطرات فاجعه‌بار تزریق DbContext در Singleton:
+۱. **کرش‌های همزمانی چندنخی (Multi-Threaded Crash):** کلاس \`DbContext\` در EF Core ذیل هیچ شرایطی Thread-Safe نیست. با ورود درخواست‌های همزمان، خطای \`InvalidOperationException\` پرتاب شده و درخواست‌ها فیل می‌شوند.
+۲. **نشت حافظه RAM:** چون شیء DbContext هیچ‌گاه Dispose نمی‌شود، کش داخلی \`ChangeTracker\` آن تمام انتیتی‌ها را تا ابد در حافظه نگه داشته و باعث بالا رفتن مصرف رم سرور می‌شود.
+۳. **داده‌های قدیمی و نامعتبر (Stale Data):** تغییرات دیتابیس در کش محلی منعکس نشده و دیتای بیات به کاربران نمایش داده می‌شود.
+
+#### فعال‌سازی اعتبارسنجی خودکار (ValidateScopes):
+قابلیت \`ValidateScopes\` به صورت پیش‌فرض فقط در محیط Development فعال است. برای جلوگیری از بروز باگ در محیط Production، باید با تنظیم \`options.ValidateScopes = true\` در فایل \`Program.cs\` اعتبارسنجی اجباری را فعال کرد.`,
+  },
+  {
+    id: "dotnet-mid-q240",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-aspnet-dependency-injection-lifetimes"],
+    questionTitle: "Why does resolving Transient services that implement IDisposable from the Root ServiceProvider cause a silent memory leak, and how does the container's internal _disposables tracking list work?",
+    questionTitle_fa: "چرا فراخوانی سرویس‌های Transient دارای IDisposable از کانتینر ریشه (Root ServiceProvider) باعث نشت حافظه خاموش می‌شود و لیست داخلی _disposables در کانتینر چگونه کار می‌کند؟",
+    answerContent: `### The Transient IDisposable Root Memory Leak
+
+In .NET Dependency Injection, the IoC container strictly adheres to the principle: **"Whoever creates a disposable object is responsible for disposing it."**
+
+When the container instantiates any service that implements \`IDisposable\` or \`IAsyncDisposable\`, it retains a strong GC reference to that instance in an internal collection:
+\`\`\`csharp
+// Conceptual representation inside Microsoft.Extensions.DependencyInjection.ServiceProviderEngineScope:
+private readonly List<object> _disposables = new();
+\`\`\`
+
+---
+
+#### How the Silent Leak Occurs:
+\`\`\`csharp
+builder.Services.AddTransient<HeavyDataExporter>(); // Implements IDisposable
+var app = builder.Build();
+
+// ANTI-PATTERN: Resolving directly from app.Services (The Root Provider)
+app.MapGet("/download", (IServiceProvider rootProvider) =>
+{
+    // The Root Container instantiates HeavyDataExporter AND adds it to rootProvider._disposables
+    using var exporter = rootProvider.GetRequiredService<HeavyDataExporter>();
+    exporter.Export();
+    
+    // Even though 'using' called exporter.Dispose(), the ROOT CONTAINER still holds
+    // a strong reference in its _disposables list!
+    // The Garbage Collector CANNOT reclaim this memory because RootProvider is alive for the entire app lifetime!
+});
+\`\`\`
+
+---
+
+#### The Consequence:
+If the endpoint receives 100,000 requests per day:
+- 100,000 dead instances remain rooted in the Root Provider's \`_disposables\` list.
+- Generation 2 Heap memory continuously balloons until the process crashes with \`OutOfMemoryException\`.
+
+---
+
+#### The Solution:
+1. **Always resolve within an HTTP Scope:** Minimal API endpoints and Controller actions automatically execute inside a request-scoped \`IServiceScope\`. Injected parameters are tracked in that temporary scope and garbage collected immediately when the request terminates.
+2. **Never call \`app.Services.GetRequiredService<T>()\`** for transient disposable services during request handling.`,
+    answerContent_fa: `### نشت حافظه ناشی از فراخوانی Transientهای یکبارمصرف (IDisposable) از کانتینر ریشه
+
+کانتینر دات‌نت بر اساس این اصل عمل می‌کند: *"هر کانتینری که یک شیء Disposable را بسازد، موظف است ارجاع آن را تا زمان Dispose خود نگه دارد."*
+
+#### سازوکار نشت حافظه:
+- هنگام ساخت یک شیء دارای \`IDisposable\`، کانتینر اشاره‌گر آن را در لیست داخلی \`_disposables\` ثبت می‌کند.
+- اگر این شیء مستقیماً از کانتینر ریشه (\`app.Services\`) صدا زده شود، چون کانتینر ریشه تا زمان خاموش شدن کل سرور زنده است، لیست \`_disposables\` آن با هر درخواست وب رشد کرده و مانع جمع‌آوری زباله (Garbage Collection) می‌شود.
+- در نتیجه، حتی با فراخوانی دستی \`Dispose()\`، حافظه RAM هرگز آزاد نشده و سرور پس از مدتی با خطای **OutOfMemoryException** کرش می‌کند.
+
+#### راهکار:
+سرویس‌های Transient یکبارمصرف را همیشه از طریق تزریق در پارامترهای اندپوینت (که درون اسکوپ موقت همان Request اجرا می‌شوند) فراخوانی کنید و هرگز از \`app.Services\` در طول پردازش درخواست‌ها استفاده نکنید.`,
+  },
+  {
+    id: "dotnet-mid-q241",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-aspnet-dependency-injection-lifetimes"],
+    questionTitle: "How do you consume Scoped services (like EF Core DbContext) safely inside a Singleton BackgroundService or IHostedService using IServiceScopeFactory in modern .NET?",
+    questionTitle_fa: "چگونه در یک BackgroundService یا IHostedService که به صورت Singleton ثبت شده است، از سرویس‌های Scoped (مانند DbContext) با استفاده از IServiceScopeFactory به شکلی ایمن استفاده کنیم؟",
+    answerContent: `### Consuming Scoped Services Safely in BackgroundService
+
+In ASP.NET Core, \`BackgroundService\` and \`IHostedService\` implementations are registered as **Singletons** by the framework. Injecting a Scoped dependency (such as EF Core \`DbContext\` or \`IUserRepository\`) directly into the constructor throws a scope validation exception or creates a catastrophic captive dependency.
+
+---
+
+#### The Modern Standard Pattern (.NET 8/9 \`CreateAsyncScope\`):
+
+\`\`\`csharp
+public class QueueProcessingWorker : BackgroundService
+{
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ILogger<QueueProcessingWorker> _logger;
+
+    // Inject IServiceScopeFactory into the Singleton constructor:
+    public QueueProcessingWorker(
+        IServiceScopeFactory scopeFactory,
+        ILogger<QueueProcessingWorker> logger)
+    {
+        _scopeFactory = scopeFactory;
+        _logger = logger;
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                // 1. Create an explicit asynchronous scope per work unit:
+                await using (var scope = _scopeFactory.CreateAsyncScope())
+                {
+                    // 2. Resolve scoped dependencies inside the scope:
+                    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                    var messageQueue = scope.ServiceProvider.GetRequiredService<IMessageQueueService>();
+
+                    var pendingItem = await messageQueue.DequeueAsync(stoppingToken);
+                    if (pendingItem is not null)
+                    {
+                        dbContext.AuditLogs.Add(new AuditLog(pendingItem));
+                        await dbContext.SaveChangesAsync(stoppingToken);
+                    }
+                } // 3. Scope disposed here: DbContext connection and memory cleanly released!
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred processing queue item");
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+        }
+    }
+}
+\`\`\`
+
+---
+
+#### Why \`CreateAsyncScope()\` Outperforms \`CreateScope()\`:
+In .NET 8/9, \`CreateAsyncScope()\` returns an \`AsyncServiceScope\` struct. When combined with \`await using\`, it properly awaits asynchronous disposables (\`IAsyncDisposable\`) such as database connections, network sockets, and file streams without blocking the thread pool!`,
+    answerContent_fa: `### نحوه استفاده ایمن از سرویس‌های Scoped در BackgroundService با IServiceScopeFactory
+
+سرویس‌های پس‌زمینه (\`BackgroundService\` و \`IHostedService\`) به صورت **Singleton** در دات‌نت اجرا می‌شوند؛ بنابراین نمی‌توان سرویس‌های Scoped مانند \`DbContext\` را مستقیماً در سازنده آنها تزریق کرد.
+
+#### الگوی استاندارد پیاده‌سازی:
+۱. **تزریق \`IServiceScopeFactory\` در سازنده:** این کارخانه وظیفه ایجاد اسکوپ‌های مجزا را بر عهده دارد.
+۲. **ساخت اسکوپ با \`CreateAsyncScope\`:** در هر چرخه کاری، یک اسکوپ موقت ساخته می‌شود.
+۳. **فراخوانی سرویس‌ها از درون اسکوپ:** سرویس \`DbContext\` از \`scope.ServiceProvider\` دریافت شده و پردازش انجام می‌گیرد.
+۴. **آزادسازی با \`await using\`:** با پایان یافتن بلاک، اسکوپ و تمام کانکشن‌های دیتابیس به صورت کاملاً غیرمسدودکننده (Non-blocking) آزاد می‌شوند.`,
+  },
+  {
+    id: "dotnet-mid-q242",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-aspnet-dependency-injection-lifetimes"],
+    questionTitle: "What are Keyed Services in .NET 8 and .NET 9, how do you register and inject multiple implementations using [FromKeyedServices], and when should you use IKeyedServiceProvider?",
+    questionTitle_fa: "قابلیت Keyed Services در دات‌نت ۸ و ۹ چیست، چگونه چندین پیاده‌سازی از یک اینترفیس را با [FromKeyedServices] تزریق کنیم و در چه مواردی باید از IKeyedServiceProvider استفاده شود؟",
+    answerContent: `### Keyed Services in .NET 8 and .NET 9
+
+Prior to .NET 8, registering multiple implementations of the same interface required custom factory delegates or third-party IoC containers like Autofac. 
+
+.NET 8 introduced **Native Keyed Services** directly into \`Microsoft.Extensions.DependencyInjection\`.
+
+---
+
+#### 1. Registering Keyed Services:
+You can register keyed services using any lifetime (\`KeyedSingleton\`, \`KeyedScoped\`, \`KeyedTransient\`):
+
+\`\`\`csharp
+// Register different storage implementations with unique keys:
+builder.Services.AddKeyedSingleton<IStorageService, S3StorageService>("s3");
+builder.Services.AddKeyedSingleton<IStorageService, AzureBlobStorageService>("azure");
+builder.Services.AddKeyedSingleton<IStorageService, LocalDiskStorageService>("local");
+\`\`\`
+
+---
+
+#### 2. Static Constructor & Parameter Injection:
+Use the \`[FromKeyedServices(key)]\` attribute on constructor parameters or Minimal API endpoint handlers:
+
+\`\`\`csharp
+public class DocumentManager(
+    [FromKeyedServices("s3")] IStorageService primaryStorage,
+    [FromKeyedServices("local")] IStorageService backupStorage)
+{
+    public async Task SaveDocumentAsync(byte[] data)
+    {
+        await primaryStorage.UploadAsync(data);
+    }
+}
+
+// In Minimal APIs:
+app.MapPost("/upload/{provider}", (
+    [FromKeyedServices("s3")] IStorageService s3,
+    IFormFile file) =>
+{
+    // ...
+});
+\`\`\`
+
+---
+
+#### 3. Dynamic Key Resolution with \`IKeyedServiceProvider\`:
+When the target implementation depends on runtime user input (e.g. request parameters or dynamic configuration):
+
+\`\`\`csharp
+public class StorageFactory(IKeyedServiceProvider serviceProvider)
+{
+    public IStorageService GetProvider(string providerName)
+    {
+        return serviceProvider.GetKeyedService<IStorageService>(providerName)
+            ?? throw new InvalidOperationException($"Storage provider '{providerName}' is not registered.");
+    }
+}
+\`\`\``,
+    answerContent_fa: `### قابلیت Keyed Services در دات‌نت ۸ و ۹
+
+در نسخه‌های قبلی دات‌نت، ثبت و تزریق چندین پیاده‌سازی از یک اینترفیس مستلزم نوشتن Factoryهای دستی یا استفاده از کانتینرهای جانبی مانند Autofac بود. دات‌نت ۸ این قابلیت را به صورت توکار اضافه کرده است.
+
+#### ۱. ثبت سرویس‌ها با کلید:
+با متدهایی مانند \`AddKeyedSingleton\`، \`AddKeyedScoped\` و \`AddKeyedTransient\` می‌توان پیاده‌سازی‌های مختلف را با کلیدهای یکتا ثبت کرد.
+
+#### ۲. تزریق ایستا با اتریبیوت \`[FromKeyedServices]\`:
+با قرار دادن این اتریبیوت روی پارامترهای سازنده یا اندپوینت‌ها، دات‌نت به طور خودکار نمونه متناظر با آن کلید را تزریق می‌کند.
+
+#### ۳. دریافت پویا با \`IKeyedServiceProvider\`:
+در مواردی که انتخاب پیاده‌سازی به پارامترهای ارسالی کاربر در زمان اجرا وابسته است، اینترفیس \`IKeyedServiceProvider\` امکان واکشی داینامیک سرویس بر اساس کلید متنی را با متد \`GetKeyedService<T>(key)\` فراهم می‌سازد.`,
+  },
+  {
+    id: "dotnet-mid-q243",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-aspnet-middleware-pipeline-filters"],
+    questionTitle: "How does the ASP.NET Core Middleware Russian Doll pipeline execute under the hood, and what is the exact order of mandatory middleware (UseExceptionHandler, UseRouting, UseCors, UseAuthentication, UseAuthorization)?",
+    questionTitle_fa: "خط لوله میدل‌ویرهای ASP.NET Core بر اساس مدل عروسک روسی (Russian Doll) چگونه در سطح رانتایم اجرا می‌شود و ترتیب دقیق چینش میدل‌ویرهای حیاتی (شامل UseExceptionHandler، UseRouting، UseCors، UseAuthentication و UseAuthorization) چیست؟",
+    answerContent: `### Middleware Pipeline Architecture & Critical Ordering
+
+In ASP.NET Core, the HTTP request processing pipeline is constructed as a chain of nested delegates (\`RequestDelegate\`), known as the **Russian Doll (Matryoshka) Model**.
+
+---
+
+#### 1. Bidirectional Execution Mechanics:
+- **Inbound Phase (Pre-Processing):** As the request enters, each middleware executes code **before** calling \`await next(context)\`.
+- **Terminal Invocation:** The innermost component (the matched Controller action or Minimal API lambda) processes the request and generates the response payload.
+- **Outbound Phase (Post-Processing):** Once the inner delegate completes, execution unwinds in **reverse order**, allowing outer middleware to execute cleanup or metrics logic **after** \`await next(context)\`.
+
+---
+
+#### 2. The Mandatory Middleware Ordering in \`Program.cs\`:
+
+\`\`\`csharp
+var app = builder.Build();
+
+// 1. GLOBAL EXCEPTION HANDLER (Must be FIRST to catch ALL downstream exceptions)
+app.UseExceptionHandler();
+
+// 2. PROTOCOL SECURITY
+app.UseHsts();
+app.UseHttpsRedirection();
+
+// 3. STATIC FILES (Short-circuits static assets without routing or auth overhead)
+app.UseStaticFiles();
+
+// 4. ROUTING (Parses URL and attaches Endpoint metadata to HttpContext)
+app.UseRouting();
+
+// 5. CORS (CRITICAL: Must be AFTER UseRouting and BEFORE UseAuthentication/UseAuthorization!)
+// Reason: Needs Endpoint metadata to know which CORS policy applies, but must allow
+// unauthenticated HTTP OPTIONS preflight requests to succeed!
+app.UseCors("AllowFrontendOrigins");
+
+// 6. AUTHENTICATION (Validates token/cookie and creates ClaimsPrincipal)
+app.UseAuthentication();
+
+// 7. AUTHORIZATION (Evaluates role/policy permissions against ClaimsPrincipal)
+app.UseAuthorization();
+
+// 8. RATE LIMITING
+app.UseRateLimiter();
+
+// 9. ENDPOINT EXECUTION
+app.MapControllers();
+app.MapGroup("/api/v1").MapOrderEndpoints();
+\`\`\`
+
+---
+
+#### The #1 Production Mistake: Misplacing \`UseCors\`
+- If \`UseCors\` is placed **BEFORE \`UseRouting\`**, it cannot evaluate endpoint-specific CORS policies (\`[EnableCors("SpecificPolicy")]\`).
+- If \`UseCors\` is placed **AFTER \`UseAuthorization\`**, browser preflight \`OPTIONS\` requests (which lack authorization headers) will be rejected with HTTP 401 Unauthorized before CORS headers can be attached!`,
+    answerContent_fa: `### کالبدشکافی معماری خط لوله میدل‌ویرها و ترتیب حیاتی چینش در دات‌نت
+
+خط لوله پردازش درخواست در ASP.NET Core بر اساس الگوی **عروسک روسی (Russian Doll)** پیاده‌سازی شده است:
+
+#### ۱. سازوکار اجرای دوطرفه:
+- **فاز رفت (Inbound):** کدهای قبل از دستور \`await next(context)\` به ترتیب ثبت اجرا می‌شوند.
+- **اجرای اندپوینت نهایی:** هندلر اصلی اجرا شده و بدنه پاسخ را تولید می‌کند.
+- **فاز برگشت (Outbound):** کدهای پس از دستور \`await next(context)\` به ترتیب معکوس بازگشته و اجرا می‌شوند.
+
+#### ۲. ترتیب الزامی و حیاتی میدل‌ویرها:
+۱. **\`UseExceptionHandler\`**: در ابتدای خط لوله جهت به دام انداختن تمامی خطاهای لایه‌های پایین‌دست.
+۲. **\`UseHttpsRedirection\` و \`UseHsts\`**: ارتقای پروتکل امنیتی شبکه.
+۳. **\`UseStaticFiles\`**: تحویل مستقیم فایل‌های ثابت بدون تحمیل سربار احراز هویت یا روتینگ.
+۴. **\`UseRouting\`**: شناسایی اندپوینت و ثبت متادیتای روت در \`HttpContext\`.
+۵. **\`UseCors\` (بسیار مهم)**: **حتماً بعد از UseRouting و قبل از UseAuthentication/Authorization** قرار گیرد تا درخواست‌های Preflight (متد OPTIONS) قبل از احراز هویت تایید شده و هدرهای CORS دریافت شوند.
+۶. **\`UseAuthentication\`**: استخراج هویت کاربر (\`ClaimsPrincipal\`).
+۷. **\`UseAuthorization\`**: ارزیابی دسترسی‌ها و پالیسی‌ها.
+۸. **\`MapControllers / MapGroup\`**: اجرای کد نهایی متد.`,
+  },
+  {
+    id: "dotnet-mid-q244",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-aspnet-middleware-pipeline-filters"],
+    questionTitle: "What are the critical architectural differences between Conventional Middleware and Factory-Activated Middleware (IMiddleware), especially regarding DI lifetimes and Scoped service injection?",
+    questionTitle_fa: "تفاوت‌های بنیادین معماری میان میدل‌ویرهای مرسوم (Conventional) و Factory-Activated (اینترفیس IMiddleware) به ویژه از نظر طول عمر کانتینر DI و تزریق سرویس‌های Scoped چیست؟",
+    answerContent: `### Conventional Middleware vs. Factory-Activated Middleware (\`IMiddleware\`)
+
+ASP.NET Core provides two architectural approaches for creating custom middleware classes:
+
+---
+
+| Feature | Conventional Middleware | Factory-Activated Middleware (\`IMiddleware\`) |
+| :--- | :--- | :--- |
+| **Interface Requirement** | None (Duck-typing: requires \`InvokeAsync\`) | Implements \`IMiddleware\` |
+| **Instantiation Lifetime** | **Singleton** (Created once at application startup) | **Scoped** or **Transient** (Configured in DI) |
+| **\`RequestDelegate next\`** | Injected once into the **Constructor** | Passed as an argument to **\`InvokeAsync(context, next)\`** |
+| **Scoped Service Injection** | **MUST be passed as parameters to \`InvokeAsync\`** | Can be injected **directly into the Constructor** |
+| **DI Registration** | Optional (Registered directly in pipeline via reflection) | **Mandatory** (\`builder.Services.AddScoped<MyMiddleware>()\`) |
+| **Performance** | Calls \`InvokeAsync\` via compiled expression | Calls \`IMiddleware.InvokeAsync\` with zero reflection |
+
+---
+
+#### 1. Conventional Middleware (Singleton Lifetime):
+\`\`\`csharp
+public class RequestPerformanceMiddleware
+{
+    private readonly RequestDelegate _next; // Stored as Singleton field
+
+    public RequestPerformanceMiddleware(RequestDelegate next) => _next = next;
+
+    // Scoped services (e.g., DbContext) MUST be injected here, NEVER in constructor!
+    public async Task InvokeAsync(HttpContext context, AppDbContext dbContext)
+    {
+        var sw = Stopwatch.StartNew();
+        await _next(context);
+        sw.Stop();
+
+        dbContext.Metrics.Add(new Metric(context.Request.Path, sw.ElapsedMilliseconds));
+        await dbContext.SaveChangesAsync();
+    }
+}
+\`\`\`
+
+---
+
+#### 2. Factory-Activated Middleware (\`IMiddleware\`):
+\`\`\`csharp
+public class MultiTenantResolutionMiddleware : IMiddleware
+{
+    private readonly ITenantContext _tenantContext; // Scoped dependency injected into constructor!
+
+    public MultiTenantResolutionMiddleware(ITenantContext tenantContext)
+    {
+        _tenantContext = tenantContext;
+    }
+
+    public async Task InvokeAsync(HttpContext context, RequestDelegate next)
+    {
+        var tenantHeader = context.Request.Headers["X-Tenant-ID"].FirstOrDefault();
+        if (string.IsNullOrEmpty(tenantHeader))
+        {
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            await context.Response.WriteAsync("Missing X-Tenant-ID header.");
+            return; // Short-circuit
+        }
+
+        _tenantContext.Initialize(tenantHeader);
+        await next(context); // Proceed
+    }
+}
+
+// In Program.cs:
+builder.Services.AddScoped<MultiTenantResolutionMiddleware>(); // Explicit DI registration
+app.UseMiddleware<MultiTenantResolutionMiddleware>();
+\`\`\``,
+    answerContent_fa: `### مقایسه میدل‌ویرهای مرسوم (Conventional) و Factory-Activated (اینترفیس IMiddleware)
+
+در ASP.NET Core دو رویکرد متفاوت برای ساخت میدل‌ویرهای سفارشی وجود دارد:
+
+#### ۱. میدل‌ویرهای مرسوم (Conventional Middleware):
+- **طول عمر Singleton:** در زمان استارتاپ برنامه فقط یک‌بار ساخته می‌شوند.
+- **تزریق شیء \`RequestDelegate next\` در Constructor:** به دلیل طول عمر تکین، نباید سرویس‌های Scoped (مانند \`DbContext\`) در Constructor تزریق شوند زیرا خطای Captive Dependency رخ می‌دهد.
+- **تزریق سرویس‌های Scoped در متد \`InvokeAsync\`:** وابستگی‌های دارای طول عمر محدود باید به عنوان پارامتر ورودی متد \`InvokeAsync\` تعریف شوند.
+
+#### ۲. میدل‌ویرهای Factory-Activated (اینترفیس \`IMiddleware\`):
+- **طول عمر Scoped یا Transient:** در هر درخواست توسط \`IMiddlewareFactory\` به صورت مجزا ساخته می‌شوند.
+- **تزریق مستقیم در Constructor:** سرویس‌های Scoped مستقیماً در سازنده تزریق می‌شوند.
+- **الزام ثبت در DI:** حتماً باید با دستور \`builder.Services.AddScoped<MyMiddleware>()\` در کانتینر ثبت شوند.
+- **کارایی:** بدون نیاز به Reflection و با ایمنی تایپ کامل اجرا می‌شوند.`,
+  },
+  {
+    id: "dotnet-mid-q245",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-aspnet-middleware-pipeline-filters"],
+    questionTitle: "Explain the differences between pipeline branching methods: app.Use, app.Run, app.Map, app.MapWhen, and app.UseWhen, and when does a sub-pipeline rejoin the main pipeline?",
+    questionTitle_fa: "تفاوت میان متدهای مختلف شاخه‌بندی خط لوله (شامل app.Use، app.Run، app.Map، app.MapWhen و app.UseWhen) چیست و در کدام متدها جریان پردازش دوباره به خط لوله اصلی بازمی‌گردد؟",
+    answerContent: `### Pipeline Branching Primitives in ASP.NET Core
+
+Controlling HTTP request flow through conditional sub-pipelines is essential for building modular architectures:
+
+---
+
+| Method | Execution Behavior | Re-joins Main Pipeline? | Primary Use Case |
+| :--- | :--- | :--- | :--- |
+| **\`app.Use\`** | In-line execution (calls \`next(context)\` or short-circuits) | **Yes** (via \`next\`) | Request timing, header injection, logging |
+| **\`app.Run\`** | Terminal execution (never calls \`next\`) | **No** (Terminates pipeline) | Final fallback handler, health check endpoint |
+| **\`app.Map\`** | Path-prefix match branch (\`/admin\`) | **No** (Permanently branches) | Isolated admin panel or webhook listener |
+| **\`app.MapWhen\`** | Predicate condition match branch (\`context.Request.Query...\`) | **No** (Permanently branches) | Legacy API version handler, isolated tenant flow |
+| **\`app.UseWhen\`** | Conditional branch execution | **YES (Always re-joins main pipeline!)** | Conditional auditing or payload transformation |
+
+---
+
+#### 1. \`app.Map\` vs \`app.UseWhen\` (The Crucial Difference):
+
+\`\`\`csharp
+// MAP: Once entered, the request NEVER re-enters the main pipeline!
+app.Map("/webhooks", webhookApp =>
+{
+    webhookApp.UseMiddleware<WebhookSignatureValidationMiddleware>();
+    webhookApp.Run(async context =>
+    {
+        await context.Response.WriteAsync("Webhook Processed");
+    });
+});
+
+// USEWHEN: Executes specialized middleware, then RETURNS TO THE MAIN PIPELINE!
+app.UseWhen(
+    context => context.Request.Path.StartsWithSegments("/api/v1/payments"),
+    paymentApp =>
+    {
+        // Executes fraud detection middleware for payment routes only...
+        paymentApp.UseMiddleware<FraudDetectionMiddleware>();
+        // ...and then execution automatically flows back to Routing -> Auth -> Controller!
+    });
+\`\`\``,
+    answerContent_fa: `### سازوکار و تفاوت متدهای شاخه‌بندی خط لوله (Use, Run, Map, MapWhen, UseWhen)
+
+در ASP.NET Core برای مدیریت شاخه‌های پردازشی از متدهای زیر استفاده می‌شود:
+
+#### مقایسه رفتار متدها:
+۱. **\`app.Use\`**: پردازش درون‌خطی و ارسال به مرحله بعد با \`next(context)\`.
+۲. **\`app.Run\`**: میدل‌ویر پایانی (Terminal) که پاسخ را ارسال کرده و خط لوله را خاتمه می‌دهد (هیچ‌گاه \`next\` صدا زده نمی‌شود).
+۳. **\`app.Map\`**: انشعاب دائمی بر اساس پیشوند URL (مسیر جدا شده و هرگز به پایپ‌لاین اصلی بازنمی‌گردد).
+۴. **\`app.MapWhen\`**: انشعاب دائمی بر اساس یک شرط دلخواه روی شیء \`HttpContext\`.
+۵. **\`app.UseWhen\` (تفاوت بنیادین)**: میدل‌ویرهای مشخص‌شده را فقط در صورت برقراری شرط اجرا کرده و **سپس جریان درخواست را مجدداً به خط لوله اصلی بازمی‌گرداند** تا به سمت مراحل Routing و Authentication هدایت شود.`,
+  },
+  {
+    id: "dotnet-mid-q246",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-aspnet-middleware-pipeline-filters"],
+    questionTitle: "How do you implement modern global exception handling in ASP.NET Core 8/9 using IExceptionHandler and ProblemDetails (RFC 7807) without custom try/catch middleware?",
+    questionTitle_fa: "چگونه در ASP.NET Core 8 و 9 سیستم مدیریت سراسری خطاهای برنامه را با اینترفیس IExceptionHandler و استاندارد ProblemDetails (RFC 7807) بدون نیاز به نوشتن میدل‌ویر try/catch دستی پیاده‌سازی کنیم؟",
+    answerContent: `### Global Exception Handling with \`IExceptionHandler\` (.NET 8/9)
+
+In .NET 8 and 9, ASP.NET Core introduced **\`IExceptionHandler\`**, eliminating the need for manual \`try/catch\` middleware while standardizing error formats on **RFC 7807 ProblemDetails**.
+
+---
+
+#### 1. Implementing Domain-Specific and Fallback Handlers:
+
+\`\`\`csharp
+// Handler 1: Catches business domain validation failures
+public class ValidationExceptionHandler(ILogger<ValidationExceptionHandler> logger) : IExceptionHandler
+{
+    public async ValueTask<bool> TryHandleAsync(
+        HttpContext httpContext,
+        Exception exception,
+        CancellationToken cancellationToken)
+    {
+        if (exception is not DomainValidationException valEx)
+        {
+            return false; // Return false to pass exception to NEXT handler in chain!
+        }
+
+        logger.LogWarning("Validation failed: {Message}", valEx.Message);
+
+        var problemDetails = new HttpValidationProblemDetails(valEx.Errors)
+        {
+            Status = StatusCodes.Status400BadRequest,
+            Title = "Validation Error",
+            Type = "https://tools.ietf.org/html/rfc7231#section-6.5.1",
+            Instance = httpContext.Request.Path
+        };
+
+        httpContext.Response.StatusCode = problemDetails.Status.Value;
+        await httpContext.Response.WriteAsJsonAsync(problemDetails, cancellationToken);
+
+        return true; // Successfully handled!
+    }
+}
+
+// Handler 2: Catches all remaining unhandled exceptions (Fallback)
+public class GlobalFallbackExceptionHandler(ILogger<GlobalFallbackExceptionHandler> logger) : IExceptionHandler
+{
+    public async ValueTask<bool> TryHandleAsync(
+        HttpContext httpContext,
+        Exception exception,
+        CancellationToken cancellationToken)
+    {
+        logger.LogError(exception, "Unhandled system error on path: {Path}", httpContext.Request.Path);
+
+        var problemDetails = new ProblemDetails
+        {
+            Status = StatusCodes.Status500InternalServerError,
+            Title = "An unexpected error occurred",
+            Type = "https://tools.ietf.org/html/rfc7231#section-6.6.1",
+            Instance = httpContext.Request.Path,
+            Detail = "Please contact support with trace ID: " + httpContext.TraceIdentifier
+        };
+
+        httpContext.Response.StatusCode = problemDetails.Status.Value;
+        await httpContext.Response.WriteAsJsonAsync(problemDetails, cancellationToken);
+
+        return true; // Handled
+    }
+}
+\`\`\`
+
+---
+
+#### 2. Service Registration in \`Program.cs\`:
+\`\`\`csharp
+// Handlers are executed in order of registration:
+builder.Services.AddExceptionHandler<ValidationExceptionHandler>();
+builder.Services.AddExceptionHandler<GlobalFallbackExceptionHandler>();
+builder.Services.AddProblemDetails();
+
+var app = builder.Build();
+
+// Uses the built-in exception handler middleware which coordinates IExceptionHandler instances:
+app.UseExceptionHandler();
+\`\`\``,
+    answerContent_fa: `### پیاده‌سازی مدیریت سراسری خطاها با IExceptionHandler در دات‌نت ۸ و ۹
+
+دات‌نت ۸ با معرفی اینترفیس **\`IExceptionHandler\`**، نیاز به نوشتن میدل‌ویرهای try/catch سنتی را برطرف کرده و ساختاری زنجیره‌ای برای تبدیل خطاها به فرمت استاندارد RFC 7807 (\`ProblemDetails\`) فراهم نموده است.
+
+#### سازوکار زنجیره‌ای (Chained Handlers):
+۱. **متد \`TryHandleAsync\`**: هر هندلر بررسی می‌کند که آیا توانایی مدیریت آن نوع استثنای خاص را دارد یا خیر.
+۲. **بازگرداندن مقدار \`false\`**: در صورت عدم تطابق، کنترل خطا به هندلر بعدی ثبت‌شده در کانتینر DI منتقل می‌شود.
+۳. **بازگرداندن مقدار \`true\`**: در صورت مدیریت موفق، پاسخ استاندارد JSON تولید شده و زنجیره متوقف می‌شود.
+
+#### مزایای نسبت به میدل‌ویر سنتی:
+- تفکیک تمیز خطاهای اعتبارسنجی (400)، خطاهای عدم دسترسی (403)، نات‌فوند (404) و خطاهای داخلی سرور (500) در کلاس‌های مستقل.
+- پشتیبانی کامل از استاندارد بین‌المللی RFC 7807.`,
+  },
+  {
+    id: "dotnet-mid-q247",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-aspnet-middleware-pipeline-filters"],
+    questionTitle: "Why does modifying HTTP response headers after awaiting next(context) throw an InvalidOperationException ('Headers are read-only, response has already started'), and how does HttpResponse.OnStarting solve this?",
+    questionTitle_fa: "چرا تغییر دادن هدرهای پاسخ HTTP پس از اجرای await next(context) منجر به پرتاب خطای InvalidOperationException (پاسخ شروع شده و هدرها فقط‌خواندنی هستند) می‌شود و متد HttpResponse.OnStarting چگونه این مشکل را حل می‌کند؟",
+    answerContent: `### HTTP Response Streaming & Header Modification Constraints
+
+In high-performance web servers (Kestrel), HTTP responses are streamed over TCP sockets:
+
+1. **Header Flushing:** When an endpoint action writes the first chunk of data to the response body stream (via \`WriteAsJsonAsync\`, \`FileStream\`, or \`PipeWriter\`), Kestrel immediately serializes the HTTP Status Line and Headers, flushes them across the network socket, and flips the internal boolean:
+   \`\`\`csharp
+   context.Response.HasStarted = true;
+   \`\`\`
+2. **Immutability:** Once \`HasStarted == true\`, the HTTP protocol forbids sending additional headers. Attempting to add or modify headers afterwards throws:
+   \`\`\`text
+   System.InvalidOperationException: Headers are read-only, response has already started.
+   \`\`\`
+
+---
+
+#### The Anti-Pattern:
+\`\`\`csharp
+// FLAWED MIDDLEWARE:
+public class BadHeaderMiddleware(RequestDelegate next)
+{
+    public async Task InvokeAsync(HttpContext context)
+    {
+        await next(context); // Downstream endpoint executes AND FLUSHES BODY!
+
+        // CRASH! Response has already started streaming to client:
+        context.Response.Headers["X-Custom-Header"] = "Value";
+    }
+}
+\`\`\`
+
+---
+
+#### The Solution: \`HttpResponse.OnStarting\`
+
+The \`context.Response.OnStarting(callback)\` method registers a delegate that the web server guarantees to execute **immediately before the headers are flushed to the network socket**, even if the downstream action is what triggered the flush:
+
+\`\`\`csharp
+public class SafeHeaderMiddleware(RequestDelegate next)
+{
+    public async Task InvokeAsync(HttpContext context)
+    {
+        // Register callback BEFORE passing control downstream:
+        context.Response.OnStarting(() =>
+        {
+            context.Response.Headers["X-Response-Time-Utc"] = DateTime.UtcNow.ToString("o");
+            context.Response.Headers["X-Trace-Id"] = Activity.Current?.Id ?? context.TraceIdentifier;
+            return Task.CompletedTask;
+        });
+
+        await next(context); // Safe: OnStarting fires right before bytes hit the socket!
+    }
+}
+\`\`\``,
+    answerContent_fa: `### محدودیت‌های دستکاری هدرهای HTTP و کاربرد HttpResponse.OnStarting
+
+در وب‌سرورهای پرسرعت مانند Kestrel، ارسال پاسخ به کلاینت به صورت جریانی (Stream) انجام می‌شود:
+
+#### علت وقوع خطای \`InvalidOperationException\`:
+- به محض اینکه اندپوینت اولین بایت از داده‌ها را در بدنه پاسخ (\`Response.Body\`) می‌نویسد، وب‌سرور هدرهای HTTP و وضعیت پاسخ را در سوکت شبکه ارسال کرده و متغیر \`context.Response.HasStarted\` برابر \`true\` می‌شود.
+- بر اساس پروتکل HTTP، پس از ارسال هدرها نمی‌توان هدر جدیدی اضافه یا ویرایش کرد و تلاش برای این کار خطای پرتاب می‌کند.
+
+#### راهکار ایمن با متد \`OnStarting\`:
+متد \`context.Response.OnStarting\` یک کالبک ثبت می‌کند که سرور وب تضمین می‌دهد **دقیقاً در لحظه قبل از ارسال هدرها به شبکه** آن را اجرا نماید، حتی اگر نوشتن داده‌ها توسط عمیق‌ترین لایه اندپوینت آغاز شده باشد.`,
+  },
+  {
+    id: "dotnet-mid-q248",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-aspnet-configuration-options-secrets"],
+    questionTitle: "How does the ASP.NET Core Configuration Provider hierarchy resolve and override settings, and how do Environment Variables map nested JSON objects using double underscores (__)?",
+    questionTitle_fa: "سیستم سلسله‌مراتبی ارائه‌دهندگان کانفیگ در ASP.NET Core چگونه مقادیر را اولویت‌بندی و بازنویسی می‌کند و متغیرهای محیطی چگونه با دو علامت Underscore (__) اشیاء تودرتوی JSON را مپ می‌کنند؟",
+    answerContent: `### ASP.NET Core Configuration Hierarchy & Environment Variable Mapping
+
+In ASP.NET Core, \`WebApplication.CreateBuilder(args)\` automatically configures a multi-provider configuration pipeline where providers registered later in the chain **override** matching keys from earlier providers:
+
+---
+
+#### 1. The Strict Configuration Precedence Order:
+1. **\`appsettings.json\`**: Base default configurations for all environments.
+2. **\`appsettings.{Environment}.json\`**: Environment-specific overrides (e.g. \`appsettings.Development.json\`, \`appsettings.Production.json\`).
+3. **User Secrets (\`secrets.json\`)**: Local developer secrets (loaded **only** when \`EnvironmentName == "Development"\`).
+4. **Environment Variables**: Operating system and container-level variables (Docker, Kubernetes Secrets/ConfigMaps).
+5. **Command-Line Arguments**: CLI parameters (e.g. \`--Database:MaxConnections=100\`) which have the **highest precedence**.
+
+---
+
+#### 2. Environment Variable Hierarchy Mapping (\`__\` Double Underscore):
+In JSON configuration files, sections are nested hierarchically:
+\`\`\`json
+{
+  "ExternalServices": {
+    "PaymentGateway": {
+      "ApiKey": "sk_test_123",
+      "TimeoutSeconds": 30
+    }
+  }
+}
+\`\`\`
+
+In Linux shells, Bash, and Docker/Kubernetes container specs, variable names cannot contain colons (\`:\`). 
+ASP.NET Core resolves this by parsing **double underscores (\`__\`)** as configuration section delimiters:
+
+\`\`\`bash
+# Linux / Docker Environment Variable:
+export ExternalServices__PaymentGateway__ApiKey="sk_live_prod_999"
+export ExternalServices__PaymentGateway__TimeoutSeconds="60"
+\`\`\`
+
+When the application reads \`IConfiguration["ExternalServices:PaymentGateway:ApiKey"]\`, it seamlessly receives \`"sk_live_prod_999"\`, perfectly overriding the JSON file without modifying code.`,
+    answerContent_fa: `### اولویت‌بندی ارائه‌دهندگان کانفیگ و نگاشت متغیرهای محیطی با Double Underscore
+
+در ASP.NET Core، سیستم پیکربندی مقادیر را از چندین منبع مختلف تجمیع کرده و لایه‌های بعدی مقادیر لایه‌های قبلی را **بازنویسی (Override)** می‌کنند:
+
+#### ۱. ترتیب دقیق اولویت‌بندی ارائه‌دهندگان:
+۱. **\`appsettings.json\`**: تنظیمات پیش‌فرض پایه.
+۲. **\`appsettings.{Environment}.json\`**: تنظیمات اختصاصی محیط (Development، Staging، Production).
+۳. **User Secrets**: کلیدهای محلی توسعه‌دهنده (تنها در حالت Development).
+۴. **متغیرهای محیطی سیستم (Environment Variables)**: متغیرهای داکر و کوبرنتیز.
+۵. **آرگومان‌های خط فرمان (CLI Arguments)**: بالاترین اولویت برای بازنویسی لحظه‌ای.
+
+#### ۲. نگاشت اشیاء تودرتو با علامت \`__\` (Double Underscore):
+از آنجا که سیستم‌عامل لینوکس و کانتینرهای داکر استفاده از علامت دو نقطه (\`:\`) را در نام متغیرها مجاز نمی‌دانند، دات‌نت به صورت خودکار دو علامت آندرلاین (\`__\`) را به ساختار درختی JSON مپ می‌کند (مثال: \`ExternalServices__PaymentGateway__ApiKey\` جایگزین کلید \`ExternalServices:PaymentGateway:ApiKey\` می‌شود).`,
+  },
+  {
+    id: "dotnet-mid-q249",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-aspnet-configuration-options-secrets"],
+    questionTitle: "What are the fundamental differences between IOptions<T>, IOptionsSnapshot<T>, and IOptionsMonitor<T> in the Options Pattern, especially regarding DI lifetimes and live runtime reloads?",
+    questionTitle_fa: "تفاوت‌های بنیادین میان IOptions<T>، IOptionsSnapshot<T> و IOptionsMonitor<T> در الگوی Options به ویژه از نظر طول عمر کانتینر DI و ریلود شدن خودکار مقادیر چیست؟",
+    answerContent: `### The Options Pattern Trio: IOptions vs. IOptionsSnapshot vs. IOptionsMonitor
+
+The .NET Options Pattern binds raw configuration sections to strongly-typed classes. Choosing the correct interface depends on service lifetime and dynamic reload requirements:
+
+---
+
+| Dimension | \`IOptions<T>\` | \`IOptionsSnapshot<T>\` | \`IOptionsMonitor<T>\` |
+| :--- | :--- | :--- | :--- |
+| **DI Lifetime** | **Singleton** | **Scoped** | **Singleton** |
+| **Instantiation Cost** | Evaluated once at first access | Re-evaluated **once per \`IServiceScope\`** | Evaluated once, updated via token source |
+| **Runtime Reloading** | ❌ No (Fixed for app lifetime) | ✅ Yes (Refreshes on next HTTP request) | **✅ Yes (Real-time push updates)** |
+| **Named Options** | ❌ No | ✅ Yes (\`snapshot.Get("Name")\`) | ✅ Yes (\`monitor.Get("Name")\`) |
+| **Change Listener** | ❌ No | ❌ No | **✅ Yes (\`monitor.OnChange(callback)\`)** |
+| **Injectable in Singletons?** | ✅ Safe | ❌ **CRASH (Captive Dependency!)** | ✅ **Safe & Recommended** |
+| **Primary Use Case** | Fixed immutable settings | Request-scoped services needing fresh config | Long-running BackgroundServices & caches |
+
+---
+
+#### 1. \`IOptions<T>\` (Singleton, Immutable):
+- Computed once upon first resolution.
+- Highly performant with near-zero allocation overhead.
+- Does not reflect changes if \`appsettings.json\` is edited while the app is running.
+
+#### 2. \`IOptionsSnapshot<T>\` (Scoped, Per-Request Recompute):
+- Recomputed on every new \`IServiceScope\` (every incoming HTTP request).
+- Guarantees **consistent configuration throughout the entire duration of a single HTTP request**, even if the underlying file changes mid-flight.
+
+#### 3. \`IOptionsMonitor<T>\` (Singleton, Real-Time Push Notification):
+- Subscribes to \`IConfigurationChangeTokenSource\` to receive instant OS file change notifications.
+- Exposes \`monitor.CurrentValue\` for immediate access and \`monitor.OnChange((newOptions, name) => ...)\` to react to configuration changes dynamically without application restarts.`,
+    answerContent_fa: `### مقایسه سه‌گانه الگوی Options: تفاوت‌های IOptions، IOptionsSnapshot و IOptionsMonitor
+
+الگوی Options در دات‌نت تنظیمات را به کلاس‌های strongly-typed تبدیل می‌کند:
+
+#### ۱. اینترفیس \`IOptions<T>\` (طول عمر Singleton):
+- در اولین فراخوانی یک‌بار مقداردهی شده و تا پایان عمر برنامه ثابت می‌ماند.
+- تغییرات فایل \`appsettings.json\` در زمان اجرا روی آن تاثیری ندارد.
+
+#### ۲. اینترفیس \`IOptionsSnapshot<T>\` (طول عمر Scoped):
+- به ازای هر درخواست وب (Scope) مجدداً محاسبه می‌شود.
+- تضمین می‌کند که در طول پردازش یک درخواست HTTP خاص، مقادیر کانفیگ کاملاً یکدست و بدون تغییر باقی بمانند.
+- **تله مهلک:** نباید در سرویس‌های Singleton تزریق شود چون باعث خطای Captive Dependency می‌گردد.
+
+#### ۳. اینترفیس \`IOptionsMonitor<T>\` (طول عمر Singleton):
+- تنظیمات را به صورت بلادرنگ و آنی آپدیت می‌کند.
+- دارای متد \`monitor.CurrentValue\` و کالبک رویداد \`monitor.OnChange\` است که امکان واکنش به تغییرات کانفیگ بدون ریستارت سرور را برای BackgroundServiceها فراهم می‌سازد.`,
+  },
+  {
+    id: "dotnet-mid-q250",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-aspnet-configuration-options-secrets"],
+    questionTitle: "Why does injecting IOptionsSnapshot<T> into a Singleton service (or BackgroundService) cause a Captive Dependency runtime crash, and what is the proper pattern for consuming dynamic settings in Singletons?",
+    questionTitle_fa: "چرا تزریق IOptionsSnapshot<T> در یک سرویس Singleton (یا BackgroundService) باعث خطای زمان اجرای Captive Dependency می‌شود و الگوی استاندارد برای خواندن تنظیمات پویا در سرویس‌های Singleton چیست؟",
+    answerContent: `### Captive Dependency with IOptionsSnapshot in Singleton Services
+
+A common architectural trap in ASP.NET Core occurs when developers attempt to inject \`IOptionsSnapshot<T>\` into a **Singleton service** (such as a \`BackgroundService\`, \`IHostedService\`, or memory cache manager).
+
+---
+
+#### Why It Crashes:
+1. **Lifetime Incompatibility:** \`IOptionsSnapshot<T>\` is explicitly registered in the DI container as a **Scoped service** because its internal mechanism relies on per-request scope isolation.
+2. **Container Scope Validation:** When \`ValidateScopes = true\` is enabled, the DI container detects a Singleton capturing a Scoped service during startup, crashing with:
+   \`\`\`text
+   System.InvalidOperationException: Cannot consume scoped service 'Microsoft.Extensions.Options.IOptionsSnapshot\`1[AppOptions]' from singleton 'BackgroundWorker'.
+   \`\`\`
+
+---
+
+#### The Solution: Use \`IOptionsMonitor<T>\`
+
+\`IOptionsMonitor<T>\` is designed specifically for **Singleton lifecycles**, providing real-time access to updated configuration values without requiring an active \`IServiceScope\`:
+
+\`\`\`csharp
+public class OrderSyncWorker : BackgroundService
+{
+    private readonly IOptionsMonitor<SyncOptions> _optionsMonitor;
+    private readonly ILogger<OrderSyncWorker> _logger;
+
+    // Correct: Inject IOptionsMonitor into the Singleton constructor!
+    public OrderSyncWorker(
+        IOptionsMonitor<SyncOptions> optionsMonitor,
+        ILogger<OrderSyncWorker> logger)
+    {
+        _optionsMonitor = optionsMonitor;
+        _logger = logger;
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            // Always retrieves the freshest runtime settings:
+            var batchSize = _optionsMonitor.CurrentValue.BatchSize;
+            var pollInterval = _optionsMonitor.CurrentValue.PollIntervalSeconds;
+
+            _logger.LogInformation("Processing batch of {BatchSize} orders...", batchSize);
+
+            await Task.Delay(TimeSpan.FromSeconds(pollInterval), stoppingToken);
+        }
+    }
+}
+\`\`\``,
+    answerContent_fa: `### خطای Captive Dependency با IOptionsSnapshot در سرویس‌های Singleton
+
+یکی از خطاهای رایج در پروژه‌های دات‌نت، تلاش برای تزریق \`IOptionsSnapshot<T>\` در سرویس‌های دارای طول عمر **Singleton** (مانند \`BackgroundService\`) است.
+
+#### علت پرتاب خطا:
+اینترفیس \`IOptionsSnapshot<T>\` ذیل کانتینر DI با طول عمر **Scoped** ثبت شده است؛ زیرا وظیفه آن بازخوانی مقادیر به ازای هر درخواست وب است. تزریق یک سرویس Scoped درون Singleton خطای مستقیم **Captive Dependency** را ایجاد می‌کند و با فعال بودن \`ValidateScopes\` در زمان استارتاپ برنامه متوقف می‌شود.
+
+#### راهکار استاندارد:
+در تمام سرویس‌های Singleton و پس‌زمینه، همیشه باید از **\`IOptionsMonitor<T>\`** استفاده شود؛ زیرا این اینترفیس با طول عمر Singleton ثبت شده و از طریق پراپرتی \`CurrentValue\` بدون نیاز به ساخت Scope، آخرین تغییرات کانفیگ را در اختیار سرویس قرار می‌دهد.`,
+  },
+  {
+    id: "dotnet-mid-q251",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-aspnet-configuration-options-secrets"],
+    questionTitle: "How do you implement Fail-Fast startup configuration validation in .NET 8/9 using DataAnnotations, custom validation delegates, and ValidateOnStart()?",
+    questionTitle_fa: "چگونه در دات‌نت ۸ و ۹ اعتبارسنجی زودهنگام (Fail-Fast) تنظیمات برنامه را در زمان استارتاپ با اتریبیوت‌های DataAnnotations، شروط سفارشی و متد ValidateOnStart() پیاده‌سازی کنیم؟",
+    answerContent: `### Fail-Fast Options Validation with \`ValidateOnStart\` (.NET 8/9)
+
+In legacy systems, invalid or missing configuration values (such as an empty API secret or invalid port number) remained undetected until user requests hit the relevant feature hours or days after deployment.
+
+.NET 8 and 9 provide comprehensive **Fail-Fast Startup Validation**:
+
+---
+
+#### 1. Define Strongly-Typed Options with DataAnnotations:
+\`\`\`csharp
+using System.ComponentModel.DataAnnotations;
+
+public class DatabaseOptions
+{
+    public const string SectionName = "Database";
+
+    [Required(ErrorMessage = "ConnectionString cannot be empty")]
+    public string ConnectionString { get; init; } = string.Empty;
+
+    [Range(5, 500, ErrorMessage = "MaxPoolSize must be between 5 and 500")]
+    public int MaxPoolSize { get; init; } = 100;
+
+    [Url(ErrorMessage = "MetricsEndpoint must be a valid HTTP/HTTPS URL")]
+    public string MetricsEndpoint { get; init; } = string.Empty;
+}
+\`\`\`
+
+---
+
+#### 2. Fluent Registration with \`ValidateOnStart()\`:
+\`\`\`csharp
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddOptions<DatabaseOptions>()
+    .Bind(builder.Configuration.GetSection(DatabaseOptions.SectionName))
+    .ValidateDataAnnotations() // Validates [Required], [Range], [Url] attributes
+    .Validate(options => 
+    {
+        // Custom domain logic validation
+        return !options.ConnectionString.Contains("TODO_REPLACE");
+    }, "ConnectionString contains unconfigured placeholder values!")
+    .ValidateOnStart(); // CRITICAL: Runs validation immediately during builder.Build()!
+
+var app = builder.Build(); // Throws OptionsValidationException immediately if invalid!
+\`\`\`
+
+---
+
+#### Why \`ValidateOnStart()\` is Essential in CI/CD & Kubernetes:
+When deployed to Kubernetes or container clusters, a failing \`ValidateOnStart()\` causes the container's Readiness/Liveness probe to fail immediately, preventing Kubernetes from routing production traffic to a misconfigured pod and triggering an automatic rollback.`,
+    answerContent_fa: `### اعتبارسنجی زودهنگام (Fail-Fast) تنظیمات در زمان استارتاپ با ValidateOnStart
+
+در برنامه‌های حرفه‌ای، تنظیمات ناقص یا نامعتبر (مانند خالی بودن پسورد دیتابیس یا آدرس نامعتبر API) نباید در زمان اجرای درخواست‌های کاربران کشف شوند؛ بلکه سرور باید در همان لحظه بالا آمدن متوقف شود (Fail-Fast).
+
+#### پیاده‌سازی در دات‌نت ۸ و ۹:
+۱. **استفاده از اتریبیوت‌های DataAnnotations:** قراردادن اتریبیوت‌های \`[Required]\`، \`[Range]\` و \`[Url]\` روی پراپرتی‌های کلاس Options.
+۲. **متد \`ValidateDataAnnotations()\`:** اعتبارسنجی خودکار اتریبیوت‌ها.
+۳. **متد سفارشی \`Validate\`:** اعمال شروط منطقی پیچیده (مانند عدم وجود عبارات پیش‌فرض تستی در کانکشن‌استرینگ).
+۴. **متد حیاتی \`ValidateOnStart()\`:** اجرای تمامی این اعتبارسنجی‌ها در لحظه اجرای \`builder.Build()\` قبل از بالا آمدن وب‌سرور Kestrel.
+
+#### مزیت در کانتینرهای Kubernetes:
+در صورت اشتباه بودن تنظیمات محیطی، پاد (Pod) در همان ثانیه اول ریستارت شده و کوبرنتیز از ارسال ترافیک کاربران به سرور معیوب جلوگیری می‌کند.`,
+  },
+  {
+    id: "dotnet-mid-q252",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-aspnet-configuration-options-secrets"],
+    questionTitle: "What is the Secret Manager tool (User Secrets) in .NET, how does it securely isolate API keys from Git repositories during development, and where are secrets stored on the local operating system?",
+    questionTitle_fa: "ابزار Secret Manager (یا User Secrets) در دات‌نت چیست، چگونه در زمان توسعه مانع کامیت شدن کلیدهای محرمانه در ریپازیتوری Git می‌شود و فایل‌های آن در کجای سیستم‌عامل ذخیره می‌گردند؟",
+    answerContent: `### Secret Manager (User Secrets) in ASP.NET Core
+
+During local application development, developers require access to API keys, test database passwords, and client secrets. Accidental commits of these secrets to source control (GitHub/GitLab) are a primary vector for security breaches.
+
+---
+
+#### 1. How User Secrets Operates:
+The Secret Manager tool stores sensitive development key-value pairs **completely outside the project directory and source tree**:
+
+1. **Initialize User Secrets:**
+   \`\`\`bash
+   dotnet user-secrets init
+   \`\`\`
+   This command adds a unique GUID identifier to your \`.csproj\` file:
+   \`\`\`xml
+   <PropertyGroup>
+     <UserSecretsId>79a3edd0-2092-40a2-a04d-dcb46d5ca9ed</UserSecretsId>
+   </PropertyGroup>
+   \`\`\`
+
+2. **Set Configuration Values:**
+   \`\`\`bash
+   dotnet user-secrets set "Stripe:SecretKey" "sk_test_51Mz987654321"
+   dotnet user-secrets set "Database:Password" "DevSecretPassword!"
+   \`\`\`
+
+---
+
+#### 2. Physical Storage Locations:
+The secrets are stored in an unencrypted JSON file in the developer's local OS user profile:
+- **Windows:** \`%APPDATA%\\Microsoft\\UserSecrets\\<UserSecretsId>\\secrets.json\`
+- **Linux:** \`~/.microsoft/usersecrets/<UserSecretsId>/secrets.json\`
+- **macOS:** \`~/.microsoft/usersecrets/<UserSecretsId>/secrets.json\`
+
+---
+
+#### 3. Automatic Environment Isolation:
+When running with \`builder.Environment.IsDevelopment()\`, ASP.NET Core automatically loads User Secrets into the \`IConfiguration\` pipeline. In Production environments, User Secrets are completely ignored, and values are supplied via **Environment Variables**, **Azure Key Vault**, or **AWS Secrets Manager**.`,
+    answerContent_fa: `### ابزار Secret Manager (User Secrets) در دات‌نت و ایزوله‌سازی امن کلیدها
+
+کامیت شدن اشتباهی کلیدهای محرمانه، رمزهای دیتابیس و توکن‌های پرداخت در ریپازیتوری‌های Git یکی از بزرگ‌ترین مخاطرات امنیتی است.
+
+#### سازوکار User Secrets:
+ابزار Secret Manager اطلاعات حساس را **کاملاً خارج از پوشه پروژه و سورس‌کد Git** نگهداری می‌کند:
+
+۱. **دستور مقداردهی:** با اجرای \`dotnet user-secrets init\` یک شناسه GUID در فایل \`.csproj\` ثبت می‌شود.
+۲. **ذخیره‌سازی در سیستم‌عامل:** فایل \`secrets.json\` در پوشه پروفایل کاربری سیستم‌عامل ذخیره می‌شود:
+   - در ویندوز: \`%APPDATA%\\Microsoft\\UserSecrets\\<ID>\\secrets.json\`
+   - در لینوکس و مک: \`~/.microsoft/usersecrets/<ID>/secrets.json\`
+۳. **بارگذاری خودکار فقط در محیط Development:** فریم‌ورک دات‌نت این فایل را به صورت خودکار تنها در زمان اجرای لوکال در پایپ‌لاین کانفیگ ادغام می‌کند و در محیط Production این منبع نادیده گرفته شده و تنظیمات از متغیرهای امنیتی سرور یا Azure Key Vault خوانده می‌شوند.`,
+  },
+  {
+    id: "dotnet-mid-q253",
+    stackId: "dotnet",
+    categoryId: "ef-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-efcore-dbcontext-fluent-api-mappings"],
+    questionTitle: "How does the Entity Framework Core ChangeTracker work internally (Snapshots vs DetectChanges), and how are EntityState transitions handled during SaveChangesAsync()?",
+    questionTitle_fa: "موتور ردیابی تغییرات (ChangeTracker) در EF Core در سطح داخلی چگونه کار می‌کند (تصاویر لحظه‌ای Snapshot در برابر DetectChanges) و وضعیت‌های EntityState هنگام فراخوانی SaveChangesAsync چگونه مدیریت می‌شوند؟",
+    answerContent: `### ChangeTracker Internals & EntityState Transitions in EF Core
+
+Entity Framework Core's **\`ChangeTracker\`** tracks the state and modifications of loaded entities through an internal component called the **\`IStateManager\`**.
+
+---
+
+#### 1. The Snapshot-Based Change Tracking Pipeline:
+1. **Materialization & Snapshotting:**
+   - When a tracking query executes (\`context.Orders.ToList()\`), EF Core reads raw database tabular rows, instantiates the C# entity objects, and creates a **deep clone snapshot of all scalar and navigation properties** inside an internal \`EntityEntry\` object.
+2. **In-Memory Modification:**
+   - The developer mutates entity properties directly in C# (e.g. \`order.Status = OrderStatus.Shipped\`). The entity has no built-in notification hooks; it is completely unaware of the tracker.
+3. **DetectChanges Execution:**
+   - When \`SaveChangesAsync()\` is invoked, EF Core triggers \`ChangeTracker.DetectChanges()\`.
+   - It performs an ordinal, property-by-property comparison between the **Current Values** on the live C# object and the **Original Values** stored in the initial snapshot.
+4. **State Transition:**
+   - If differences are detected, the entity's \`EntityState\` transitions from \`Unchanged\` to \`Modified\`, and specific property entries are marked as \`IsModified = true\`.
+5. **SQL Command Generation:**
+   - The SQL generator builds parameterized \`UPDATE\` statements that update **ONLY the columns whose properties have \`IsModified == true\`**.
+
+---
+
+#### 2. Summary of EntityState Transitions:
+
+| EntityState | Condition in \`ChangeTracker\` | Resulting SQL Statement in \`SaveChangesAsync()\` |
+| :--- | :--- | :--- |
+| **\`Added\`** | Added via \`context.Add()\` / foreign key graph | \`INSERT INTO ... VALUES (...);\` |
+| **\`Modified\`** | Property mutated, detected by snapshot check | \`UPDATE ... SET [Col] = @val WHERE [Id] = @id;\` |
+| **\`Deleted\`** | Marked via \`context.Remove()\` | \`DELETE FROM ... WHERE [Id] = @id;\` |
+| **\`Unchanged\`** | Queried from DB, zero properties mutated | No SQL generated (Skipped) |
+| **\`Detached\`** | Not tracked by \`DbContext\` (\`AsNoTracking\`) | No SQL generated |
+
+---
+
+#### Performance Optimization:
+When querying data purely for display or read-only REST API endpoints, always use **\`.AsNoTracking()\`**. This skips snapshot creation in the \`StateManager\`, reducing memory allocation by ~50% and query execution time by ~30%!`,
+    answerContent_fa: `### کالبدشکافی موتور ChangeTracker و چرخه وضعیت‌های EntityState در EF Core
+
+موتور **\`ChangeTracker\`** در EF Core از طریق زیرسیستم داخلی \`IStateManager\` تغییرات اشیاء در حافظه را ردیابی می‌کند:
+
+#### ۱. سازوکار ردیابی مبتنی بر تصویر لحظه‌ای (Snapshot-Based):
+۱. **ایجاد اسنپ‌شات (Snapshot):** در زمان کوئری‌گیری معمولی (Tracking)، داده‌ها از دیتابیس خوانده شده و یک کپی عمیق از تمام فیلدهای اولیه شیء در \`StateManager\` ذخیره می‌شود.
+۲. **تغییر در حافظه:** برنامه‌نویس فیلدهای انتیتی را در کد تغییر می‌دهد.
+۳. **اجرای DetectChanges:** با فراخوانی متد \`SaveChangesAsync\`، موتور ChangeTracker مقادیر فعلی شیء را فیلد به فیلد با مقادیر اسنپ‌شات اولیه مقایسه می‌کند.
+۴. **تغییر وضعیت به Modified:** در صورت کشف تغییر، وضعیت شیء به \`Modified\` تغییر یافته و دقیقاً فیلدهای ویرایش‌شده علامت‌گذاری می‌شوند.
+۵. **تولید SQL بهینه:** دستور \`UPDATE\` تنها برای ستون‌هایی که تغییر کرده‌اند ساخته می‌شود.
+
+#### ۲. وضعیت‌های پنج‌گانه EntityState:
+- **\`Added\`**: دستور \`INSERT\` اجرا می‌شود.
+- **\`Modified\`**: دستور \`UPDATE\` فقط برای فیلدهای تغییریافته اجرا می‌شود.
+- **\`Deleted\`**: دستور \`DELETE\` اجرا می‌شود.
+- **\`Unchanged\`**: هیچ کوئری تولید نمی‌شود.
+- **\`Detached\`**: شیء خارج از کانتکست است (مانند حالت \`AsNoTracking\`).
+
+#### بهینه‌سازی:
+در کوئری‌های فقط‌خواندنی، حتماً از **\`AsNoTracking()\`** استفاده کنید تا اسنپ‌شات ساخته نشده و مصرف رم سرور تا ۵۰ درصد کاهش یابد.`,
+  },
+  {
+    id: "dotnet-mid-q254",
+    stackId: "dotnet",
+    categoryId: "ef-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-efcore-dbcontext-fluent-api-mappings"],
+    questionTitle: "What is DbContext Pooling (AddDbContextPool) in EF Core, how does it optimize allocation and throughput in high-concurrency APIs, and what architectural constraints does it impose?",
+    questionTitle_fa: "قابلیت DbContext Pooling (متد AddDbContextPool) در EF Core چیست، چگونه تخصیص حافظه و توان عملیاتی را در APIهای با ترافیک بالا بهینه می‌کند و چه محدودیت‌های معماری را تحمیل می‌نماید؟",
+    answerContent: `### DbContext Pooling (\`AddDbContextPool\`) in EF Core
+
+In traditional ASP.NET Core applications using \`builder.Services.AddDbContext<AppDbContext>()\`, a new \`DbContext\` instance is allocated on the Heap for **every incoming HTTP request** and torn down when the request ends. 
+
+While EF Core caches the compiled metadata model (\`IModel\`), instantiating the context object graph, internal service dependencies, and \`ChangeTracker\` state still imposes noticeable CPU and Gen 0 Garbage Collection overhead.
+
+---
+
+#### 1. How \`AddDbContextPool\` Works:
+\`\`\`csharp
+// Register pooled DbContext in Program.cs:
+builder.Services.AddDbContextPool<AppDbContext>(options =>
+{
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
+}, poolSize: 1024);
+\`\`\`
+
+- **Instance Reuse:** Instead of creating a new instance with \`new\`, EF Core loans a warm, pre-allocated \`DbContext\` instance from an internal thread-safe pool.
+- **\`ResetState()\` Invocation:** When the HTTP request finishes and the scope is disposed, EF Core does **NOT** destroy the instance. Instead, it calls \`ResetState()\`:
+  - Evicts all tracked entities from the \`ChangeTracker\`.
+  - Resets database connections, transactions, and event listeners.
+  - Returns the sanitized instance to the pool for the next request.
+
+---
+
+#### 2. Throughput Benefits:
+- Reduces GC Gen 0 allocations by up to **25-30%**.
+- Improves API requests-per-second throughput by **15-20%** under heavy concurrent load.
+
+---
+
+#### 3. Architectural Constraints & Anti-Patterns:
+1. **No State in Private Fields:** You **cannot store per-request state** (e.g. \`ICurrentUser\` or \`TenantId\`) in private fields or the constructor of a pooled \`DbContext\` because the instance is shared across different user requests.
+2. **Context Options Configuration:** DbContext options must be configured entirely in the \`AddDbContextPool\` lambda delegate, not inside \`OnConfiguring\` using dynamic runtime values.`,
+    answerContent_fa: `### استخر نمونه‌ها با DbContext Pooling (متد AddDbContextPool) در EF Core
+
+در روش پیش‌فرض (\`AddDbContext\`)، به ازای هر درخواست HTTP یک نمونه جدید از \`DbContext\` روی Heap ساخته شده و در انتهای درخواست توسط Garbage Collector دور ریخته می‌شود که در ترافیک‌های سنگین سربار رم و CPU ایجاد می‌کند.
+
+#### سازوکار AddDbContextPool:
+- **استفاده مجدد از اشیاء:** فریم‌ورک نمونه‌های از پیش ساخته‌شده را درون یک Object Pool مدیریت کرده و به درخواست‌های وب قرض می‌دهد.
+- **متد \`ResetState()\`:** در پایان هر درخواست، شیء منهدم نمی‌شود؛ بلکه با متد \`ResetState\` تمام انتیتی‌های ردیابی‌شده در ChangeTracker پاکسازی و کانکشن‌ها ریست شده و نمونه تمیز به استخر بازمی‌گردد.
+
+#### مزایای کارایی:
+- کاهش ۲۵ تا ۳۰ درصدی تخصیص حافظه در Gen 0.
+- افزایش ۱۵ تا ۲۰ درصدی توان پردازش درخواست‌ها (Throughput).
+
+#### محدودیت‌های مهم معماری:
+- **عدم ذخیره وضعیت در فیلدهای خصوصی:** نباید اطلاعات اختصاصی یک کاربر (مانند \`TenantId\` یا \`UserId\`) در متغیرهای خصوصی کلاس DbContext ذخیره شود چون این شیء توسط درخواست‌های کاربران دیگر مجدداً استفاده خواهد شد.`,
+  },
+  {
+    id: "dotnet-mid-q255",
+    stackId: "dotnet",
+    categoryId: "ef-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-efcore-dbcontext-fluent-api-mappings"],
+    questionTitle: "Why is IEntityTypeConfiguration<T> preferred over Data Annotations in Clean Architecture / DDD, and how do you configure automatic assembly discovery in OnModelCreating?",
+    questionTitle_fa: "چرا استفاده از IEntityTypeConfiguration<T> در معماری تمیز و DDD نسبت به Data Annotations ارجحیت دارد و چگونه می‌توان کشف خودکار تمامی کانفیگ‌ها را در OnModelCreating پیاده‌سازی کرد؟",
+    answerContent: `### IEntityTypeConfiguration<T> vs. Data Annotations in Clean Architecture
+
+In Clean Architecture and Domain-Driven Design (DDD), the **Domain Layer** must remain independent of external frameworks, databases, and UI components.
+
+---
+
+#### 1. Why Data Annotations Fail in Enterprise Architectures:
+- **Pollutes Pure Domain Entities:** Placing \`[Table("Orders")]\`, \`[Column("order_num")]\`, \`[Key]\`, or \`[ForeignKey]\` on domain classes couples business entities directly to the EF Core persistence mechanism.
+- **Limited Technical Expressiveness:** Data Annotations cannot define:
+  - Composite primary keys (\`HasKey(x => new { x.OrderId, x.ProductId })\`).
+  - Filtered / Partial indexes (\`HasIndex().HasFilter("[IsDeleted] = 0")\`).
+  - Value converters for Strongly-Typed IDs (\`HasConversion\`).
+  - JSON columns (\`ToJson()\`).
+  - Shadow properties and Global Query Filters.
+
+---
+
+#### 2. The Solution: \`IEntityTypeConfiguration<T>\`
+
+Separate entity configuration into dedicated classes located in the **Infrastructure / Persistence Layer**:
+
+\`\`\`csharp
+public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
+{
+    public void Configure(EntityTypeBuilder<Customer> builder)
+    {
+        builder.ToTable("Customers", "crm");
+        builder.HasKey(c => c.Id);
+
+        builder.Property(c => c.Email)
+            .IsRequired()
+            .HasMaxLength(256)
+            .IsUnicode(false);
+
+        builder.HasIndex(c => c.Email)
+            .IsUnique();
+    }
+}
+\`\`\`
+
+---
+
+#### 3. Automatic Assembly Discovery in \`OnModelCreating\`:
+Rather than registering every configuration class manually line-by-line, use assembly scanning:
+
+\`\`\`csharp
+public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+{
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+
+        // Discovers and executes all IEntityTypeConfiguration classes in the current assembly:
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
+    }
+}
+\`\`\``,
+    answerContent_fa: `### برتری IEntityTypeConfiguration<T> نسبت به Data Annotations در معماری تمیز (Clean Architecture)
+
+در معماری‌های تمیز و مبتنی بر DDD، لایه دامنه (Domain) باید کاملاً مستقل از جزئیات پایگاه داده و پکیج‌های خارجی باشد:
+
+#### معایب Data Annotations:
+۱. **آلودگی انتیتی‌های بیزینسی:** قرار دادن اتریبیوت‌های پایگاه داده روی کلاس‌های تجاری، اصول معماری تمیز و POCO بودن دامنه را نقض می‌کند.
+۲. **ناتوانی در پشتیبانی از سناریوهای پیچیده:** امکان تعریف ایندکس‌های شرطی (Filtered Index)، کلیدهای ترکیبی، نگاشت ستون‌های JSON و کانورترهای اختصاصی با Data Annotations وجود ندارد.
+
+#### مزایای \`IEntityTypeConfiguration<T>\`:
+- نگهداری تنظیمات دیتابیس در لایه Infrastructure در فایل‌های مجزا به ازای هر موجودیت.
+- پشتیبانی کامل از تمام قابلیت‌های پیشرفته EF Core.
+
+#### اسکن خودکار در متد \`OnModelCreating\`:
+با دستور \`modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly)\`، تمامی کلاس‌های پیکربندی موجود در اسمبلی به صورت خودکار بدون نیاز به کدنویسی دستی شناسایی و اعمال می‌شوند.`,
+  },
+  {
+    id: "dotnet-mid-q256",
+    stackId: "dotnet",
+    categoryId: "ef-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-efcore-dbcontext-fluent-api-mappings"],
+    questionTitle: "How do you map Strongly-Typed IDs and complex value types in EF Core using ValueConverter<TModel, TProvider>, and why are Value Comparers sometimes required?",
+    questionTitle_fa: "چگونه شناسه‌های با تایپ قوی (Strongly-Typed IDs) و انواع مقداری سفارشی را با ValueConverter در EF Core نگاشت کنیم و در چه مواردی تعریف Value Comparer الزامی است؟",
+    answerContent: `### Value Converters & Value Comparers in EF Core
+
+**Primitive Obsession** (using raw \`Guid\` or \`long\` for all entity IDs) is a major source of bugs in enterprise codebases (e.g. passing a \`CustomerId\` where an \`OrderId\` was expected).
+
+---
+
+#### 1. Defining and Mapping Strongly-Typed IDs:
+
+\`\`\`csharp
+// 1. Strongly-Typed ID record struct
+public readonly record struct OrderId(Guid Value)
+{
+    public static OrderId New() => new(Guid.NewGuid());
+    public static OrderId Empty => new(Guid.Empty);
+}
+
+// 2. Custom ValueConverter class
+public class OrderIdValueConverter : ValueConverter<OrderId, Guid>
+{
+    public OrderIdValueConverter() : base(
+        id => id.Value,              // Model -> Provider (To Database Guid)
+        guid => new OrderId(guid)    // Provider -> Model (From Database Guid)
+    ) {}
+}
+
+// 3. Applying in Entity Configuration:
+public class OrderConfiguration : IEntityTypeConfiguration<Order>
+{
+    public void Configure(EntityTypeBuilder<Order> builder)
+    {
+        builder.HasKey(o => o.Id);
+        
+        builder.Property(o => o.Id)
+            .HasConversion<OrderIdValueConverter>();
+    }
+}
+\`\`\`
+
+---
+
+#### 2. Why Are Value Comparers Required for Mutable Types?
+When you use a \`ValueConverter\` on a **mutable type** (e.g. \`List<string>\` mapped to a JSON string or comma-separated column):
+- EF Core's \`ChangeTracker\` takes a reference snapshot of the object.
+- Because the object reference does not change when internal items are mutated (\`list.Add("item")\`), standard reference equality (\`ReferenceEquals\`) will **fail to detect the mutation**!
+
+#### The Solution: \`ValueComparer<T>\`:
+\`\`\`csharp
+var stringListComparer = new ValueComparer<List<string>>(
+    (c1, c2) => c1!.SequenceEqual(c2!),
+    c => c.Aggregate(0, (a, v) => HashCode.Combine(a, v.GetHashCode())),
+    c => c.ToList() // Creates a deep clone snapshot!
+);
+
+builder.Property(e => e.Tags)
+    .HasConversion(
+        tags => string.Join(',', tags),
+        str => str.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList())
+    .Metadata.SetValueComparer(stringListComparer);
+\`\`\``,
+    answerContent_fa: `### نگاشت Strongly-Typed IDs و انواع مقداری با ValueConverter و ضرورت ValueComparer
+
+برای جلوگیری از خطای Primitive Obsession (ارسال اشتباه شناسه یک موجودیت به جای موجودیتی دیگر)، از شناسه‌های با تایپ قوی استفاده می‌شود:
+
+#### ۱. پیاده‌سازی Strongly-Typed ID با ValueConverter:
+یک \`record struct\` اختصاصی برای شناسه تعریف شده و با کلاس \`ValueConverter<OrderId, Guid>\` تبدیل دوطرفه آن به \`Guid\` دیتابیس تنظیم می‌شود.
+
+#### ۲. ضرورت تعریف Value Comparer برای انواع Mutable:
+هنگامی که یک نوع داده تغییرپذیر (مانند \`List<string>\`) را با ValueConverter به یک ستون متنی در دات‌نت تبدیل می‌کنید:
+- موتور ChangeTracker یک کپی از آدرس اشاره‌گر شیء ذخیره می‌کند.
+- با تغییر محتویات لیست، آدرس اشاره‌گر تغییر نمی‌کند؛ بنابراین مقایسه پیش‌فرض رانتایم متوجه تغییرات نشده و کوئری \`UPDATE\` در متد \`SaveChangesAsync\` ساخته نمی‌شود!
+
+با تعریف یک **\`ValueComparer<List<string>>\`**، نحوه مقایسه عمیق آیتم‌ها و ایجاد کپی مستقل (Deep Clone) برای ChangeTracker مشخص شده و تغییرات به درستی ردیابی می‌شوند.`,
+  },
+  {
+    id: "dotnet-mid-q257",
+    stackId: "dotnet",
+    categoryId: "ef-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-efcore-dbcontext-fluent-api-mappings"],
+    questionTitle: "What are Shadow Properties and Global Query Filters in EF Core, and how are they used together to implement automated Soft Deletes and Multi-Tenancy?",
+    questionTitle_fa: "ویژگی‌های سایه (Shadow Properties) و فیلترهای سراسری کوئری (Global Query Filters) در EF Core چیستند و چگونه در کنار یکدیگر برای پیاده‌سازی حذف منطقی (Soft Delete) و Multi-Tenancy استفاده می‌شوند؟",
+    answerContent: `### Shadow Properties & Global Query Filters in EF Core
+
+Modern enterprise architectures require cross-cutting data concerns (such as audit trails, soft deletes, and multi-tenant isolation) without polluting domain entity models with infrastructure properties.
+
+---
+
+#### 1. Shadow Properties:
+Shadow properties are properties that exist in the database table schema and EF Core metadata model, but are **not declared as C# properties on the domain entity class**:
+
+\`\`\`csharp
+// 1. Defining shadow properties via Fluent API:
+builder.Entity<Order>(b =>
+{
+    b.Property<bool>("IsDeleted").HasDefaultValue(false);
+    b.Property<string>("TenantId").IsRequired().HasMaxLength(64);
+    b.Property<DateTime>("CreatedAt").IsRequired();
+});
+
+// 2. Reading shadow properties in LINQ using EF.Property<T>:
+var tenantOrders = await context.Orders
+    .Where(o => EF.Property<string>(o, "TenantId") == "tenant_corp_1")
+    .ToListAsync();
+
+// 3. Setting shadow properties during SaveChanges:
+context.Entry(order).Property("IsDeleted").CurrentValue = true;
+\`\`\`
+
+---
+
+#### 2. Global Query Filters:
+A Global Query Filter is a LINQ expression applied to the entity type configuration that EF Core automatically injects into the \`WHERE\` clause of **all queries generated against that table**:
+
+\`\`\`csharp
+public class AppDbContext : DbContext
+{
+    private readonly ITenantProvider _tenantProvider;
+
+    public AppDbContext(DbContextOptions<AppDbContext> options, ITenantProvider tenantProvider) 
+        : base(options)
+    {
+        _tenantProvider = tenantProvider;
+    }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+
+        // Combined Soft Delete & Multi-Tenant Global Filter:
+        modelBuilder.Entity<Order>().HasQueryFilter(o => 
+            !EF.Property<bool>(o, "IsDeleted") && 
+            EF.Property<string>(o, "TenantId") == _tenantProvider.CurrentTenantId);
+    }
+}
+\`\`\`
+
+---
+
+#### 3. Bypassing Filters with \`IgnoreQueryFilters()\`:
+When an administrative task, data migration, or tenant-agnostic audit report requires querying all records:
+
+\`\`\`csharp
+// Bypasses both Soft-Delete and Multi-Tenant filters:
+var allHistoricalRecords = await context.Orders
+    .IgnoreQueryFilters()
+    .ToListAsync();
+\`\`\``,
+    answerContent_fa: `### ویژگی‌های سایه (Shadow Properties) و فیلترهای سراسری کوئری در EF Core
+
+برای پیاده‌سازی قابلیت‌های زیرساختی (مانند حذف نرم و تفکیک داده‌های مشتریان در سیستم‌های Multi-Tenant) بدون دستکاری فیلدهای دامنه‌ای از این دو قابلیت استفاده می‌شود:
+
+#### ۱. ویژگی‌های سایه (Shadow Properties):
+فیلدهایی هستند که در جدول دیتابیس وجود دارند اما در کلاس C# انتیتی تعریف نشده‌اند تا دامنه پاکیزه بماند:
+- تعریف با \`builder.Property<bool>("IsDeleted")\`.
+- کوئری‌گیری در LINQ با متد \`EF.Property<T>(entity, "PropertyName")\`.
+- مقداردهی با \`context.Entry(entity).Property("IsDeleted").CurrentValue = true\`.
+
+#### ۲. فیلترهای سراسری کوئری (Global Query Filters):
+شروطی در متد \`OnModelCreating\` هستند که EF Core به صورت خودکار آنها را به عبارت \`WHERE\` در تمام کوئری‌های SQL ارسالی به دیتابیس الصاق می‌کند:
+\`\`\`csharp
+modelBuilder.Entity<Order>().HasQueryFilter(o => 
+    !EF.Property<bool>(o, "IsDeleted") && 
+    EF.Property<string>(o, "TenantId") == currentTenantId);
+\`\`\`
+
+#### ۳. دور زدن فیلتر با \`IgnoreQueryFilters()\`:
+در سناریوهای گزارش‌گیری مدیریتی یا بازیابی رکوردهای حذف‌شده، با فراخوانی متد \`IgnoreQueryFilters()\` می‌توان فیلترهای سراسری را غیرفعال کرد.`,
+  },
+  {
+    id: "dotnet-mid-q258",
+    stackId: "dotnet",
+    categoryId: "ef-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-efcore-querying-relationships-loading"],
+    questionTitle: "What is the N+1 Query Problem in Entity Framework Core, why does it severely degrade performance, and how do you prevent it using Eager Loading (Include/ThenInclude) and Select Projections?",
+    questionTitle_fa: "خطای ویرانگر N+1 Query در EF Core چیست، چرا باعث افت شدید کارایی سیستم می‌شود و چگونه با استفاده از Eager Loading و Select Projectionها از وقوع آن جلوگیری کنیم؟",
+    answerContent: `### The N+1 Query Problem in Entity Framework Core
+
+The **N+1 Query Problem** is one of the most common and destructive performance anti-patterns in data-driven backend applications.
+
+---
+
+#### 1. How the Bug Occurs:
+The application sends **1 initial SQL query** to fetch $N$ parent records (e.g. 500 customers). Then, inside a loop or during JSON serialization, the code triggers a separate SQL query for each customer to retrieve their related child records (e.g. orders).
+
+\`\`\`csharp
+// DISASTROUS ANTI-PATTERN:
+var customers = await context.Customers.ToListAsync(); // 1 Query: Fetches 500 rows
+
+foreach (var customer in customers)
+{
+    // Executes 1 separate query per customer:
+    // Total Database Roundtrips = 1 + 500 = 501 SQL queries!
+    var orders = await context.Orders.Where(o => o.CustomerId == customer.Id).ToListAsync();
+}
+\`\`\`
+
+#### Impact:
+- Hundreds of redundant network roundtrips to the database server.
+- Extreme latency (increasing response times from 15ms to several seconds).
+- Connection pool exhaustion under concurrent user traffic.
+
+---
+
+#### 2. Prevention Strategy A: Eager Loading with \`Include\` / \`ThenInclude\`
+Eager loading instructs EF Core to join and retrieve the child entities upfront in the **initial database roundtrip**:
+
+\`\`\`csharp
+var customersWithOrders = await context.Customers
+    .AsNoTracking()
+    .Include(c => c.Orders)
+        .ThenInclude(o => o.OrderItems)
+    .ToListAsync(); // Exactly 1 SQL query with LEFT JOINs!
+\`\`\`
+
+---
+
+#### 3. Prevention Strategy B: Direct Select Projections (The Best Practice)
+When returning read-only DTOs, project directly to the destination model using LINQ \`.Select()\`:
+
+\`\`\`csharp
+var customerSummaries = await context.Customers
+    .AsNoTracking()
+    .Where(c => c.IsActive)
+    .Select(c => new CustomerSummaryDto(
+        c.Id,
+        c.FullName,
+        c.Orders.Count,
+        c.Orders.Select(o => o.TotalAmount).Sum()
+    ))
+    .ToListAsync();
+\`\`\`
+- Generates a single, highly optimized SQL query containing subqueries/aggregations without allocating entity snapshots in memory.`,
+    answerContent_fa: `### خطای ویرانگر N+1 Query در EF Core و راهکارهای مهار آن
+
+خطای **N+1 Query** زمانی رخ می‌دهد که برنامه برای واکشی اطلاعات والد و فرزند، به جای دریافت یکپارچه، تعداد زیادی درخواست مجزا به پایگاه داده ارسال کند:
+
+#### ۱. سازوکار بروز خطا:
+- برنامه ابتدا **۱ کوئری** برای واکشی ۵۰۰ مشتری ارسال می‌کند.
+- سپس در یک حلقه \`foreach\`، به ازای هر مشتری **۱ کوئری جداگانه** برای دریافت سفارش‌های او می‌فرستد.
+- **نتیجه:** مجموعاً $1 + 500 = 501$ رفت‌وبرگشت به دیتابیس انجام شده که باعث قفل شدن Connection Pool و کندی شدید سرور می‌گردد.
+
+#### ۲. راهکار اول: بارگذاری حریصانه (Eager Loading با Include):
+با متدهای \`Include\` و \`ThenInclude\`، فریم‌ورک تمام داده‌های والد و فرزند را در قالب **یک کوئری واحد** با دستورات \`LEFT JOIN\` از دیتابیس واکشی می‌کند.
+
+#### ۳. راهکار دوم: پروجکشن مستقیم به DTO با متد Select (بهترین روش):
+با استفاده از متد \`Select\`، دقیقاً ستون‌ها و محاسبات آماری مورد نیاز به DTO مپ می‌شوند؛ این کار علاوه بر واکشی در یک کوئری، سربار ساخت انتیتی‌ها در رم را نیز کاملاً حذف می‌کند.`,
+  },
+  {
+    id: "dotnet-mid-q259",
+    stackId: "dotnet",
+    categoryId: "ef-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-efcore-querying-relationships-loading"],
+    questionTitle: "What is Cartesian Explosion when eager-loading multiple child collections, and how does AsSplitQuery() resolve it compared to AsSingleQuery()?",
+    questionTitle_fa: "پدیده انفجار دکارتی (Cartesian Explosion) هنگام بارگذاری همزمان چندین کالکشن فرزند با Include چیست و متد AsSplitQuery() چگونه در مقایسه با AsSingleQuery() آن را مهار می‌کند؟",
+    answerContent: `### Cartesian Explosion & Split Queries (\`AsSplitQuery\`) in EF Core
+
+When an EF Core query uses \`Include()\` across **multiple collection navigations**, the database execution strategy can dramatically impact network payload and server memory.
+
+---
+
+#### 1. What is Cartesian Explosion?
+SQL \`JOIN\` operations produce flat tabular result sets. When joining multiple 1-to-Many collections against a single parent (e.g. \`Blog\` -> \`Posts\` (10) and \`Blog\` -> \`Tags\` (5) and \`Blog\` -> \`Contributors\` (2)):
+
+$$\text{Rows Generated per Parent} = 10 \times 5 \times 2 = 100 \text{ rows!}$$
+
+- For 1,000 blogs, the database returns **100,000 rows** over the network.
+- The parent Blog columns (Title, Description, HeaderImage) are duplicated 100 times redundantly.
+- EF Core must allocate massive memory buffers to de-duplicate and assemble the object graph.
+
+---
+
+#### 2. The Solution: \`AsSplitQuery()\`
+\`AsSplitQuery()\` splits the single monolithic join query into multiple independent, focused SQL queries executed within the same context:
+
+\`\`\`csharp
+var blogs = await context.Blogs
+    .Include(b => b.Posts)
+    .Include(b => b.Tags)
+    .AsSplitQuery() // Emits separate SQL queries for Blogs, Posts, and Tags!
+    .ToListAsync();
+\`\`\`
+
+#### Generated SQL with Split Queries:
+1. \`SELECT [b].[Id], [b].[Title] FROM [Blogs] AS [b]\`
+2. \`SELECT [p].[Id], [p].[BlogId], [p].[Content] FROM [Posts] AS [p] INNER JOIN [Blogs] AS [b] ON [p].[BlogId] = [b].[Id]\`
+3. \`SELECT [t].[Id], [t].[BlogId], [t].[Name] FROM [Tags] AS [t] INNER JOIN [Blogs] AS [b] ON [t].[BlogId] = [b].[Id]\`
+
+Total rows returned across the network: $1 + 10 + 5 = 16 \text{ rows}$ (an **84% reduction** in network payload!).
+
+---
+
+#### 3. Trade-offs: Single Query vs. Split Query
+
+| Dimension | Single Query (\`AsSingleQuery\`) | Split Query (\`AsSplitQuery\`) |
+| :--- | :--- | :--- |
+| **Network Payload** | High (Cartesian duplication) | **Minimal (Exact rows only)** |
+| **Roundtrips** | **1 Roundtrip** | Multiple Roundtrips ($1 + N$) |
+| **Snapshot Consistency** | **100% Guaranteed** | Potential skew if data changes mid-flight |
+| **Optimal Use Case** | Reference navigations / 1 collection | **Multiple included collections** |`,
+    answerContent_fa: `### انفجار دکارتی (Cartesian Explosion) و کوئری‌های تفکیک‌شده (AsSplitQuery)
+
+هنگامی که در EF Core چندین کالکشن فرزند به طور همزمان با \`Include\` واکشی می‌شوند:
+
+#### ۱. علت وقوع انفجار دکارتی:
+به دلیل ساختار مسطح جداول در زبان SQL، استفاده از چند \`JOIN\` باعث **ضرب دکارتی** تعداد رکوردهای فرزندان در یکدیگر می‌شود (مثال: ۱۰ پست $\times$ ۵ برچسب $\times$ ۲ نویسنده = ۱۰۰ ردیف بازگشتی به ازای هر وبلاگ!). این حجم عظیم از داده‌های تکراری باعث اشغال پهنای باند شبکه و مصرف شدید حافظه رم سرور برای فیلتر کردن موارد تکراری می‌گردد.
+
+#### ۲. راهکار متد \`AsSplitQuery()\`:
+این متد به جای ۱ کوئری غول‌پیکر با JOINهای متقاطع، چند کوئری مجزا و هدفمند به دیتابیس می‌فرستد و داده‌ها را در حافظه به هم متصل می‌کند. در نتیجه تعداد ردیف‌های منتقل‌شده در شبکه از ۱۰۰ به ۱۶ ردیف کاهش می‌یابد.
+
+#### ۳. مقایسه و انتخاب:
+- **\`AsSingleQuery\`**: برای روابط یک‌به‌یک یا نهایتاً یک کالکشن فرزند (دارای تضمین یکپارچگی تراکنش).
+- **\`AsSplitQuery\`**: برای سناریوهایی که همزمان ۲ یا چند کالکشن فرزند واکشی می‌شوند.`,
+  },
+  {
+    id: "dotnet-mid-q260",
+    stackId: "dotnet",
+    categoryId: "ef-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-efcore-querying-relationships-loading"],
+    questionTitle: "What is the difference between AsNoTracking() and AsNoTrackingWithIdentityResolution() in EF Core, and in what scenarios is Identity Resolution necessary for read queries?",
+    questionTitle_fa: "تفاوت میان AsNoTracking() و AsNoTrackingWithIdentityResolution() در EF Core چیست و در چه سناریوهایی فعال‌سازی Identity Resolution در کوئری‌های فقط‌خواندنی الزامی است؟",
+    answerContent: `### AsNoTracking vs. AsNoTrackingWithIdentityResolution in EF Core
+
+Both methods bypass EF Core's \`ChangeTracker\` to maximize query performance for read-only scenarios, but they differ fundamentally in how they handle **entity identity in memory**.
+
+---
+
+#### 1. \`AsNoTracking()\`:
+- Completely disables change tracking and skips the internal identity map lookup table.
+- **Performance:** Fastest execution speed and lowest allocation overhead for flat, non-relational queries.
+- **The Duplicate Instance Problem:** If a query returns multiple rows referencing the **same parent entity**, EF Core instantiates a **new, duplicate C# object in memory for every single row**:
+
+\`\`\`csharp
+// Querying 100 orders that belong to 2 distinct customers:
+var orders = await context.Orders
+    .AsNoTracking()
+    .Include(o => o.Customer)
+    .ToListAsync();
+
+// Result: 100 separate Customer instances are created on the Heap!
+// ReferenceEquals(orders[0].Customer, orders[1].Customer) == false (Even if CustomerId is identical!)
+\`\`\`
+
+---
+
+#### 2. \`AsNoTrackingWithIdentityResolution()\`:
+- Disables change tracking snapshots, but maintains a **lightweight lookup dictionary of entity keys** during query materialization.
+- **Result:** If multiple orders belong to Customer #101, all order objects reference the **exact same single \`Customer\` instance** in memory.
+- **Reference Equality:** \`ReferenceEquals(orders[0].Customer, orders[1].Customer) == true\`.
+
+---
+
+#### 3. When to Use Which:
+- **Use \`AsNoTracking()\`:** For simple flat queries, DTO projections, or when entities have no shared related graphs.
+- **Use \`AsNoTrackingWithIdentityResolution()\`:** When eager-loading complex entity graphs with \`Include()\` where child entities are shared across multiple parents, preventing duplicate memory allocations and object graph inconsistencies.`,
+    answerContent_fa: `### مقایسه AsNoTracking با AsNoTrackingWithIdentityResolution در EF Core
+
+هر دو متد برای کوئری‌های فقط‌خواندنی (Read-Only) جهت غیرفعال‌سازی ChangeTracker و افزایش چشمگیر سرعت استفاده می‌شوند، اما در مدیریت یکتایی اشیاء در حافظه متفاوتند:
+
+#### ۱. متد \`AsNoTracking()\`:
+- بالاترین سرعت و کمترین مصرف رم برای کوئری‌های ساده.
+- **مشکل ساخت نمونه‌های تکراری:** اگر ۱۰۰ سفارش واکشی شوند که همگی متعلق به ۱ مشتری خاص باشند، در حافظه رم **۱۰۰ شیء مستقل از کلاس Customer** با مقادیر یکسان ساخته می‌شود (\`ReferenceEquals\` مقدار \`false\` برمی‌گرداند).
+
+#### ۲. متد \`AsNoTrackingWithIdentityResolution()\`:
+- ردیابی تغییرات را غیرفعال نگه می‌دارد اما یک جدول سبک از کلیدهای اصلی در حافظه ایجاد می‌کند.
+- هر ۱۰۰ سفارش به **دقیقاً یک نمونه واحد از کلاس Customer** در حافظه متصل می‌شوند.
+
+#### جمع‌بندی کاربرد:
+- در کوئری‌های فاقد Include یا پروجکشن‌های مستقیم از **\`AsNoTracking\`** استفاده کنید.
+- در کوئری‌های رابطه‌ای با \`Include\` که رکوردهای فرزند مشترک دارند، از **\`AsNoTrackingWithIdentityResolution\`** جهت جلوگیری از تکثیر اشیاء در رم استفاده نمایید.`,
+  },
+  {
+    id: "dotnet-mid-q261",
+    stackId: "dotnet",
+    categoryId: "ef-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-efcore-querying-relationships-loading"],
+    questionTitle: "Why is Lazy Loading considered an anti-pattern in modern REST Web APIs, and what runtime exceptions and performance bottlenecks does it introduce?",
+    questionTitle_fa: "چرا بارگذاری تنبل (Lazy Loading) در وب‌سرویس‌های مدرن REST یک ضدالگو (Anti-Pattern) محسوب می‌شود و چه استثناها و گلوگاه‌های کارایی در زمان اجرا ایجاد می‌کند؟",
+    answerContent: `### Why Lazy Loading is an Anti-Pattern in Modern REST Web APIs
+
+Lazy Loading automatically fetches related data from the database the moment a navigation property is accessed in C# code. While convenient in legacy desktop UI applications (WPF/WinForms), it is considered a **dangerous anti-pattern in modern ASP.NET Core Web APIs**.
+
+---
+
+#### 1. The Accidental N+1 Disaster During JSON Serialization:
+When an API controller returns an entity directly, the ASP.NET Core JSON serializer (\`System.Text.Json\` or \`Newtonsoft.Json\`) inspects and reads every public property getter via reflection:
+- Accessing \`order.Customer\` triggers a SQL query.
+- Accessing \`order.Items\` triggers another SQL query.
+- Accessing \`item.Product\` triggers $N$ additional SQL queries!
+- A single API response can silently execute **thousands of unexpected database queries**, exhausting connection pools and crashing the database under production load.
+
+---
+
+#### 2. The \`ObjectDisposedException\` Runtime Crash:
+In ASP.NET Core, \`DbContext\` is registered with a **Scoped lifetime** and is disposed as soon as the HTTP request handler finishes.
+- If an entity is passed to a background service, an asynchronous task, or accessed outside the controller scope, accessing a lazy-loaded property throws:
+  \`\`\`text
+  System.ObjectDisposedException: Cannot access a disposed context instance.
+  \`\`\`
+
+---
+
+#### 3. Sync-Over-Async & Thread Starvation:
+Lazy loading properties are accessed via standard C# property getters (e.g. \`order.Customer\`), which **cannot be asynchronous** (\`await\` is not allowed in property getters).
+- The framework is forced to execute **synchronous, blocking database I/O** on the .NET Thread Pool, leading to **Thread Starvation** under high concurrent traffic.
+
+---
+
+#### Enterprise Solution:
+Disable lazy loading entirely. Use **Eager Loading (\`Include\`)** for write scenarios and **LINQ Select Projections into DTOs** for all read endpoints.`,
+    answerContent_fa: `### دلایل ضدالگو بودن Lazy Loading در وب‌سرویس‌های REST
+
+بارگذاری تنبل (Lazy Loading) اطلاعات وابسته را در زمان دسترسی به فیلد ناوبری به صورت خودکار لود می‌کند. این روش در Web APIها شدیداً مخرب است:
+
+#### ۱. بروز فاجعه N+1 در زمان Serialize به JSON:
+موتور تبدیل به JSON برای تولید خروجی، تمامی پراپرتی‌های عمومی انتیتی را می‌خواند؛ این کار باعث فراخوانی ناخواسته صدها کوئری همزمان و اشباع فوری دیتابیس می‌شود.
+
+#### ۲. خطای پرتاب استثنای ObjectDisposedException:
+طول عمر \`DbContext\` در وب به ازای هر درخواست (Scoped) است. در صورت دسترسی به پراپرتی‌ها پس از اتمام اسکوپ یا در سرویس‌های پس‌زمینه، خطای دسترسی به کانتکست نابودشده پرتاب می‌شود.
+
+#### ۳. پدیده قفل شدن تردها (Thread Starvation):
+از آنجا که دسترسی به فیلدهای کلاس (Getterها) نمی‌تواند \`async\` باشد، فریم‌ورک ناچار است ارتباط با دیتابیس را به صورت **همگام و مسدودکننده (Blocking Sync)** اجرا کند که در ترافیک بالا نخ‌های پردازشی سرور را قفل می‌کند.
+
+#### راهکار:
+حذف کامل Lazy Loading و استفاده از **Select Projection** برای واکشی مستقیم به DTOها.`,
+  },
+  {
+    id: "dotnet-mid-q262",
+    stackId: "dotnet",
+    categoryId: "ef-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-efcore-querying-relationships-loading"],
+    questionTitle: "How do ExecuteUpdateAsync and ExecuteDeleteAsync in .NET 8/9 optimize bulk data modifications compared to the traditional 'Load-Mutate-Save' pattern?",
+    questionTitle_fa: "دستورات ExecuteUpdateAsync و ExecuteDeleteAsync در دات‌نت ۸ و ۹ چگونه عملیات ویرایش و حذف گروهی داده‌ها را در مقایسه با الگوی سنتی 'خواندن-تغییر-ذخیره' بهینه می‌کنند؟",
+    answerContent: `### High-Performance Set Operations: ExecuteUpdateAsync & ExecuteDeleteAsync
+
+Prior to .NET 7/8/9, modifying or deleting multiple database rows required the highly inefficient **"Load-Mutate-Save"** pattern.
+
+---
+
+#### 1. The Legacy Anti-Pattern (Load-Mutate-Save):
+\`\`\`csharp
+// ANTI-PATTERN: Heavy, slow, and memory-intensive!
+var expiredTokens = await context.RefreshTokens
+    .Where(t => t.ExpiresAtUtc < DateTime.UtcNow)
+    .ToListAsync(); // 1. Pulls 50,000 records across the network into RAM!
+
+foreach (var token in expiredTokens)
+{
+    token.IsRevoked = true; // 2. ChangeTracker tracks 50,000 entity snapshots!
+}
+
+await context.SaveChangesAsync(); // 3. Sends 50,000 individual UPDATE statements (or large batches)!
+\`\`\`
+
+---
+
+#### 2. Modern Set-Based Operations in .NET 8 & 9:
+\`ExecuteUpdateAsync\` and \`ExecuteDeleteAsync\` translate directly into a **single, set-based SQL command executed entirely on the database engine**:
+
+\`\`\`csharp
+// 1. Direct Bulk Update (Executes 1 single SQL UPDATE statement):
+int updatedCount = await context.RefreshTokens
+    .Where(t => t.ExpiresAtUtc < DateTime.UtcNow && !t.IsRevoked)
+    .ExecuteUpdateAsync(setters => setters
+        .SetProperty(t => t.IsRevoked, true)
+        .SetProperty(t => t.RevokedAtUtc, DateTime.UtcNow));
+
+// 2. Direct Bulk Delete (Executes 1 single SQL DELETE statement):
+int deletedCount = await context.AuditLogs
+    .Where(log => log.CreatedAtUtc < retentionLimit)
+    .ExecuteDeleteAsync();
+\`\`\`
+
+---
+
+#### 3. Core Architectural Advantages:
+1. **300x-500x Faster Performance:** Zero latency from transferring rows across the network.
+2. **Zero In-Memory Allocation:** Skips entity materialization, constructor execution, and \`ChangeTracker\` snapshotting.
+3. **Respects Global Query Filters:** Soft-delete and multi-tenancy filters defined in \`OnModelCreating\` are automatically injected into the SQL \`WHERE\` clause.
+
+---
+
+#### Important Caveats:
+- Because entities are not loaded into C# memory, entity-level validation logic, C# property setters, and EF Core \`SaveChanges\` interceptors do **not** trigger.`,
+    answerContent_fa: `### بهینه‌سازی عملیات گروهی با ExecuteUpdateAsync و ExecuteDeleteAsync در دات‌نت ۸ و ۹
+
+در نسخه‌های سنتی، ویرایش یا حذف گروهی داده‌ها با الگوی پرهزینه "واکشی در رم ➔ ویرایش فیلدها ➔ ثبت با SaveChanges" انجام می‌شد که باعث اشغال گیگابایت‌ها رم و تولید هزاران کوئری مجزا می‌گردید.
+
+#### سازوکار دستورات مستقیم دیتابیسی (Set-Based):
+متدهای \`ExecuteUpdateAsync\` و \`ExecuteDeleteAsync\` عملیات را مستقیماً به یک دستور واحد SQL در سمت سرور دیتابیس ترجمه می‌کنند:
+
+\`\`\`csharp
+// ویرایش گروهی مستقیم در دیتابیس بدون لود در رم:
+int updated = await context.RefreshTokens
+    .Where(t => t.ExpiresAtUtc < DateTime.UtcNow && !t.IsRevoked)
+    .ExecuteUpdateAsync(s => s
+        .SetProperty(t => t.IsRevoked, true)
+        .SetProperty(t => t.RevokedAtUtc, DateTime.UtcNow));
+\`\`\`
+
+#### مزایای کلیدی:
+۱. **سرعت ۳۰۰ تا ۵۰۰ برابری**: بدون نیاز به انتقال داده‌ها در شبکه.
+۲. **مصرف رم صفر**: بدون ساخت اشیاء در حافظه C# و بدون درگیر شدن ChangeTracker.
+۳. **پشتیبانی از Global Query Filters**: شروط حذف نرم و Multi-Tenancy به صورت خودکار در عبارت WHERE کوئری اعمال می‌شوند.`,
+  },
+  {
+    id: "dotnet-mid-q263",
+    stackId: "dotnet",
+    categoryId: "ef-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-efcore-migrations-seeding-transactions"],
+    questionTitle: "How does the EF Core Migrations engine work internally (ModelSnapshot vs IMigrationsModelDiffer), and how does the __EFMigrationsHistory table track applied schema versions?",
+    questionTitle_fa: "موتور مایگریشن در EF Core در سطح داخلی چگونه کار می‌کند (مقایسه ModelSnapshot با IMigrationsModelDiffer) و جدول __EFMigrationsHistory چگونه نسخه‌های اعمال‌شده شمای دیتابیس را ردیابی می‌کند؟",
+    answerContent: `### Internal Architecture of EF Core Migrations
+
+When you run \`dotnet ef migrations add <Name>\`, EF Core uses a deterministic diffing engine to generate C# migration operations.
+
+---
+
+#### 1. The Core Internal Components:
+1. **\`AppDbContextModelSnapshot.cs\` (Model Snapshot):**
+   - Represents the complete state of the C# metadata model as of the **most recent migration**. It is updated every time a new migration is scaffolded.
+2. **\`IMigrationsModelDiffer\` (The Diffing Engine):**
+   - Compares the entity metadata in your current \`DbContext\` against \`AppDbContextModelSnapshot\`.
+   - Computes the AST delta (e.g. Added Tables, Renamed Columns, Changed Foreign Keys, Altered Precision).
+3. **\`{Timestamp}_{Name}.cs\` & \`{Timestamp}_{Name}.Designer.cs\`:**
+   - Generates the \`Up(MigrationBuilder)\` and \`Down(MigrationBuilder)\` operations representing the exact delta.
+
+---
+
+#### 2. The \`__EFMigrationsHistory\` Tracking Engine:
+When migrations are applied to the target database (via bundle or script), EF Core maintains an internal tracking table:
+
+\`\`\`sql
+CREATE TABLE [__EFMigrationsHistory] (
+    [MigrationId] nvarchar(150) NOT NULL PRIMARY KEY,
+    [ProductVersion] nvarchar(32) NOT NULL
+);
+\`\`\`
+
+- **Execution Flow:** Before running any DDL scripts, EF Core queries \`SELECT [MigrationId] FROM [__EFMigrationsHistory]\`.
+- It calculates the difference between migrations existing in your compiled code and rows present in \`__EFMigrationsHistory\`.
+- Only pending migrations are executed in strict chronological order, each writing an audit row upon successful transaction commit.`,
+    answerContent_fa: `### کالبدشکافی معماری داخلی موتور Migrations در EF Core
+
+هنگام اجرای دستور ساخت مایگریشن، EF Core از یک موتور محاسبه تفاوت (Diffing Engine) برای تولید دستورات C# استفاده می‌کند:
+
+#### ۱. مؤلفه‌های کلیدی داخلی:
+۱. **فایل \`AppDbContextModelSnapshot.cs\`**: نمایانگر تصویر کامل آخرین وضعیت مدل دیتابیس تا قبل از تغییرات جدید.
+۲. **موتور \`IMigrationsModelDiffer\`**: مقایسه کد فعلی C# با اسنپ‌شات قبلی و استخراج دقیق تفاوت‌ها (ستون‌های جدید، تغییر تایپ، کلیدهای خارجی).
+۳. **فایل مایگریشن (\`{Timestamp}_{Name}.cs\`)**: شامل متدهای \`Up\` (اعمال رو به جلو) و \`Down\` (بازگشت به عقب).
+
+#### ۲. سازوکار جدول \`__EFMigrationsHistory\`:
+فریم‌ورک در دیتابیس جدولی به نام \`__EFMigrationsHistory\` می‌سازد. قبل از اعمال تغییرات، لیست شناسه‌های موجود در این جدول را خوانده و فقط مایگریشن‌هایی که هنوز در این جدول ثبت نشده‌اند را به ترتیب تاریخ اعمال و نام آن‌ها را ذخیره می‌نماید.`,
+  },
+  {
+    id: "dotnet-mid-q264",
+    stackId: "dotnet",
+    categoryId: "ef-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-efcore-migrations-seeding-transactions"],
+    questionTitle: "Why is executing Database.Migrate() at application startup considered a dangerous anti-pattern in multi-instance production environments, and how do Migration Bundles resolve this?",
+    questionTitle_fa: "چرا اجرای Database.Migrate() در استارتاپ برنامه در محیط‌های پروداکشن چندنسخه‌ای یک ضدالگو (Anti-Pattern) خطرناک محسوب می‌شود و Migration Bundles چگونه این چالش را حل می‌کند؟",
+    answerContent: `### Why Database.Migrate() is an Anti-Pattern in Production
+
+Invoking \`context.Database.Migrate()\` or \`MigrateAsync()\` inside \`Program.cs\` during application startup is popular in development, but introduces catastrophic risks in containerized production environments (Kubernetes, AWS ECS, Docker Swarm).
+
+---
+
+#### 1. Production Hazards of Startup Migrations:
+1. **Multi-Replica Race Conditions & Deadlocks:** When 10 application pods scale up simultaneously, all 10 attempt to run DDL schema alterations concurrently against the same database, causing schema locking deadlocks or partial state corruption.
+2. **Violation of Least Privilege Security:** For \`Database.Migrate()\` to succeed, the Web API connection string requires **DDL permissions** (\`CREATE TABLE\`, \`ALTER TABLE\`, \`DROP TABLE\`). In secure architectures, the Web API should only hold **DML permissions** (\`SELECT\`, \`INSERT\`, \`UPDATE\`, \`DELETE\`).
+3. **Pod Health-Check & Liveness Timeouts:** A heavy schema migration (e.g. creating indexes on 10M rows) takes minutes. Kubernetes will mark the pod as unresponsive and kill it mid-migration!
+
+---
+
+#### 2. The Solution: Migration Bundles (\`dotnet ef migrations bundle\`)
+Migration Bundles produce a self-contained, standalone executable containing all migration logic:
+
+\`\`\`bash
+# 1. CI Pipeline: Build standalone bundle executable
+dotnet ef migrations bundle --project Infrastructure --startup-project WebApi --output ./migrate.exe
+
+# 2. CD Release Pipeline: Execute using dedicated elevated DBA service account BEFORE web pods deploy!
+./migrate.exe --connection "Server=prod-db;Database=ProductionDb;User Id=dba_deployer;Password=***;"
+\`\`\`
+
+#### Benefits of Migration Bundles:
+- Runs as an **isolated, single-instance pipeline step** before any new application code is deployed.
+- Requires zero .NET SDK installation on deployment agents.
+- Enforces strict security boundary separation between runtime API credentials and deployment DBA credentials.`,
+    answerContent_fa: `### خطرات اجرای Database.Migrate() در پروداکشن و مزایای Migration Bundles
+
+فراخوانی \`context.Database.Migrate()\` در زمان استارتاپ برنامه در محیط‌های پروداکشن و کانتینری یک **ضدالگو (Anti-Pattern)** بزرگ است:
+
+#### ۱. دلایل ممنوعیت در پروداکشن:
+۱. **پدیده Race Condition در کلاسترهای ابری:** با بالا آمدن همزمان چند پاد (Pod) در کوبرنتیز، تمامی نمونه‌ها همزمان تلاش به تغییر ساختار جداول می‌کنند که منجر به Deadlock و خطاهای سیستمی می‌شود.
+۲. **نقض امنیت و اصل Least Privilege:** وب‌سرویس برای اجرای مایگریشن نیازمند دسترسی‌های سطح بالای DDL (مانند ساخت و حذف جدول) می‌شود؛ در حالی که وب‌اپلیکیشن در پروداکشن فقط باید مجوزهای DML (خواندن/نوشتن) داشته باشد.
+۳. **تایم‌اوت پراب‌های سلامت کوبرنتیز:** طولانی شدن مایگریشن باعث ریستارت مداوم کانتینر توسط کوبرنتیز و ناقص ماندن تغییرات دیتابیس می‌شود.
+
+#### ۲. راهکار استاندارد با Migration Bundles:
+دستور \`dotnet ef migrations bundle\` یک فایل اجرایی مستقل (\`migrate.exe\`) می‌سازد که در پایپ‌لاین CI/CD **قبل از استقرار وب‌سرویس** و با اکانت اختصاصی DBA به صورت تک‌نسخه‌ای و کاملاً امن اجرا می‌شود.`,
+  },
+  {
+    id: "dotnet-mid-q265",
+    stackId: "dotnet",
+    categoryId: "ef-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-efcore-migrations-seeding-transactions"],
+    questionTitle: "What is the difference between HasData() seeding in OnModelCreating and runtime async data seeders, and what restrictions apply to HasData()?",
+    questionTitle_fa: "تفاوت میان سیدینگ داده با متد HasData() در OnModelCreating و سرویس‌های سیدر ناهمگام در زمان اجرا چیست و چه محدودیت‌هایی برای HasData() وجود دارد؟",
+    answerContent: `### Data Seeding: ModelBuilder \`HasData()\` vs. Runtime Seeders
+
+EF Core provides two primary mechanisms for seeding initial application data, each tailored to distinct data lifecycles.
+
+---
+
+#### 1. ModelBuilder \`HasData()\` (Static Lookup Tables):
+\`HasData()\` embeds data directly into the EF Core metadata model and migration files as \`INSERT DATA\` statements:
+
+\`\`\`csharp
+public class OrderStatusConfiguration : IEntityTypeConfiguration<OrderStatus>
+{
+    public void Configure(EntityTypeBuilder<OrderStatus> builder)
+    {
+        builder.HasData(
+            new OrderStatus { Id = 1, Code = "PENDING", DisplayName = "Pending Payment" },
+            new OrderStatus { Id = 2, Code = "PROCESSING", DisplayName = "In Processing" },
+            new OrderStatus { Id = 3, Code = "COMPLETED", DisplayName = "Completed" }
+        );
+    }
+}
+\`\`\`
+
+#### Critical Restrictions of \`HasData()\`:
+- **Explicit Primary Keys Required:** Primary key values must be hardcoded explicitly; database autoincrement identity generation is bypassed.
+- **Strictly Deterministic Values Only:** Never use \`DateTime.UtcNow\` or \`Guid.NewGuid()\`! Because EF Core detects diffs on every \`migrations add\`, non-deterministic values cause EF Core to generate duplicate \`UPDATE\` scripts on every single migration.
+
+---
+
+#### 2. Runtime Async Data Seeders (\`IDataSeeder\`):
+Custom C# classes executed during application initialization outside the migrations engine:
+
+\`\`\`csharp
+public class DefaultAdminSeeder(AppDbContext context, IPasswordHasher<User> hasher)
+{
+    public async Task SeedAsync()
+    {
+        if (!await context.Users.AnyAsync(u => u.Email == "admin@domain.com"))
+        {
+            var admin = new User { Id = Guid.NewGuid(), Email = "admin@domain.com" };
+            admin.PasswordHash = hasher.HashPassword(admin, "SecureP@ss123");
+            context.Users.Add(admin);
+            await context.SaveChangesAsync();
+        }
+    }
+}
+\`\`\`
+- Best for: Dynamic data, hashed credentials, test/demo environments, or fetching seed data from external APIs.`,
+    answerContent_fa: `### مقایسه روش‌های Seed کردن داده‌ها: متد HasData در برابر Seederهای زمان اجرا
+
+#### ۱. متد \`HasData()\` در Fluent API (داده‌های ثابت سیستمی):
+- داده‌ها مستقیماً در متد \`OnModelCreating\` تعریف شده و در قالب دستورات \`INSERT\` وارد فایل‌های مایگریشن می‌شوند.
+- **محدودیت‌های مهم:**
+  - کلید اصلی (ID) باید حتماً به صورت صریح مقداردهی شود.
+  - نباید از توابع غیرقطعی مانند \`DateTime.UtcNow\` یا \`Guid.NewGuid()\` استفاده شود؛ زیرا در هر بار ساخت مایگریشن، فریم‌ورک آن را به عنوان یک تغییر شناسایی کرده و دستورات \`UPDATE\` تکراری می‌سازد.
+
+#### ۲. سرویس‌های ناهمگام Seeder در زمان اجرا (داده‌های پویا):
+- یک سرویس اختصاصی که در زمان راه‌اندازی اولیه برنامه، پس از بررسی عدم وجود رکورد (\`AnyAsync\`)، داده‌ها را ایجاد می‌کند.
+- **کاربرد:** ایجاد کاربر پیش‌فرض با رمز عبور هش‌شده، داده‌های تستی محیط Development و بارگذاری داده از فایل‌های خارجی.`,
+  },
+  {
+    id: "dotnet-mid-q266",
+    stackId: "dotnet",
+    categoryId: "ef-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-efcore-migrations-seeding-transactions"],
+    questionTitle: "What are Database Savepoints in EF Core, and how do they enable partial rollback within an explicit transaction?",
+    questionTitle_fa: "نقاط ذخیره موقت (Savepoints) در EF Core چیستند و چگونه امکان بازگردانی جزئی (Partial Rollback) را در یک تراکنش صریح فراهم می‌کنند؟",
+    answerContent: `### Database Savepoints in Entity Framework Core
+
+A **Savepoint** is a bookmark created within an active database transaction that allows the application to **roll back a portion of the transaction** without aborting and discarding the entire transaction.
+
+---
+
+#### 1. Why Savepoints Are Essential:
+In complex business workflows (e.g. e-commerce checkout), you may want the primary entity (the Order) to be committed even if an optional secondary operation (e.g. awarding bonus loyalty points or sending a notification log) fails.
+
+---
+
+#### 2. Implementation with \`CreateSavepointAsync\` & \`RollbackToSavepointAsync\`:
+
+\`\`\`csharp
+await using var transaction = await context.Database.BeginTransactionAsync();
+
+try
+{
+    // Step 1: Create Core Order (Must succeed)
+    var order = new Order { CustomerId = customerId, TotalAmount = 500 };
+    context.Orders.Add(order);
+    await context.SaveChangesAsync();
+
+    // Step 2: Create Savepoint Bookmark
+    await transaction.CreateSavepointAsync("OrderPersistedSavepoint");
+
+    try
+    {
+        // Step 3: Attempt optional loyalty point deduction
+        var points = new LoyaltyTransaction { CustomerId = customerId, PointsUsed = 50 };
+        context.LoyaltyTransactions.Add(points);
+        await context.SaveChangesAsync();
+    }
+    catch (LoyaltyServiceException)
+    {
+        // Step 4: Rollback ONLY loyalty deduction, preserving the Order!
+        await transaction.RollbackToSavepointAsync("OrderPersistedSavepoint");
+    }
+
+    // Step 5: Commit the transaction (Order is saved!)
+    await transaction.CommitAsync();
+}
+catch (Exception)
+{
+    // Fatal failure: Abort the entire transaction
+    await transaction.RollbackAsync();
+    throw;
+}
+\`\`\``,
+    answerContent_fa: `### نقاط ذخیره موقت (Savepoints) در EF Core و بازگردانی جزئی تراکنش‌ها
+
+یک **Savepoint** نشانه‌ای درون یک تراکنش فعال است که به برنامه اجازه می‌دهد در صورت بروز خطا در یک بخش فرعی، **تنها همان بخش را Rollback کند** بدون اینکه کل تراکنش اصلی لغو شود.
+
+#### نمونه کاربرد در سناریوهای واقعی:
+در فرآیند ثبت سفارش، ثبت فاکتور اصلی اجباری است اما کسر امتیاز وفاداری یا ثبت لاگ فرعی اختیاری است:
+۱. سفارش ثبت شده و متد \`SaveChangesAsync\` فراخوانی می‌شود.
+۲. با متد \`transaction.CreateSavepointAsync("OrderSaved")\` یک نقطه ذخیره موقت ایجاد می‌شود.
+۳. عملیات کسر امتیاز اجرا می‌گردد؛ در صورت بروز خطا، با متد \`RollbackToSavepointAsync("OrderSaved")\` تنها عملیات امتیاز بازگردانده شده و سفارش اصلی با متد \`CommitAsync\` با موفقیت در دیتابیس ذخیره می‌شود.`,
+  },
+  {
+    id: "dotnet-mid-q267",
+    stackId: "dotnet",
+    categoryId: "ef-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-efcore-migrations-seeding-transactions"],
+    questionTitle: "Why do manual transactions throw an InvalidOperationException when EnableRetryOnFailure is enabled, and how does CreateExecutionStrategy().ExecuteAsync() solve it?",
+    questionTitle_fa: "چرا تراکنش‌های دستی در زمان فعال بودن EnableRetryOnFailure خطای InvalidOperationException پرتاب می‌کنند و متد CreateExecutionStrategy().ExecuteAsync() چگونه آن را برطرف می‌سازد؟",
+    answerContent: `### Resilient Transactions with ExecutionStrategy in EF Core
+
+When connecting to cloud databases (Azure SQL, AWS Aurora, PostgreSQL), transient network faults occur. EF Core provides **Connection Resiliency** via \`EnableRetryOnFailure()\`.
+
+---
+
+#### 1. Why Manual \`BeginTransactionAsync()\` Throws an Exception:
+\`\`\`csharp
+// Program.cs:
+options.UseSqlServer(connectionString, sqlOptions => sqlOptions.EnableRetryOnFailure());
+
+// Service Layer:
+await using var transaction = await context.Database.BeginTransactionAsync(); // CRASH!
+\`\`\`
+
+**The Reason:** If a transient network glitch occurs after statement #1 executes, EF Core cannot automatically re-execute statement #2 without risking re-executing the entire transaction and duplicating side-effects. EF Core prevents this by throwing:
+\`\`\`text
+System.InvalidOperationException: The configured execution strategy 'SqlServerRetryingExecutionStrategy' does not support user-initiated transactions.
+\`\`\`
+
+---
+
+#### 2. The Solution: Wrapping in \`CreateExecutionStrategy()\`
+The entire transaction block must be wrapped inside the execution strategy delegate, allowing EF Core to safely retry the **complete unit of work** from scratch if a transient connection failure drops the connection:
+
+\`\`\`csharp
+var strategy = context.Database.CreateExecutionStrategy();
+
+await strategy.ExecuteAsync(async () =>
+{
+    // The execution strategy manages retrying the entire block if a transient error occurs:
+    await using var transaction = await context.Database.BeginTransactionAsync();
+
+    context.Orders.Add(order);
+    await context.SaveChangesAsync();
+
+    context.Invoices.Add(new Invoice { OrderId = order.Id, Total = order.TotalAmount });
+    await context.SaveChangesAsync();
+
+    await transaction.CommitAsync();
+});
+\`\`\``,
+    answerContent_fa: `### تراکنش‌های تاب‌آور با ExecutionStrategy در زمان فعال بودن تلاش مجدد خودکار
+
+هنگام اتصال به دیتابیس‌های ابری، قابلیت \`EnableRetryOnFailure\` تلاش مجدد خودکار در صورت قطع موقت شبکه را فعال می‌کند.
+
+#### علت پرتاب خطای InvalidOperationException:
+اگر یک تراکنش دستی با \`BeginTransactionAsync\` باز شود و در میانه کار ارتباط قطع گردد، EF Core نمی‌تواند حدس بزند کدام دستورات اعمال شده‌اند؛ بنابراین برای جلوگیری از تکرار ناخواسته تراکنش‌ها، خطای عدم پشتیبانی از تراکنش دستی را پرتاب می‌کند.
+
+#### راهکار با متد \`CreateExecutionStrategy\`:
+کل بلاک باز کردن تراکنش، تغییرات و Commit باید درون کالبک متد \`strategy.ExecuteAsync\` قرار گیرد تا در صورت قطعی شبکه، کل تراکنش از ابتدا به صورت خودکار و اتمیک مجدداً تلاش شود:
+
+\`\`\`csharp
+var strategy = context.Database.CreateExecutionStrategy();
+await strategy.ExecuteAsync(async () =>
+{
+    await using var transaction = await context.Database.BeginTransactionAsync();
+    context.Orders.Add(order);
+    await context.SaveChangesAsync();
+    await transaction.CommitAsync();
+});
+\`\`\``,
+  },
+  {
+    id: "dotnet-mid-q268",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-security-jwt-bearer-claims-identity"],
+    questionTitle: "What is the structural anatomy of a JSON Web Token (Header, Payload, Signature), and what is the difference between Symmetric (HS256) and Asymmetric (RS256) signing in microservice architectures?",
+    questionTitle_fa: "ساختار سه‌گانه یک توکن JWT (شامل Header، Payload و Signature) چگونه تشکیل می‌شود و تفاوت الگوریتم‌های امضای متقارن (HS256) و نامتقارن (RS256) در معماری‌های میکروسرویسی چیست؟",
+    answerContent: `### Structure of JSON Web Tokens & Signing Cryptography
+
+A **JSON Web Token (JWT / RFC 7519)** is a compact, URL-safe representation of claims transferred between client and server.
+
+---
+
+#### 1. The Three Segments of a JWT:
+A token consists of three Base64Url-encoded strings separated by periods (\`.\`):
+
+\`\`\`text
+[Base64Url(Header)].[Base64Url(Payload)].[Base64Url(Signature)]
+\`\`\`
+
+1. **Header:** Contains token metadata and cryptographic algorithm:
+   \`\`\`json
+   { "alg": "HS256", "typ": "JWT" }
+   \`\`\`
+2. **Payload (Claims):** Contains the identity statements:
+   - **Registered Claims:** \`sub\` (User ID), \`iss\` (Issuer), \`aud\` (Audience), \`exp\` (Expiration), \`nbf\` (Not Before), \`jti\` (JWT Unique ID).
+   - **Custom Claims:** \`email\`, \`roles\`, \`tenant_id\`.
+3. **Signature:** Verifies that the sender is authentic and the message was not tampered with:
+   $$\text{Signature} = \text{HMACSHA256}(\text{Base64Url(Header)} + "." + \text{Base64Url(Payload)}, \text{SecretKey})$$
+
+---
+
+#### 2. Symmetric (HS256) vs. Asymmetric (RS256 / ES256) Signing:
+
+| Feature | Symmetric (\`HS256\`) | Asymmetric (\`RS256\` / \`ES256\`) |
+| :--- | :--- | :--- |
+| **Key Architecture** | Single Shared Secret Key | Public / Private Key Pair |
+| **Token Signing** | Identity Server signs with Secret Key | Identity Server signs with **Private Key** |
+| **Token Validation** | Every Resource API needs the **Same Secret Key** | Resource APIs validate with **Public Key (JWKS)** |
+| **Blast Radius** | If 1 microservice leaks the secret, all are compromised | Zero signing risk; public key cannot forge tokens |
+| **Best Architecture** | Monoliths / Small Private Microservices | **Distributed Microservices, OAuth2 / OIDC** |`,
+    answerContent_fa: `### ساختار سه‌گانه توکن JWT و مقایسه امضای متقارن با نامتقارن
+
+یک توکن **JSON Web Token (JWT)** شامل سه بخش کدگذاری‌شده با الگوریتم Base64Url است:
+
+#### ۱. بخش‌های سه‌گانه:
+۱. **بخش Header**: مشخص‌کننده الگوریتم رمزنگاری (\`alg\`) و نوع توکن (\`typ\`).
+۲. **بخش Payload**: حامل کلیم‌ها و اطلاعات هویتی کاربر (شامل کلیم‌های استاندارد \`sub\`، \`iss\`، \`aud\`، \`exp\`، \`jti\` و کلیم‌های سفارشی مانند نقش‌ها).
+۳. **بخش Signature**: امضای دیجیتال که از ترکیب هدر، پی‌لود و کلید رمزنگاری تولید می‌شود تا از عدم دستکاری محتوا اطمینان حاصل شود.
+
+#### ۲. مقایسه امضای متقارن (HS256) با نامتقارن (RS256):
+- **متقارن (HS256)**: هر دو سرور احراز هویت و وب‌سرویس‌های مقصد از یک کلید مشترک (Secret Key) استفاده می‌کنند. در صورت لو رفتن کلید در یکی از میکروسرویس‌ها، امنیت کل سامانه به خطر می‌افتد.
+- **نامتقارن (RS256)**: سرور احراز هویت تنها با **کلید خصوصی (Private Key)** توکن را امضا کرده و تمامی میکروسرویس‌ها تنها با داشتن **کلید عمومی (Public Key)** صحت توکن را بررسی می‌کنند؛ بنابراین خطر جعل توکن به صفر می‌رسد.`,
+  },
+  {
+    id: "dotnet-mid-q269",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-security-jwt-bearer-claims-identity"],
+    questionTitle: "What are the essential TokenValidationParameters when configuring AddJwtBearer in ASP.NET Core, and why must ClockSkew be explicitly minimized?",
+    questionTitle_fa: "پارامترهای اساسی TokenValidationParameters در زمان تنظیم AddJwtBearer در ASP.NET Core چیستند و چرا کاهش پارامتر ClockSkew یک ضرورت امنیتی است؟",
+    answerContent: `### TokenValidationParameters Configuration & The ClockSkew Security Trap
+
+When configuring \`AddJwtBearer\` in ASP.NET Core, the **\`TokenValidationParameters\`** class governs which cryptographic and identity assertions are enforced.
+
+---
+
+#### 1. Core Configuration in \`Program.cs\`:
+\`\`\`csharp
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.RequireHttpsMetadata = true;
+        options.SaveToken = true;
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+
+            ValidateAudience = true,
+            ValidAudience = builder.Configuration["Jwt:Audience"],
+
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:SecretKey"]!)),
+
+            ValidateLifetime = true,
+
+            // CRITICAL FIX: Eliminate the dangerous default 5-minute leeway!
+            ClockSkew = TimeSpan.Zero,
+
+            NameClaimType = "name",
+            RoleClaimType = "roles"
+        };
+    });
+\`\`\`
+
+---
+
+#### 2. The Dangerous \`ClockSkew\` Trap:
+By default, Microsoft's JWT handler applies a **5-minute default \`ClockSkew\`** to tolerate clock drift across distributed physical servers.
+
+#### The Security Threat:
+If your security policy specifies that Access Tokens expire in **15 minutes** (\`exp = Now + 15m\`), the default \`ClockSkew\` keeps the token **valid for 20 minutes** on the server!
+- If an access token is stolen, the attacker has a 33% longer window to exploit the compromised token.
+- **Rule of Thumb:** Always set \`ClockSkew = TimeSpan.Zero\` (or \`TimeSpan.FromSeconds(30)\` if slight clock drift exists) to enforce strict, predictable expiration windows.`,
+    answerContent_fa: `### تنظیمات اساسی TokenValidationParameters و تله امنیتی ClockSkew
+
+هنگام پیکربندی احراز هویت با \`AddJwtBearer\`، اعتبارسنجی توکن‌ها بر عهده شیء \`TokenValidationParameters\` است:
+
+#### ۱. پارامترهای حیاتی:
+- **\`ValidateIssuer\` / \`ValidIssuer\`**: اطمینان از اینکه توکن توسط سرور معتبر صادر شده است.
+- **\`ValidateAudience\` / \`ValidAudience\`**: اطمینان از اینکه توکن برای مصرف همین API مشخص صادر شده است.
+- **\`ValidateIssuerSigningKey\`**: اعتبارسنجی امضای دیجیتال توکن با کلید مخفی یا کلید عمومی.
+- **\`ValidateLifetime\`**: بررسی نگذشتن از زمان انقضا (\`exp\`).
+
+#### ۲. تله امنیتی ClockSkew:
+فریم‌ورک دات‌نت به طور پیش‌فرض یک زمان ارفاق **۵ دقیقه‌ای (ClockSkew)** برای پوشش اختلاف ساعت سرورها در نظر می‌گیرد. اگر طول عمر توکن شما ۱۵ دقیقه تنظیم شده باشد، سرور تا **۲۰ دقیقه** توکن را معتبر می‌شناسد! برای جلوگیری از سوءاستفاده مهاجمان، مقدار \`ClockSkew\` باید به \`TimeSpan.Zero\` یا حداکثر چند ثانیه محدود شود.`,
+  },
+  {
+    id: "dotnet-mid-q270",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-security-jwt-bearer-claims-identity"],
+    questionTitle: "How does the ClaimsPrincipal and ClaimsIdentity model work in ASP.NET Core, and how do you safely extract user claims from HttpContext.User?",
+    questionTitle_fa: "مدل سلسله‌مراتبی ClaimsPrincipal و ClaimsIdentity در ASP.NET Core چگونه کار می‌کند و چگونه کلیم‌های کاربر را به صورت ایمن از HttpContext.User استخراج کنیم؟",
+    answerContent: `### ClaimsPrincipal & ClaimsIdentity Architecture in ASP.NET Core
+
+In .NET, user identity is represented through a hierarchical, identity-agnostic security model.
+
+---
+
+#### 1. The Security Hierarchy:
+\`\`\`text
+┌────────────────────────────────────────────────────────┐
+│                   ClaimsPrincipal                      │ (Represents the User / HttpContext.User)
+│  ┌──────────────────────────────────────────────────┐  │
+│  │                  ClaimsIdentity                  │  │ (e.g. JWT Bearer Identity, Cookie Identity)
+│  │  ┌───────────────┐ ┌───────────────┐ ┌────────┐  │  │
+│  │  │ Claim: sub    │ │ Claim: email  │ │ Claim: │  │  │ (Individual statements of truth)
+│  │  │ "usr_1029"    │ │ "dev@corp.com"│ │ "roles"│  │  │
+│  │  └───────────────┘ └───────────────┘ └────────┘  │  │
+│  └──────────────────────────────────────────────────┘  │
+└────────────────────────────────────────────────────────┘
+\`\`\`
+
+- **\`Claim\`**: A single key-value statement of fact (e.g. \`Type: "email", Value: "user@domain.com"\`).
+- **\`ClaimsIdentity\`**: A collection of claims bundled under a specific authentication scheme (e.g. \`"Bearer"\`).
+- **\`ClaimsPrincipal\`**: A wrapper that can hold multiple identities (e.g. a user authenticated via both a JWT bearer and a client certificate).
+
+---
+
+#### 2. Writing Safe Extension Methods for Identity Extraction:
+
+\`\`\`csharp
+public static class ClaimsPrincipalExtensions
+{
+    public static Guid GetUserId(this ClaimsPrincipal principal)
+    {
+        var idClaim = principal.FindFirst("sub")?.Value 
+            ?? principal.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            ?? throw new UnauthorizedAccessException("Missing subject (sub) claim.");
+
+        return Guid.Parse(idClaim);
+    }
+
+    public static string GetUserEmail(this ClaimsPrincipal principal) =>
+        principal.FindFirst("email")?.Value 
+        ?? principal.FindFirst(ClaimTypes.Email)?.Value 
+        ?? string.Empty;
+
+    public static bool HasRole(this ClaimsPrincipal principal, string role) =>
+        principal.IsInRole(role) || principal.HasClaim("roles", role);
+}
+\`\`\``,
+    answerContent_fa: `### ساختار سلسله‌مراتبی ClaimsPrincipal و ClaimsIdentity در دات‌نت
+
+در ASP.NET Core، اطلاعات هویتی کاربر در قالب یک ساختار چندلایه نگهداری می‌شود:
+
+#### ۱. سلسله‌مراتب هویتی:
+- **\`Claim\`**: کوچک‌ترین واحد اطلاعاتی شامل یک کلید و مقدار (مثال: \`email: "user@domain.com"\`).
+- **\`ClaimsIdentity\`**: مجموعه‌ای از کلیم‌ها که تحت یک پروتکل احراز هویت خاص (مانند Bearer) قرار دارند.
+- **\`ClaimsPrincipal\`**: شیء اصلی که کانتکست کاربر (\`HttpContext.User\`) را نمایندگی می‌کند و می‌تواند یک یا چند هویت مختلف داشته باشد.
+
+#### ۲. متدهای توسعه‌یافته جهت خواندن ایمن اطلاعات:
+با نوشتن متدهای Extension روی شیء \`ClaimsPrincipal\`، دسترسی به شناسه کاربر (\`sub\`) و ایمیل بدون نیاز به تکرار رشته‌های متنی (Magic Strings) در کنترلرها و اندپوینت‌ها فراهم می‌شود.`,
+  },
+  {
+    id: "dotnet-mid-q271",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-security-jwt-bearer-claims-identity"],
+    questionTitle: "How do you implement the Refresh Token Rotation (RTR) pattern with automatic Reuse Detection (Family Revocation) to secure stateless JWT sessions?",
+    questionTitle_fa: "الگوی چرخش Refresh Token (RTR) به همراه شناسایی استفاده مجدد (Reuse Detection و ابطال خانوادگی توکن‌ها) برای ایمن‌سازی نشست‌های JWT چگونه پیاده‌سازی می‌شود؟",
+    answerContent: `### Refresh Token Rotation (RTR) & Breach Reuse Detection
+
+Because JWT access tokens are stateless, they must remain short-lived (10-15 minutes). To maintain a smooth user experience, **Refresh Token Rotation (RTR)** allows clients to obtain new access tokens while mitigating token theft.
+
+---
+
+#### 1. Refresh Token Rotation (RTR) Mechanics:
+Every time a client requests a new access token using a refresh token:
+1. The submitted refresh token is immediately marked as **\`IsUsed = true\`**.
+2. The server generates and returns a **NEW Access Token** and a **NEW Refresh Token**.
+3. A single refresh token can **never be used twice**.
+
+---
+
+#### 2. Automatic Reuse Detection (Family Revocation):
+If an attacker intercepts a refresh token and uses it *after* the legitimate client has already rotated it:
+
+\`\`\`csharp
+public async Task<TokenResult> RefreshAsync(string rawRefreshToken)
+{
+    var tokenHash = Hash(rawRefreshToken);
+    var token = await context.RefreshTokens.FirstOrDefaultAsync(t => t.TokenHash == tokenHash);
+
+    if (token == null)
+        throw new SecurityTokenException("Token does not exist.");
+
+    // BREACH DETECTION: If a previously used token is submitted again,
+    // an attacker has stolen the token family!
+    if (token.IsUsed)
+    {
+        // REVOKE ALL REFRESH TOKENS FOR THIS USER IMMEDIATELY!
+        await context.RefreshTokens
+            .Where(t => t.UserId == token.UserId)
+            .ExecuteUpdateAsync(s => s.SetProperty(t => t.IsRevoked, true));
+
+        throw new SecurityTokenException("Security alert: Token reuse detected. All active sessions terminated.");
+    }
+
+    // Standard rotation
+    token.IsUsed = true;
+    var newPair = GenerateTokenPair(token.UserId);
+    context.RefreshTokens.Add(newPair.RefreshTokenEntity);
+    await context.SaveChangesAsync();
+
+    return newPair;
+}
+\`\`\``,
+    answerContent_fa: `### الگوی چرخش Refresh Token (RTR) و شناسایی نشت امنیتی (Reuse Detection)
+
+از آنجا که توکن‌های دسترسی JWT کوتاه عمر هستند (۱۰ تا ۱۵ دقیقه)، الگوی **Refresh Token Rotation (RTR)** برای تمدید امن نشست‌ها به کار می‌رود:
+
+#### ۱. سازوکار چرخش توکن (RTR):
+به ازای هر بار درخواست تمدید، توکن رفرش مصرف‌شده بلافاصله در دیتابیس علامت \`IsUsed = true\` خورده و یک جفت توکن جدید (Access Token جدید + Refresh Token جدید) به کلاینت تحویل داده می‌شود؛ بنابراین هر توکن رفرش فقط و فقط یکبار قابل استفاده است.
+
+#### ۲. شناسایی استفاده مجدد (Reuse Detection) و ابطال گروهی:
+اگر یک توکن رفرش که قبلاً مصرف شده مجدداً به سرور ارسال شود، نشانه قطعی این است که توکن توسط یک مهاجم سرقت شده است. سرور بلافاصله وضعیت خطر اعلام کرده و **تمامی توکن‌های رفرش فعال آن کاربر را در دیتابیس باطل (Revoke) می‌کند** تا نشست مهاجم و کاربر هر دو قطع شده و کاربر مجبور به لاگین مجدد شود.`,
+  },
+  {
+    id: "dotnet-mid-q272",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-security-jwt-bearer-claims-identity"],
+    questionTitle: "Where should Refresh Tokens and Access Tokens be stored on the client side, and why are HttpOnly, Secure, SameSite=Strict cookies superior to localStorage?",
+    questionTitle_fa: "توکن‌های دسترسی و Refresh Tokenها در سمت کلاینت باید در کجا ذخیره شوند و چرا استفاده از کوکی‌های HttpOnly، Secure و SameSite=Strict نسبت به localStorage برتری امنیتی قطعی دارد؟",
+    answerContent: `### Client-Side Token Storage Security: Cookies vs. LocalStorage
+
+The location where client applications store authentication tokens dictates their susceptibility to **Cross-Site Scripting (XSS)** and **Cross-Site Request Forgery (CSRF)** attacks.
+
+---
+
+#### 1. Why \`localStorage\` is Vulnerable:
+- Any JavaScript code running on the domain (including third-party npm packages, analytics scripts, or injected XSS payloads) has unrestricted read access to \`localStorage\`.
+- If an XSS vulnerability exists, an attacker can execute \`localStorage.getItem('token')\` and instantly exfiltrate the user's credentials to an external server.
+
+---
+
+#### 2. The Superiority of \`HttpOnly\`, \`Secure\`, \`SameSite=Strict\` Cookies:
+
+\`\`\`csharp
+Response.Cookies.Append("refreshToken", newRefreshToken, new CookieOptions
+{
+    HttpOnly = true,                  // 1. Immune to XSS: JavaScript CANNOT read this cookie!
+    Secure = true,                    // 2. Transmitted ONLY over encrypted HTTPS connections.
+    SameSite = SameSiteMode.Strict,   // 3. Immune to CSRF: Browser will NEVER send on third-party links.
+    Expires = DateTimeOffset.UtcNow.AddDays(7),
+    Path = "/api/auth/refresh"        // 4. Restricted scope: Sent ONLY to the refresh endpoint!
+});
+\`\`\`
+
+---
+
+#### 3. Best Practice Architecture:
+- **Access Token:** Stored in **C# / JavaScript in-memory variables** (destroyed on page reload or tab close).
+- **Refresh Token:** Stored in an **\`HttpOnly\`, \`Secure\`, \`SameSite=Strict\` Cookie** scoped strictly to the refresh endpoint path (\`/api/auth/refresh\`).`,
+    answerContent_fa: `### مقایسه امنیت ذخیره‌سازی توکن‌ها در سمت کلاینت: کوکی‌های امن در برابر localStorage
+
+محل نگهداری توکن‌ها در مرورگر، میزان آسیب‌پذیری سیستم در برابر حملات **XSS** و **CSRF** را تعیین می‌کند:
+
+#### ۱. خطرات \`localStorage\`:
+تمامی اسکریپت‌های جاوااسکریپت موجود در صفحه به \`localStorage\` دسترسی دارند. در صورت وجود کوچک‌ترین حفره XSS، مهاجم می‌تواند با یک خط کد تمام توکن‌ها را به سرور خود ارسال و نشست کاربر را بدزدد.
+
+#### ۲. مزایای امنیتی کوکی‌های \`HttpOnly\`:
+- **\`HttpOnly = true\`**: کدهای جاوااسکریپت تحت هیچ شرایطی به کوکی دسترسی ندارند (خنثی‌سازی کامل حملات XSS).
+- **\`Secure = true\`**: کوکی فقط روی پروتکل امن HTTPS جابجا می‌شود.
+- **\`SameSite = SameSiteMode.Strict\`**: جلوگیری کامل از حملات جعل درخواست میان‌سایتی (CSRF).
+
+#### بهترین الگوی معماری:
+- **Access Token**: در حافظه موقت (Memory) کلاینت نگهداری شود.
+- **Refresh Token**: در یک **کوکی HttpOnly با فلگ‌های Secure و SameSite=Strict** که مسیر آن به اندپوینت \`/api/auth/refresh\` محدود شده ذخیره گردد.`,
+  },
+  {
+    id: "dotnet-mid-q273",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-security-role-policy-authorization"],
+    questionTitle: "How does Policy-Based Authorization differ from Role-Based Access Control (RBAC) in ASP.NET Core, and how do you decouple business rules into IAuthorizationRequirement and AuthorizationHandler<T>?",
+    questionTitle_fa: "مجوزدهی مبتنی بر پالیسی (Policy-Based) چه تفاوتی با کنترل دسترسی مبتنی بر نقش (RBAC) در ASP.NET Core دارد و چگونه منطق تجاری دسترسی را در قالب IAuthorizationRequirement و AuthorizationHandler پیاده‌سازی کنیم؟",
+    answerContent: `### Policy-Based Authorization vs. RBAC in ASP.NET Core
+
+Role-Based Access Control (\`[Authorize(Roles = "Admin,Manager")]\`) is simple but leads to **Role Explosion** and brittle code as enterprise business rules expand.
+
+---
+
+#### 1. Why Policy-Based Authorization (ABAC) is Superior:
+- **Decoupled Business Rules:** Controllers declare intent (\`[Authorize(Policy = "CanApproveRefund")]\`) while the actual evaluation logic resides in dedicated handlers in the Infrastructure/Security layer.
+- **Multi-Factor Logic:** Policies can evaluate combinations of roles, user claims, time-of-day, IP subnet ranges, and dynamic requirements.
+
+---
+
+#### 2. The 3-Part Architecture:
+1. **The Requirement (\`IAuthorizationRequirement\`):** A pure data contract holding rule parameters:
+   \`\`\`csharp
+   public record MinimumSeniorityRequirement(int MinimumYears) : IAuthorizationRequirement;
+   \`\`\`
+
+2. **The Handler (\`AuthorizationHandler<T>\`):** The engine evaluating the requirement:
+   \`\`\`csharp
+   public class MinimumSeniorityHandler : AuthorizationHandler<MinimumSeniorityRequirement>
+   {
+       protected override Task HandleRequirementAsync(
+           AuthorizationHandlerContext context,
+           MinimumSeniorityRequirement requirement)
+       {
+           var joinedClaim = context.User.FindFirst("joined_date")?.Value;
+           if (DateTime.TryParse(joinedClaim, out var joinedDate))
+           {
+               var years = (DateTime.UtcNow - joinedDate).TotalDays / 365.25;
+               if (years >= requirement.MinimumYears)
+               {
+                   context.Succeed(requirement); // Requirement satisfied!
+               }
+           }
+
+           return Task.CompletedTask;
+       }
+   }
+   \`\`\`
+
+3. **Policy Registration in \`Program.cs\`:**
+   \`\`\`csharp
+   builder.Services.AddSingleton<IAuthorizationHandler, MinimumSeniorityHandler>();
+   builder.Services.AddAuthorization(options =>
+   {
+       options.AddPolicy("SeniorEngineerOnly", policy =>
+           policy.Requirements.Add(new MinimumSeniorityRequirement(5)));
+   });
+   \`\`\``,
+    answerContent_fa: `### مقایسه مجوزدهی پالیسی‌محور با RBAC در ASP.NET Core
+
+روش سنتی RBAC (\`[Authorize(Roles = "Admin")]\`) با گسترش منطق برنامه باعث افزایش سرسام‌آور نقش‌ها (Role Explosion) و شکنندگی کدها می‌شود.
+
+#### مزایای مجوزدهی مبتنی بر پالیسی (Policy-Based):
+- **تفکیک کامل دغدغه‌ها:** کنترلرها صرفاً نام پالیسی را اعلام می‌کنند (\`[Authorize(Policy = "CanApprove")]\`) و منطق بررسی در هندلرهای اختصاصی پیاده‌سازی می‌شود.
+- **پشتیبانی از شروط چندگانه:** ترکیب نقش‌ها، کلیم‌ها، سوابق کاری و محاسبات پویا.
+
+#### ساختار سه‌بخشی پیاده‌سازی:
+۱. **شرط (\`IAuthorizationRequirement\`)**: کلاسی حامل متغیرهای شرط.
+۲. **هندلر (\`AuthorizationHandler<T>\`)**: کلاس ارزیابی‌کننده که با متد \`context.Succeed(requirement)\` برقراری شرط را تایید می‌کند.
+۳. **ثبت پالیسی در \`Program.cs\`**: ثبت هندلر در کانتینر DI و تعریف نام پالیسی.`,
+  },
+  {
+    id: "dotnet-mid-q274",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-security-role-policy-authorization"],
+    questionTitle: "What is the execution lifecycle of AuthorizationHandlerContext (Succeed vs Fail vs Abstain), and why does context.Fail() enforce a strict Fail-Closed security behavior?",
+    questionTitle_fa: "چرخه حیات متدها در شیء AuthorizationHandlerContext (تفاوت Succeed و Fail و ممتنع بودن) چگونه است و چرا متد context.Fail() رفتار امنیتی غیرقابل بازگشت Fail-Closed را اعمال می‌کند؟",
+    answerContent: `### AuthorizationHandlerContext Lifecycle: Succeed, Fail, and Abstain
+
+When ASP.NET Core evaluates an authorization requirement, it passes an \`AuthorizationHandlerContext\` to all registered handlers for that requirement.
+
+---
+
+#### 1. The Three Handler Actions:
+
+1. **\`context.Succeed(IAuthorizationRequirement requirement)\`**:
+   - Explicitly marks that this specific requirement has been satisfied by the current user.
+   - If a policy contains multiple requirements, **all requirements must be succeeded** for the overall policy check to pass (unless custom requirement evaluation logic is used).
+
+2. **\`context.Fail()\` (Fail-Closed Security):**
+   - Explicitly records an **irreversible failure**.
+   - **Crucial Security Behavior:** Once \`context.Fail()\` is invoked, **the overall authorization check is GUARANTEED to fail**, even if 10 other handlers call \`context.Succeed()\` for the same requirement!
+   - Use Case: Blacklisted users, revoked API keys, or security breach indicators that must immediately terminate access regardless of other valid claims.
+
+3. **Returning without Calling Succeed or Fail (Abstain):**
+   - The handler simply returns \`Task.CompletedTask\` without invoking \`Succeed()\` or \`Fail()\`.
+   - Allows ASP.NET Core to evaluate **other handlers** registered for the same requirement. If no handler calls \`Succeed()\`, authorization naturally fails.
+
+---
+
+#### Summary Decision Table:
+
+| Handler Action | Effect on Requirement | Overridable by Other Handlers? |
+| :--- | :--- | :--- |
+| **\`context.Succeed(req)\`** | Marks requirement as satisfied | Yes (if another handler calls \`Fail()\`) |
+| **\`context.Fail()\`** | **Permanently marks authorization as failed** | ❌ **NO (Irreversible Failure)** |
+| **Return Task (Abstain)** | No change | Yes (Other handlers are evaluated) |`,
+    answerContent_fa: `### چرخه حیات متدها در AuthorizationHandlerContext: تفاوت Succeed، Fail و Abstain
+
+هنگام بررسی یک پالیسی، دات‌نت شیء \`AuthorizationHandlerContext\` را به تمامی هندلرهای ثبت‌شده ارسال می‌کند:
+
+#### حالت‌های سه‌گانه تصمیم‌گیری هندلر:
+۱. **متد \`context.Succeed(requirement)\`**: اعلام می‌کند که شرط دسترسی برای این کاربر برقرار شده است.
+۲. **متد \`context.Fail()\` (اصل Fail-Closed)**: شکست قطعی و غیرقابل بازگشت! اگر حتی ۱۰ هندلر دیگر متد Succeed را فراخوانی کرده باشند، فراخوانی متد Fail فوراً و به صورت دائمی کل مجوزدهی را رد می‌کند (مناسب کاربران مسدودشده یا توکن‌های بلک‌لیست).
+۳. **عدم فراخوانی متدها (ممتنع بودن)**: هندلر بدون هیچ عملی بازمی‌گردد تا سایر هندلرهای ثبت‌شده فرصت بررسی شرط را داشته باشند. در صورت عدم تایید توسط هیچ‌یک از هندلرها، دسترسی مسدود می‌شود.`,
+  },
+  {
+    id: "dotnet-mid-q275",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-security-role-policy-authorization"],
+    questionTitle: "What is Resource-Based Authorization in ASP.NET Core, why can't declarative [Authorize] attributes handle it, and how is it executed imperatively via IAuthorizationService?",
+    questionTitle_fa: "مجوزدهی منبع‌محور (Resource-Based Authorization) در ASP.NET Core چیست، چرا اتریبیوت‌های اعلامی [Authorize] قادر به حل آن نیستند و چگونه با IAuthorizationService به صورت امری اجرا می‌شود؟",
+    answerContent: `### Resource-Based Authorization in ASP.NET Core
+
+Declarative attributes like \`[Authorize(Policy = "...")]\` execute in the MVC/Routing pipeline **before the action method executes**. 
+
+At that early stage, the application only knows the user's identity and the HTTP route parameters—it **has not fetched the database entity yet**.
+
+---
+
+#### 1. The Core Problem:
+Consider the business rule: *"A user can only edit an Invoice if they are the original author of that specific invoice, or if they are a Global Admin."*
+
+Because the \`AuthorId\` is stored inside the database row, authorization cannot occur until the record is loaded into memory.
+
+---
+
+#### 2. Implementation with \`AuthorizationHandler<TRequirement, TResource>\`:
+
+\`\`\`csharp
+public record InvoiceEditRequirement : IAuthorizationRequirement;
+
+public class InvoiceAuthorizationHandler : AuthorizationHandler<InvoiceEditRequirement, Invoice>
+{
+    protected override Task HandleRequirementAsync(
+        AuthorizationHandlerContext context,
+        InvoiceEditRequirement requirement,
+        Invoice invoice)
+    {
+        var currentUserId = context.User.FindFirst("sub")?.Value;
+
+        if (invoice.AuthorId.ToString() == currentUserId || context.User.IsInRole("Admin"))
+        {
+            context.Succeed(requirement);
+        }
+
+        return Task.CompletedTask;
+    }
+}
+\`\`\`
+
+---
+
+#### 3. Imperative Execution in Minimal APIs / Controllers:
+
+\`\`\`csharp
+app.MapPut("/api/invoices/{id:guid}", async (
+    Guid id,
+    UpdateInvoiceDto dto,
+    AppDbContext db,
+    IAuthorizationService authService,
+    ClaimsPrincipal user) =>
+{
+    // Step 1: Fetch resource from DB
+    var invoice = await db.Invoices.FindAsync(id);
+    if (invoice == null) return Results.NotFound();
+
+    // Step 2: Imperatively evaluate resource authorization
+    var result = await authService.AuthorizeAsync(user, invoice, new InvoiceEditRequirement());
+
+    if (!result.Succeeded)
+    {
+        return Results.Forbid(); // Returns HTTP 403 Forbidden!
+    }
+
+    // Step 3: Perform business operation
+    invoice.Update(dto.Amount, dto.Notes);
+    await db.SaveChangesAsync();
+
+    return Results.Ok(invoice);
+}).RequireAuthorization();
+\`\`\``,
+    answerContent_fa: `### مجوزدهی منبع‌محور (Resource-Based Authorization) در ASP.NET Core
+
+اتریبیوت‌های اعلامی \`[Authorize]\` قبل از ورود به متد اجرا می‌شوند؛ بنابراین به رکورد دیتابیسی دسترسی ندارند.
+
+#### صورت مسئله:
+قانون: *"کاربر فقط در صورتی مجاز به ویرایش فاکتور است که خود سازنده آن فاکتور باشد."*
+از آنجا که شناسه سازنده (\`AuthorId\`) در سطر دیتابیس قرار دارد، ابتدا باید رکورد واکشی شده و سپس مجوز کاربر نسبت به آن رکورد سنجیده شود.
+
+#### پیاده‌سازی امری با \`IAuthorizationService\`:
+۱. ساخت هندلر با ارث‌بری از \`AuthorizationHandler<TRequirement, TResource>\`.
+۲. واکشی رکورد از دیتابیس در متد کنترلر یا Minimal API.
+۳. فراخوانی متد \`authService.AuthorizeAsync(User, invoice, requirement)\`.
+۴. در صورت شکست اعتبارسنجی، بازگرداندن پاسخ **\`403 Forbidden\`**.`,
+  },
+  {
+    id: "dotnet-mid-q276",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-security-role-policy-authorization"],
+    questionTitle: "How do you implement dynamic permission-based authorization with a custom IAuthorizationPolicyProvider to avoid manually registering hundreds of policies in Program.cs?",
+    questionTitle_fa: "چگونه با پیاده‌سازی اینترفیس سفارشی IAuthorizationPolicyProvider، مجوزدهی مبتنی بر سطوح دسترسی داینامیک را پیاده‌سازی کنیم تا از ثبت دستی صدها پالیسی در Program.cs جلوگیری شود؟",
+    answerContent: `### Dynamic Permission Policies with IAuthorizationPolicyProvider
+
+In enterprise systems with 500+ granular permissions (e.g. \`Permissions.Users.Read\`, \`Permissions.Orders.Export\`), manually declaring 500 \`options.AddPolicy()\` calls in \`Program.cs\` is unmaintainable.
+
+---
+
+#### 1. Custom Attribute for Clean Syntax:
+\`\`\`csharp
+[AttributeUsage(AttributeTargets.Method | AttributeTargets.Class, AllowMultiple = true)]
+public class HasPermissionAttribute(string permission) 
+    : AuthorizeAttribute(policy: $"Permission:{permission}");
+\`\`\`
+
+---
+
+#### 2. The Dynamic \`IAuthorizationPolicyProvider\` Engine:
+The policy provider intercepts authorization requests and constructs policies dynamically at runtime:
+
+\`\`\`csharp
+public class PermissionPolicyProvider(IOptions<AuthorizationOptions> options) : IAuthorizationPolicyProvider
+{
+    private readonly DefaultAuthorizationPolicyProvider _fallbackProvider = new(options);
+
+    public Task<AuthorizationPolicy?> GetPolicyAsync(string policyName)
+    {
+        if (policyName.StartsWith("Permission:", StringComparison.OrdinalIgnoreCase))
+        {
+            var permissionName = policyName["Permission:".Length..];
+
+            // Build dynamic policy on the fly:
+            var policy = new AuthorizationPolicyBuilder()
+                .AddRequirements(new PermissionRequirement(permissionName))
+                .Build();
+
+            return Task.FromResult<AuthorizationPolicy?>(policy);
+        }
+
+        // Fallback to standard static policies registered in Program.cs
+        return _fallbackProvider.GetPolicyAsync(policyName);
+    }
+
+    public Task<AuthorizationPolicy> GetDefaultPolicyAsync() => _fallbackProvider.GetDefaultPolicyAsync();
+    public Task<AuthorizationPolicy?> GetFallbackPolicyAsync() => _fallbackProvider.GetFallbackPolicyAsync();
+}
+\`\`\`
+
+---
+
+#### 3. Usage on API Endpoints:
+\`\`\`csharp
+[HttpGet("export")]
+[HasPermission("Invoices.ExportExcel")]
+public IActionResult Export() => Ok();
+\`\`\``,
+    answerContent_fa: `### مجوزدهی سطوح دسترسی داینامیک با IAuthorizationPolicyProvider
+
+در سیستم‌های بزرگ سازمانی با صدها سطح دسترسی ریزدانه (مانند \`Users.Create\` یا \`Invoices.Export\`)، تعریف دستی صدها پالیسی در فایل \`Program.cs\` غیرممکن است.
+
+#### پیاده‌سازی با \`IAuthorizationPolicyProvider\`:
+۱. **ساخت اتریبیوت سفارشی**: کلاسی مانند \`[HasPermission("Orders.Read")]\` که پیشوند \`Permission:\` را به نام پالیسی اضافه می‌کند.
+۲. **پیاده‌سازی Provider سفارشی**: این کلاس درخواست‌های مجوزدهی را رهگیری کرده و در صورتی که نام پالیسی با \`Permission:\` شروع شود، در همان لحظه شیء \`AuthorizationPolicy\` متناظر را تولید می‌کند.
+۳. **ارجاع به پیش‌فرض (Fallback)**: برای پالیسی‌های معمولی از \`DefaultAuthorizationPolicyProvider\` استفاده می‌شود.`,
+  },
+  {
+    id: "dotnet-mid-q277",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-security-role-policy-authorization"],
+    questionTitle: "What is the difference between DefaultPolicy and FallbackPolicy in ASP.NET Core AuthorizationOptions, and how does FallbackPolicy prevent unsecured endpoints?",
+    questionTitle_fa: "تفاوت میان DefaultPolicy و FallbackPolicy در تنظیمات AuthorizationOptions چیست و چگونه FallbackPolicy از فراموش شدن امنیت روی اندپوینت‌های جدید جلوگیری می‌کند؟",
+    answerContent: `### DefaultPolicy vs. FallbackPolicy in ASP.NET Core
+
+ASP.NET Core provides two global policy configurations under \`AuthorizationOptions\` that serve distinct operational roles in application security.
+
+---
+
+| Policy Type | When It Applies | Primary Purpose |
+| :--- | :--- | :--- |
+| **\`DefaultPolicy\`** | Applied when \`[Authorize]\` or \`.RequireAuthorization()\` is present **without a specific policy name**. | Dictates standard authenticated user requirements for secured endpoints. |
+| **\`FallbackPolicy\`** | Applied to **EVERY endpoint across the entire application** that has NO authorization attributes or metadata. | Enforces a **"Secure-by-Default"** zero-trust baseline across the entire API. |
+
+---
+
+#### 1. The Threat FallbackPolicy Solves:
+In large engineering teams, a developer might add a new controller or route (\`/api/payments/export\`) and **accidentally forget** to add \`[Authorize]\`. Without a fallback policy, the endpoint is completely open to the public internet!
+
+---
+
+#### 2. Configuring FallbackPolicy for Zero-Trust API Security:
+
+\`\`\`csharp
+builder.Services.AddAuthorization(options =>
+{
+    // 1. DefaultPolicy: Used when [Authorize] has no parameters
+    options.DefaultPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+
+    // 2. FallbackPolicy: Locks down ALL routes by default!
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .RequireClaim("tenant_id")
+        .Build();
+});
+\`\`\`
+
+#### Opting-Out for Public Endpoints:
+With \`FallbackPolicy\` enabled, public endpoints (e.g. Login, Swagger, Health checks) must **explicitly opt-out** using \`[AllowAnonymous]\` or \`.AllowAnonymous()\`.`,
+    answerContent_fa: `### تفاوت DefaultPolicy و FallbackPolicy در AuthorizationOptions
+
+دات‌نت دو تنظیم سراسری برای پالیسی‌ها فراهم می‌کند:
+
+#### ۱. مفهوم \`DefaultPolicy\`:
+زمانی اعمال می‌شود که برنامه‌نویس اتریبیوت \`[Authorize]\` را بدون ذکر نام پالیسی روی اندپوینت قرار دهد.
+
+#### ۲. مفهوم \`FallbackPolicy\` (امنیت پیش‌فرض در کل برنامه):
+این پالیسی روی **تمامی اندپوینت‌های برنامه که هیچ اتریبیوتی ندارند** اعمال می‌شود.
+
+#### چرایی ضرورت FallbackPolicy:
+اگر یک برنامه‌نویس اندپوینت جدیدی بسازد و فراموش کند اتریبیوت \`[Authorize]\` را قرار دهد، آن اندپوینت در حالت عادی برای عموم باز خواهد بود. با فعال کردن \`FallbackPolicy\`، کل سامانه به صورت پیش‌فرض قفل می‌شود و فقط اندپوینت‌هایی که صراحتاً متد \`AllowAnonymous()\` یا اتریبیوت \`[AllowAnonymous]\` دارند بدون لاگین در دسترس خواهند بود.`,
+  },
+  {
+    id: "dotnet-mid-q278",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-security-api-protection-rate-limiting-cors"],
+    questionTitle: "What are the four built-in Rate Limiting algorithms in .NET 7/8/9 (Fixed Window, Sliding Window, Token Bucket, Concurrency), and how do they differ in handling traffic bursts?",
+    questionTitle_fa: "چهار الگوریتم توکار Rate Limiting در دات‌نت ۷، ۸ و ۹ (Fixed Window، Sliding Window، Token Bucket و Concurrency) چه تفاوت‌هایی در نحوه مدیریت جهش‌های ترافیکی (Bursts) دارند؟",
+    answerContent: `### Built-in Rate Limiting Algorithms in .NET 7/8/9
+
+The \`Microsoft.AspNetCore.RateLimiting\` namespace provides four distinct rate limiting algorithms tailored to diverse traffic patterns:
+
+---
+
+| Algorithm | Traffic Handling Strategy | Burst Allowance | Optimal Production Scenario |
+| :--- | :--- | :--- | :--- |
+| **Fixed Window** | Resets counter strictly at static time intervals (e.g. 100 req/min). | ❌ **Vulnerable to 2x boundary spikes** | Public documentation, static content routes |
+| **Sliding Window** | Divides window into rolling sub-segments; calculates moving average. | **Smooth rolling limit (No boundary spikes)** | Standard REST Web API endpoints |
+| **Token Bucket** | Sinks tokens into a bucket; refills at constant rate (\`TokensPerPeriod\`). | **✅ Controlled Burst Allowance** | Payment gateways, e-commerce checkouts |
+| **Concurrency** | Limits simultaneous active requests executing at the exact same moment. | ❌ Queues or rejects excess threads | Heavy PDF generation, ML inference, DB reports |
+
+---
+
+#### 1. Fixed Window Flaw (The Boundary Burst Trap):
+If the limit is 100 requests per minute, a client can send 100 requests at 11:59:59 AM, and another 100 requests at 12:00:01 PM.
+- **The Problem:** The server receives **200 requests in 2 seconds**, potentially overwhelming backend resources while technically never breaching the static 1-minute window limit!
+
+#### 2. How Sliding Window Solves Boundary Spikes:
+Sliding Window divides a 1-minute window into smaller segments (e.g. 6 segments of 10 seconds each). When evaluating requests, it slides the window forward, preventing boundary traffic spikes.
+
+#### 3. Why Token Bucket is Preferred for APIs:
+Token Bucket allows clients to exhaust a full "bucket" of accumulated tokens for sudden bursts (e.g. initial page load making 15 parallel API calls), then throttles sustained continuous traffic to the replenishment rate.`,
+    answerContent_fa: `### الگوریتم‌های چهارگانه Rate Limiting در دات‌نت ۷، ۸ و ۹
+
+دات‌نت به صورت توکار چهار الگوریتم برای کنترل ترافیک و مهار حملات DoS ارائه می‌دهد:
+
+#### ۱. الگوریتم Fixed Window (پنجره ثابت):
+- در بازه‌های زمانی مشخص (مانند ۱۰۰ درخواست در دقیقه) شمارنده را ریست می‌کند.
+- **تله ترافیکی در مرز پنجره:** اگر کاربر در ثانیه ۵۹ دقیقه اول ۱۰۰ درخواست و در ثانیه اول دقیقه دوم ۱۰۰ درخواست دیگر بفرستد، در عرض ۲ ثانیه ۲۰۰ درخواست به سرور می‌رسد که می‌تواند باعث قفل شدن دیتابیس شود.
+
+#### ۲. الگوریتم Sliding Window (پنجره لغزان):
+- بازه زمانی را به چند بخش کوچک‌تر تقسیم کرده و میانگین متحرک می‌گیرد؛ در نتیجه شوک ترافیکی مرز پنجره‌ها کاملاً مهار می‌شود.
+
+#### ۳. الگوریتم Token Bucket (سطل توکن):
+- توکن‌ها با نرخ مشخصی درون یک سطل شارژ می‌شوند.
+- **بهترین گزینه برای APIها:** به کاربر اجازه می‌دهد برای چند ثانیه جهش ترافیکی (Burst) داشته باشد (مثلاً دانلود موازی چند فایل در زمان لود صفحه)، اما ترافیک مداوم را بر اساس سرعت پر شدن سطل کنترل می‌کند.
+
+#### ۴. الگوریتم Concurrency:
+- تعداد درخواست‌های همزمان در حال پردازش را محدود می‌کند (مناسب اندپوینت‌های سنگین مانند تولید گزارشات PDF).`,
+  },
+  {
+    id: "dotnet-mid-q279",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-security-api-protection-rate-limiting-cors"],
+    questionTitle: "How do you implement Partitioned Rate Limiting by Client IP Address or Authenticated User ID using PartitionedRateLimiter.Create and customize the 429 Retry-After response?",
+    questionTitle_fa: "چگونه با متد PartitionedRateLimiter.Create محدودسازی نرخ درخواست را بر اساس آدرس IP یا شناسه کاربر پارتیشن‌بندی کرده و پاسخ خطای ۴۲۹ همراه با هدر Retry-After را سفارشی‌سازی کنیم؟",
+    answerContent: `### Partitioned Rate Limiting & Custom 429 Retry-After Handling
+
+In enterprise APIs, a single global rate limit allows one abusive client to starve all other users. **Partitioning** isolates limits per IP address or user account.
+
+---
+
+#### 1. Configuring Partitioned Rate Limiting:
+\`\`\`csharp
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    // Partition by User ID (if authenticated) or Client IP Address (if anonymous):
+    options.AddPolicy("CustomUserIpPolicy", httpContext =>
+    {
+        var userId = httpContext.User.FindFirst("sub")?.Value;
+        var partitionKey = !string.IsNullOrEmpty(userId) 
+            ? $"user_{userId}" 
+            : $"ip_{httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown"}";
+
+        return RateLimitPartition.GetTokenBucketLimiter(partitionKey, _ => new TokenBucketRateLimiterOptions
+        {
+            TokenLimit = 60,
+            ReplenishmentPeriod = TimeSpan.FromSeconds(10),
+            TokensPerPeriod = 10,
+            QueueLimit = 0
+        });
+    });
+
+    // Custom 429 Response with Retry-After Header:
+    options.OnRejected = async (context, token) =>
+    {
+        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+
+        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+        {
+            context.HttpContext.Response.Headers.RetryAfter = ((int)retryAfter.TotalSeconds).ToString();
+        }
+
+        await context.HttpContext.Response.WriteAsJsonAsync(new
+        {
+            Status = 429,
+            Title = "Too Many Requests",
+            Detail = "You have exceeded your rate limit quota. Please wait before retrying."
+        }, cancellationToken: token);
+    };
+});
+\`\`\`
+
+---
+
+#### 2. Pipeline Placement:
+\`\`\`csharp
+app.UseRouting();
+app.UseRateLimiter(); // MUST be placed AFTER UseRouting and BEFORE endpoints!
+app.UseAuthentication();
+app.UseAuthorization();
+\`\`\``,
+    answerContent_fa: `### پارتیشن‌بندی نرخ درخواست با PartitionedRateLimiter و ارسال هدر Retry-After
+
+برای جلوگیری از مسدود شدن کل سرویس توسط یک کاربر مخرب، از پارتیشن‌بندی ترافیک بر اساس آدرس IP یا شناسه کاربر استفاده می‌شود:
+
+#### پیاده‌سازی در دات‌نت:
+۱. **تفکیک با کلید پارتیشن (PartitionKey)**: اگر کاربر لاگین کرده باشد از شناسه \`sub\` و در غیر این صورت از آدرس \`RemoteIpAddress\` برای ساخت سطل اختصاصی استفاده می‌شود.
+۲. **کالبک \`OnRejected\`**: استخراج زمان باقی‌مانده از \`MetadataName.RetryAfter\` و تنظیم هدر استاندارد \`Retry-After\` در پاسخ HTTP 429.
+۳. **ترتیب میدل‌ویر**: متد \`app.UseRateLimiter\` باید حتماً بعد از \`UseRouting\` قرار گیرد تا مسیرها و اطلاعات کانتکست در دسترس باشند.`,
+  },
+  {
+    id: "dotnet-mid-q280",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-security-api-protection-rate-limiting-cors"],
+    questionTitle: "What are CORS Preflight OPTIONS requests, what security hazard is introduced by combining AllowAnyOrigin() with AllowCredentials(), and where must UseCors be placed in the middleware pipeline?",
+    questionTitle_fa: "درخواست‌های Preflight OPTIONS در CORS چیستند، ترکیب AllowAnyOrigin() با AllowCredentials() چه حفره امنیتی ایجاد می‌کند و میدل‌ویر UseCors دقیقاً در کجای خط لوله باید قرار گیرد؟",
+    answerContent: `### CORS Preflight Requests & The AllowAnyOrigin Security Hazard
+
+**Cross-Origin Resource Sharing (CORS)** is a browser security standard allowing servers to selectively relax the browser's Same-Origin Policy (SOP).
+
+---
+
+#### 1. What is a Preflight \`OPTIONS\` Request?
+When a browser makes a "non-simple" cross-origin HTTP request (e.g. using custom headers like \`Authorization\` or HTTP verbs like \`PUT\`, \`DELETE\`, \`PATCH\`), the browser **automatically sends an HTTP \`OPTIONS\` request first** to query the server's permission matrix before sending the actual payload.
+
+---
+
+#### 2. The Dangerous \`AllowAnyOrigin()\` + \`AllowCredentials()\` Flaw:
+\`\`\`csharp
+// FATAL SECURITY VULNERABILITY:
+builder.Services.AddCors(options => {
+    options.AddPolicy("BadPolicy", p => p.AllowAnyOrigin().AllowCredentials()); // Blocked by browsers!
+});
+\`\`\`
+
+#### Why It Is Dangerous:
+- If a server allows credentials (cookies, authorization headers) from ANY origin (\`*\`), any malicious website a user visits could silently execute authenticated API calls (e.g. transfer money or delete records) in the background!
+- Modern browsers explicitly **reject responses** that return \`Access-Control-Allow-Origin: *\` alongside \`Access-Control-Allow-Credentials: true\`.
+
+---
+
+#### 3. Strict Middleware Pipeline Placement:
+\`\`\`csharp
+app.UseRouting();
+app.UseCors("ProductionSpaPolicy"); // MUST be placed AFTER UseRouting and BEFORE Authentication!
+app.UseAuthentication();
+app.UseAuthorization();
+\`\`\`
+- **Why?** \`UseCors\` must be after \`UseRouting\` so CORS endpoint policies can be evaluated, and before \`UseAuthentication\` so unauthenticated preflight \`OPTIONS\` requests succeed without being challenged for JWT tokens!`,
+    answerContent_fa: `### درخواست‌های Preflight در CORS، خطای AllowAnyOrigin و ترتیب در پایپ‌لاین
+
+#### ۱. درخواست‌های Preflight (متد OPTIONS):
+هنگامی که فرانت‌اند یک درخواست دارای هدر سفارشی (مانند \`Authorization\`) یا متدهای \`PUT\` و \`DELETE\` ارسال می‌کند، مرورگر ابتدا یک درخواست خودکار با متد **\`OPTIONS\`** می‌فرستد تا از مجاز بودن دامنه و هدرها توسط سرور مطمئن شود.
+
+#### ۲. حفره امنیتی ترکیب \`AllowAnyOrigin\` با \`AllowCredentials\`:
+اگر سرور اجازه ارسال کوکی‌ها و توکن‌ها را برای تمامی دامنه‌های اینترنت (\`*\`) صادر کند، هر سایت مخربی می‌تواند از طریق مرورگر کاربر درخواست‌های احراز هویت شده بفرستد. به همین دلیل مرورگرهای مدرن این ترکیب را مسدود می‌کنند. دامنه‌های معتبر فرانت‌اند باید صراحتاً با \`WithOrigins\` تعریف شوند.
+
+#### ۳. محل قرارگیری میدل‌ویر UseCors:
+میدل‌ویر \`UseCors\` باید حتماً **بعد از \`UseRouting\`** و **قبل از \`UseAuthentication\`** قرار گیرد تا درخواست‌های \`OPTIONS\` بدون نیاز به توکن JWT پاسخ داده شوند.`,
+  },
+  {
+    id: "dotnet-mid-q281",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-security-api-protection-rate-limiting-cors"],
+    questionTitle: "How does the ASP.NET Core Data Protection API (IDataProtector) provide tamper-proof encryption with Purpose Strings, and how do you persist cryptographic key rings across distributed multi-node clusters?",
+    questionTitle_fa: "سیستم ASP.NET Core Data Protection (اینترفیس IDataProtector) چگونه با Purpose Stringها رمزنگاری ضد دستکاری ایجاد می‌کند و ذخیره‌سازی کلیدهای رمزنگاری در کلاسترهای توزیع‌شده چگونه پیکربندی می‌شود؟",
+    answerContent: `### ASP.NET Core Data Protection API & Distributed Key Ring Management
+
+The **Data Protection API** (\`IDataProtector\`) provides cryptographic confidentiality and authenticity for temporary application tokens, anti-tamper state, and sensitive payloads.
+
+---
+
+#### 1. Purpose Strings (Cryptographic Isolation):
+A **Purpose String** acts as a cryptographic namespace. A ciphertext produced with purpose string \`"PasswordReset.v1"\` **CANNOT** be decrypted by an \`IDataProtector\` initialized with purpose string \`"EmailVerification.v1"\`, even if both share the exact same master cryptographic key!
+
+\`\`\`csharp
+var protector = dataProtectionProvider.CreateProtector("Identity.PasswordReset.v1");
+
+string token = protector.Protect("user-id-12345");
+string userId = protector.Unprotect(token); // Throws CryptographicException if tampered or wrong purpose!
+\`\`\`
+
+---
+
+#### 2. The Distributed Multi-Node Cluster Trap:
+By default, Data Protection stores encryption keys in the local server's file system (\`%APPDATA%\\ASP.NET\\DataProtection-Keys\`).
+- In Kubernetes or load-balanced clusters with 5 replica pods, Pod A will fail to decrypt a token encrypted by Pod B!
+
+#### The Enterprise Solution: Shared Redis / Blob Key Storage
+\`\`\`csharp
+builder.Services.AddDataProtection()
+    .SetApplicationName("EnterpriseSharedApp")
+    .PersistKeysToStackExchangeRedis(redisMultiplexer, "DataProtection-MasterKeys")
+    .ProtectKeysWithCertificate(x509Certificate); // Encrypts master keys at rest!
+\`\`\``,
+    answerContent_fa: `### سیستم Data Protection API در دات‌نت و مدیریت کلیدها در کلاسترهای توزیع‌شده
+
+اینترفیس **\`IDataProtector\`** برای رمزنگاری متقارن و ضد دستکاری کردن داده‌های موقت (مانند لینک‌های تایید ایمیل و توکن‌های بازیابی پسورد) استفاده می‌شود:
+
+#### ۱. مفهوم Purpose Strings (ایزولاسیون کلیدها):
+رشته Purpose به عنوان یک تفکیک‌کننده رمزنگاری عمل می‌کند. متنی که با عنوان \`"PasswordReset.v1"\` رمزنگاری شده است، تحت هیچ شرایطی توسط Protector دیگری با عنوان \`"EmailConfirm.v1"\` رمزگشایی نخواهد شد حتی اگر از یک کلید اصلی مشترک استفاده کنند.
+
+#### ۲. چالش کلاسترهای چند سروری (Multi-Node):
+در حالت پیش‌فرض، کلیدهای رمزنگاری روی هارددیسک همان سرور ذخیره می‌شوند؛ بنابراین در کلاسترهای داکر/کوبرنتیز، سرور شماره ۲ نمی‌تواند توکن‌های سرور شماره ۱ را رمزگشایی کند.
+
+#### راهکار سازمانی:
+با متد \`PersistKeysToStackExchangeRedis\`، کلیدهای اصلی درون **Redis** ذخیره شده و با یک سرتیفیکیت دیجیتال رمزنگاری می‌شوند تا تمام پادها به کلیدهای یکسان دسترسی داشته باشند.`,
+  },
+  {
+    id: "dotnet-mid-q282",
+    stackId: "dotnet",
+    categoryId: "aspnet-core",
+    levelId: "mid",
+    topicIds: ["topic-dotnet-security-api-protection-rate-limiting-cors"],
+    questionTitle: "Why are fast cryptographic hashing algorithms (MD5, SHA-256) dangerous for password storage, and how do adaptive Key Derivation Functions like PBKDF2 and Argon2id prevent GPU/ASIC attacks?",
+    questionTitle_fa: "چرا الگوریتم‌های سریع رمزنگاری (مانند MD5 و SHA-256) برای نگهداری پسوردها ناامن هستند و توابع مشتق‌سازی کلید تطبیقی مانند PBKDF2 و Argon2id چگونه حملات سخت‌افزاری GPU و ASIC را مهار می‌کنند؟",
+    answerContent: `### Cryptographic Password Hashing: Why Fast Hashes Fail & Adaptive KDFs Excel
+
+A common security misconception is that hashing a password with **SHA-256** or **SHA-512** is secure.
+
+---
+
+#### 1. Why Fast Cryptographic Hashes Are Fatal for Passwords:
+- SHA-256 was designed for high-throughput data integrity verification (calculating gigabytes of data in milliseconds).
+- Because they are fast, a modern consumer GPU (e.g. RTX 4090) can calculate **over 100 billion SHA-256 hashes per second**!
+- Using precomputed **Rainbow Tables** or dictionary brute-force tools (Hashcat), an attacker with a leaked database dump can crack standard 8-10 character passwords in seconds.
+
+---
+
+#### 2. Adaptive Key Derivation Functions (KDFs):
+Secure password hashing requires algorithms that are **intentionally slow, compute-intensive, and memory-hard**:
+
+1. **PBKDF2-HMAC-SHA512 (ASP.NET Core Default \`PasswordHasher<T>\`):**
+   - Applies a cryptographically random per-user salt (128-bit) to eliminate Rainbow Tables.
+   - Runs a configurable work factor of **100,000+ hash iterations**, making brute-force 100,000x more expensive for attackers.
+
+2. **Argon2id (Winner of Password Hashing Competition):**
+   - Incorporates **Memory-Hardness**: Requires substantial megabytes of RAM memory per hash calculation.
+   - Because GPUs and ASICs have high compute cores but limited fast memory per thread, Argon2id renders hardware-accelerated parallel brute-force attacks mathematically infeasible.`,
+    answerContent_fa: `### چرایی ناامنی هش‌های سریع (SHA-256) و برتری الگوریتم‌های تطبیقی PBKDF2 و Argon2id
+
+#### ۱. علت خطرناک بودن الگوریتم‌های سریع (SHA-256 و MD5):
+الگوریتم‌های خانواده SHA برای اعتبارسنجی سریع فایل‌ها در کسری از میلی‌ثانیه طراحی شده‌اند. کارت‌های گرافیک مدرن قادر به محاسبه بیش از **۱۰۰ میلیارد هش SHA-256 در هر ثانیه** هستند؛ بنابراین در صورت سرقت دیتابیس، مهاجمان با نرم‌افزارهایی مانند Hashcat پسوردهای کاربران را در چند ثانیه کرک می‌کنند.
+
+#### ۲. توابع مشتق‌سازی کلید تطبیقی (Adaptive KDFs):
+این الگوریتم‌ها به صورت عمدی **کُند و پرهزینه** طراحی شده‌اند:
+- **الگوریتم PBKDF2 (پیش‌فرض دات‌نت در \`PasswordHasher\`):** استفاده از Salt اختصاصی برای هر کاربر و اجرای بیش از **۱۰۰,۰۰۰ بار حلقه تکرار (Iteration)** جهت بالا بردن زمان محاسبه برای مهاجم.
+- **الگوریتم Argon2id:** الزام به اشغال حافظه رم در زمان محاسبه هش (Memory-Hard)، که باعث فلج شدن پردازش موازی در کارت‌های گرافیک و تراشه‌های ASIC می‌شود.`,
+  },
 ];
+
+
+
+
+
+
+
+
+
+
 
 
 

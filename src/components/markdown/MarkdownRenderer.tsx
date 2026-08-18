@@ -344,6 +344,40 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) =
               />
             </Box>
           ),
+          table: ({ node, ...props }: any) => (
+            <div style={{ width: "100%", overflowX: "auto" }}>
+              <table
+                dir={isRtl ? "rtl" : "ltr"}
+                style={{
+                  direction: isRtl ? "rtl" : "ltr",
+                  textAlign: isRtl ? "right" : "left",
+                }}
+                {...props}
+              />
+            </div>
+          ),
+          th: ({ node, style, ...props }: any) => (
+            <th
+              dir={isRtl ? "rtl" : "ltr"}
+              style={{
+                ...style,
+                direction: isRtl ? "rtl" : "ltr",
+                textAlign: isRtl ? "right" : "left",
+              }}
+              {...props}
+            />
+          ),
+          td: ({ node, style, ...props }: any) => (
+            <td
+              dir={isRtl ? "rtl" : "ltr"}
+              style={{
+                ...style,
+                direction: isRtl ? "rtl" : "ltr",
+                textAlign: isRtl ? "right" : "left",
+              }}
+              {...props}
+            />
+          ),
         }}
       >
         {cleanedContent}

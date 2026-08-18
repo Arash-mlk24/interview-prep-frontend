@@ -24,12 +24,12 @@ This document contains the **mandatory operational rules and workflow standards*
 
 When developing or updating Roadmap Topics and Tutorials, execute this **exact 5-step procedure**:
 
-### Step 1: Deep Research & Topic Discovery
-- Conduct comprehensive technical research on the topic covering:
-  - Theoretical foundations and architectural patterns.
-  - Runtime internals (CLR/V8, memory layout, thread pools, scheduling).
-  - Modern industry best practices (.NET 8/9, C# 12/13, FastEndpoints, Minimal APIs, NetArchTest).
-  - Edge cases, anti-patterns, and high-scale production trade-offs ($50,000+$ req/sec).
+### Step 1: Deep Research & Topic Discovery (Web Search Mandatory)
+- Actively use `search_web` to conduct exhaustive live technical research across official documentation (Microsoft Learn, .NET Architecture Guides), official GitHub repositories (`dotnet/runtime`, `dotnet/efcore`, `dotnet/aspnetcore`), and industry production post-mortems for .NET 8/9, EF Core 8/9, and modern C#.
+- Cover all dimensions:
+  - Theoretical foundations, internal state machines, memory layouts, and algorithm mechanics.
+  - Latest performance benchmarks, runtime source internals, and modern API developments.
+  - Edge cases, race conditions, memory leaks, security vulnerabilities, and high-scale production trade-offs ($50,000+$ req/sec).
 
 ### Step 2: Write Comprehensive Master Tutorial
 - Location: `src/data/roadmaps/{stack}/topics/{slug}-topic.ts`.
